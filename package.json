@@ -1,0 +1,15 @@
+{
+  "name": "university-erp",
+  "private": true,
+  "version": "0.1.0",
+  "description": "University Inventory, Store, Asset and Workflow Management System",
+  "scripts": {
+    "dev:backend": "pnpm --filter backend run start:dev",
+    "dev:frontend": "pnpm --filter frontend run dev",
+    "build:backend": "pnpm --filter backend run build",
+    "build:frontend": "pnpm --filter frontend run build",
+    "docker:up": "docker compose up --build",
+    "docker:down": "docker compose down"
+  },
+  "packageManager": "pnpm@9.0.0"
+}

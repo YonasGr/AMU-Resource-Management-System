@@ -1,0 +1,20 @@
+// Prisma schema for the University ERP system.
+// This starts empty on purpose — Phase 1 (Organization, User, Role/Permission)
+// will add the first real models. Keeping Phase 0 schema minimal so the very
+// first migration is trivial to verify.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Placeholder model so `prisma migrate dev` has something to create on first run.
+// Will be removed once real Phase 1 models (OrganizationUnit, User, Role, ...) land.
+model HealthCheck {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now())
+}

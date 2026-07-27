@@ -1,0 +1,26 @@
+import { CallHandler, ExecutionContext, Injectable, NestInterceptor } from '@nestjs/common';
+import { Observable } from 'rxjs';
+import { map } from 'rxjs/operators';
+
+export interface StandardResponse<T> {
+  success: true;
+  data: T;
+  timestamp: string;
+}
+
+/**
+ * Wraps every successful response in a consistent envelope:
+ * { success: true, data: <payload>, timestamp }
+ */
+@Injectable()
+export class TransformInterceptor<T> implements NestInterceptor<T, StandardResponse<T>> {
+  intercept(context: ExecutionContext, next: CallHandler): Observable<StandardResponse<T>> {
+    return next.handle().pipe(
+      map((data) => ({
+        success: true,
+        data,
+        timestamp: new Date().toISOString(),
+      })),
+    );
+  }
+}

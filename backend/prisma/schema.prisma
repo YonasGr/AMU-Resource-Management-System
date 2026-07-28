@@ -1,7 +1,6 @@
 // Prisma schema for the University ERP system.
-// This starts empty on purpose — Phase 1 (Organization, User, Role/Permission)
-// will add the first real models. Keeping Phase 0 schema minimal so the very
-// first migration is trivial to verify.
+// Phase 1.1 adds the first real model: OrganizationUnit — the dynamic org
+// tree every other module (Store, User, Request routing) hangs off of.
 
 generator client {
   provider = "prisma-client-js"
@@ -12,9 +11,34 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// Placeholder model so `prisma migrate dev` has something to create on first run.
-// Will be removed once real Phase 1 models (OrganizationUnit, User, Role, ...) land.
-model HealthCheck {
-  id        String   @id @default(uuid())
-  createdAt DateTime @default(now())
+enum OrganizationUnitType {
+  UNIVERSITY
+  COLLEGE
+  DEPARTMENT
+  OFFICE
+  BUREAU
+  DIRECTORATE
+  UNIT
+}
+
+enum OrganizationUnitStatus {
+  ACTIVE
+  INACTIVE
+}
+
+model OrganizationUnit {
+  id     String                 @id @default(uuid())
+  name   String
+  type   OrganizationUnitType
+  status OrganizationUnitStatus @default(ACTIVE)
+
+  parentId String?            @map("parent_id")
+  parent   OrganizationUnit?  @relation("OrganizationHierarchy", fields: [parentId], references: [id])
+  children OrganizationUnit[] @relation("OrganizationHierarchy")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([parentId])
+  @@map("organization_units")
 }

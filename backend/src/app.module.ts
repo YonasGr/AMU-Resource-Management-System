@@ -3,6 +3,8 @@ import { ConfigModule } from '@nestjs/config';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { validateEnv } from './config/env.validation';
+import { PrismaModule } from './prisma/prisma.module';
+import { OrganizationModule } from './modules/organization/organization.module';
 
 @Module({
   imports: [
@@ -10,8 +12,9 @@ import { validateEnv } from './config/env.validation';
       isGlobal: true,
       validate: validateEnv,
     }),
-    // Feature modules (Auth, Organization, Store, etc.) will be registered here
-    // as we build them in Phase 1 onward.
+    PrismaModule,
+    OrganizationModule,
+    // Remaining Phase 1 modules (Auth, Role/Permission) get registered here next.
   ],
   controllers: [AppController],
   providers: [AppService],

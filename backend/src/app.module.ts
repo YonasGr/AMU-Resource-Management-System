@@ -9,6 +9,8 @@ import { OrganizationModule } from './modules/organization/organization.module';
 import { UsersModule } from './modules/users/users.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { JwtAuthGuard } from './modules/auth/guards/jwt-auth.guard';
+import { RbacModule } from './modules/rbac/rbac.module';
+import { PermissionGuard } from './modules/rbac/guards/permission.guard';
 
 @Module({
   imports: [
@@ -20,7 +22,8 @@ import { JwtAuthGuard } from './modules/auth/guards/jwt-auth.guard';
     OrganizationModule,
     UsersModule,
     AuthModule,
-    // Remaining Phase 1 module (Role/Permission + Data Scope) gets registered here next.
+    RbacModule,
+    // Phase 1 is now complete. Phase 2 (Store, Item Catalog) gets registered here next.
   ],
   controllers: [AppController],
   providers: [
@@ -30,6 +33,12 @@ import { JwtAuthGuard } from './modules/auth/guards/jwt-auth.guard';
     {
       provide: APP_GUARD,
       useClass: JwtAuthGuard,
+    },
+    // Runs after JwtAuthGuard. Routes without @RequirePermission() just need
+    // to be authenticated; routes with it also need the matching permission.
+    {
+      provide: APP_GUARD,
+      useClass: PermissionGuard,
     },
   ],
 })

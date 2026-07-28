@@ -63,6 +63,7 @@ model User {
 
   refreshTokens       RefreshToken[]
   passwordResetTokens PasswordResetToken[]
+  userRoles           UserRole[]
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -98,4 +99,76 @@ model PasswordResetToken {
 
   @@index([userId])
   @@map("password_reset_tokens")
+}
+
+enum ScopeType {
+  GLOBAL
+  ORGANIZATION
+  STORE
+}
+
+model Role {
+  id          String  @id @default(uuid())
+  code        String  @unique
+  name        String
+  description String?
+  // Seeded system roles (System Administrator, Store Manager, ...) can't be
+  // deleted — only custom roles created later can be.
+  isSystem    Boolean @default(false) @map("is_system")
+
+  rolePermissions RolePermission[]
+  userRoles       UserRole[]
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("roles")
+}
+
+model Permission {
+  id          String  @id @default(uuid())
+  // Namespaced key, e.g. "inventory.view", "transfer.approve"
+  key         String  @unique
+  description String?
+
+  rolePermissions RolePermission[]
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("permissions")
+}
+
+model RolePermission {
+  id           String     @id @default(uuid())
+  roleId       String     @map("role_id")
+  role         Role       @relation(fields: [roleId], references: [id])
+  permissionId String     @map("permission_id")
+  permission   Permission @relation(fields: [permissionId], references: [id])
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([roleId, permissionId])
+  @@map("role_permissions")
+}
+
+// Assigns a role to a user, scoped to either everything (GLOBAL), a specific
+// organization unit and everything under it (ORGANIZATION), or a specific
+// store only (STORE). scopeId is intentionally a plain string, not a foreign
+// key: it points at OrganizationUnit.id when scopeType=ORGANIZATION, or at a
+// future Store.id when scopeType=STORE (the Store module lands in Phase 2.1),
+// and is null when scopeType=GLOBAL.
+model UserRole {
+  id        String    @id @default(uuid())
+  userId    String    @map("user_id")
+  user      User      @relation(fields: [userId], references: [id])
+  roleId    String    @map("role_id")
+  role      Role      @relation(fields: [roleId], references: [id])
+  scopeType ScopeType @map("scope_type")
+  scopeId   String?   @map("scope_id")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([userId, roleId, scopeType, scopeId])
+  @@index([userId])
+  @@map("user_roles")
 }

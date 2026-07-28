@@ -220,6 +220,25 @@ async function seedAdminRoleAssignment(userId: string, roleId: string): Promise<
   console.log('Assigned System Administrator (GLOBAL scope) to the admin user.');
 }
 
+async function seedSampleStore(organizationId: string, managerId: string): Promise<void> {
+  const existing = await prisma.store.findUnique({ where: { code: 'ICT-STORE-01' } });
+  if (existing) {
+    console.log('Sample store already seeded — skipping.');
+    return;
+  }
+
+  await prisma.store.create({
+    data: {
+      name: 'ICT Store',
+      code: 'ICT-STORE-01',
+      location: 'ICT Directorate Building, Ground Floor',
+      organizationId,
+      managerId,
+    },
+  });
+  console.log('Seeded sample store: ICT Store (ICT-STORE-01).');
+}
+
 async function main() {
   const ictId = await seedOrganizationTree();
   const adminUserId = await seedAdminUser(ictId);
@@ -229,6 +248,8 @@ async function main() {
 
   const systemAdminRoleId = roleCodeToId.get('SYSTEM_ADMINISTRATOR')!;
   await seedAdminRoleAssignment(adminUserId, systemAdminRoleId);
+
+  await seedSampleStore(ictId, adminUserId);
 }
 
 main()

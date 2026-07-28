@@ -9,12 +9,14 @@ import {
   Post,
   Query,
 } from '@nestjs/common';
-import { ApiOperation, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
+import { OrganizationUnitStatus, OrganizationUnitType } from '@prisma/client';
 import { OrganizationService } from './organization.service';
 import { CreateOrganizationUnitDto } from './dto/create-organization-unit.dto';
 import { UpdateOrganizationUnitDto } from './dto/update-organization-unit.dto';
 
 @ApiTags('organization')
+@ApiBearerAuth()
 @Controller('organization-units')
 export class OrganizationController {
   constructor(private readonly organizationService: OrganizationService) {}
@@ -27,6 +29,8 @@ export class OrganizationController {
 
   @Get()
   @ApiOperation({ summary: 'List organization units (flat), optionally filtered' })
+  @ApiQuery({ name: 'type', required: false, enum: OrganizationUnitType })
+  @ApiQuery({ name: 'status', required: false, enum: OrganizationUnitStatus })
   findAll(@Query('type') type?: string, @Query('status') status?: string) {
     return this.organizationService.findAll({ type, status });
   }

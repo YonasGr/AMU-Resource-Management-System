@@ -6,9 +6,6 @@ import { AssignRoleDto } from './dto/assign-role.dto';
 
 export type ScopeTarget =
   | { type: 'ORGANIZATION'; organizationId: string }
-  // storeOrganizationId = the organization the store belongs to. Store
-  // itself doesn't exist yet (Phase 2.1) — this shape is ready for that
-  // module to call once it does.
   | { type: 'STORE'; storeId: string; storeOrganizationId: string };
 
 @Injectable()
@@ -41,7 +38,13 @@ export class AccessControlService {
       // id fails clearly instead of silently creating an unreachable grant.
       await this.organizationService.findOne(dto.scopeId);
     }
-    // STORE existence isn't checked yet — the Store model lands in Phase 2.1.
+
+    if (dto.scopeType === ScopeType.STORE && dto.scopeId) {
+      const store = await this.prisma.store.findUnique({ where: { id: dto.scopeId } });
+      if (!store) {
+        throw new NotFoundException(`Store ${dto.scopeId} not found`);
+      }
+    }
 
     return this.prisma.userRole.create({
       data: {
@@ -135,5 +138,41 @@ export class AccessControlService {
     if (scopeOrgId === targetOrgId) return true;
     const ancestors = await this.organizationService.getAncestors(targetOrgId);
     return ancestors.some((a) => a.id === scopeOrgId);
+  }
+
+  /**
+   * Returns 'ALL' if the user has a GLOBAL assignment (no filtering needed),
+   * otherwise the full set of organization unit ids their ORGANIZATION-scoped
+   * assignments cover — each assignment's own org unit plus every descendant.
+   * Used to scope list endpoints (e.g. "which stores can this user see").
+   */
+  async getAccessibleOrganizationIds(userId: string): Promise<'ALL' | Set<string>> {
+    const assignments = await this.prisma.userRole.findMany({ where: { userId } });
+
+    if (assignments.some((a) => a.scopeType === ScopeType.GLOBAL)) {
+      return 'ALL';
+    }
+
+    const ids = new Set<string>();
+    const orgAssignments = assignments.filter((a) => a.scopeType === ScopeType.ORGANIZATION);
+
+    for (const assignment of orgAssignments) {
+      const subtree = await this.organizationService.getSubtree(assignment.scopeId!);
+      const flatten = (node: { id: string; children: any[] }) => {
+        ids.add(node.id);
+        node.children.forEach(flatten);
+      };
+      flatten(subtree);
+    }
+
+    return ids;
+  }
+
+  /** The exact set of store ids the user has a direct STORE-scoped assignment for. */
+  async getAccessibleStoreIds(userId: string): Promise<Set<string>> {
+    const assignments = await this.prisma.userRole.findMany({
+      where: { userId, scopeType: ScopeType.STORE },
+    });
+    return new Set(assignments.map((a) => a.scopeId!));
   }
 }

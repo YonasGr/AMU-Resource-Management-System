@@ -37,6 +37,7 @@ model OrganizationUnit {
   children OrganizationUnit[] @relation("OrganizationHierarchy")
 
   users User[]
+  stores Store[]
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -64,6 +65,7 @@ model User {
   refreshTokens       RefreshToken[]
   passwordResetTokens PasswordResetToken[]
   userRoles           UserRole[]
+  managedStores       Store[]
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -171,4 +173,30 @@ model UserRole {
   @@unique([userId, roleId, scopeType, scopeId])
   @@index([userId])
   @@map("user_roles")
+}
+
+enum StoreStatus {
+  ACTIVE
+  INACTIVE
+}
+
+model Store {
+  id       String      @id @default(uuid())
+  name     String
+  code     String      @unique
+  location String?
+  status   StoreStatus @default(ACTIVE)
+
+  organizationId String           @map("organization_id")
+  organization   OrganizationUnit @relation(fields: [organizationId], references: [id])
+
+  managerId String? @map("manager_id")
+  manager   User?   @relation(fields: [managerId], references: [id])
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([organizationId])
+  @@index([managerId])
+  @@map("stores")
 }

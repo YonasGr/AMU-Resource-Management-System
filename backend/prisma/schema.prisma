@@ -66,6 +66,7 @@ model User {
   passwordResetTokens PasswordResetToken[]
   userRoles           UserRole[]
   managedStores       Store[]
+  createdMovements    InventoryMovement[]
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -193,6 +194,10 @@ model Store {
   managerId String? @map("manager_id")
   manager   User?   @relation(fields: [managerId], references: [id])
 
+  inventory       StoreInventory[]
+  movementsOut    InventoryMovement[] @relation("MovementFromStore")
+  movementsIn     InventoryMovement[] @relation("MovementToStore")
+
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
@@ -246,9 +251,75 @@ model Item {
   categoryId String       @map("category_id")
   category   ItemCategory @relation(fields: [categoryId], references: [id])
 
+  storeInventories StoreInventory[]
+  movements        InventoryMovement[]
+
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
   @@index([categoryId])
   @@map("items")
+}
+
+// Per-store quantity for a given item. NEVER written to directly by any
+// endpoint — only MovementService touches this table, always inside the
+// same transaction as the InventoryMovement row that justifies the change.
+model StoreInventory {
+  id           String  @id @default(uuid())
+  quantity     Int     @default(0)
+  minimumStock Int     @default(0) @map("minimum_stock")
+  location     String?
+
+  storeId String @map("store_id")
+  store   Store  @relation(fields: [storeId], references: [id])
+  itemId  String @map("item_id")
+  item    Item   @relation(fields: [itemId], references: [id])
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([storeId, itemId])
+  @@index([storeId])
+  @@index([itemId])
+  @@map("store_inventory")
+}
+
+enum MovementType {
+  PURCHASE_RECEIVE
+  TRANSFER_OUT
+  TRANSFER_IN
+  ISSUE
+  RETURN
+  DISPOSAL
+  ADJUSTMENT
+}
+
+// The append-only ledger. Every StoreInventory change must be accompanied by
+// exactly one row here (or two, for a transfer's OUT+IN pair) written in the
+// same DB transaction — this table is the "why" behind every quantity.
+// referenceId is a free string, not a foreign key: it'll point at a Request,
+// Transfer, Purchase, or Disposal record once those modules exist (Phase 5+),
+// and is left blank for movements triggered directly (e.g. manual adjustment).
+model InventoryMovement {
+  id           String       @id @default(uuid())
+  quantity     Int
+  movementType MovementType @map("movement_type")
+  referenceId  String?      @map("reference_id")
+
+  itemId String @map("item_id")
+  item   Item   @relation(fields: [itemId], references: [id])
+
+  fromStoreId String? @map("from_store_id")
+  fromStore   Store?  @relation("MovementFromStore", fields: [fromStoreId], references: [id])
+  toStoreId   String? @map("to_store_id")
+  toStore     Store?  @relation("MovementToStore", fields: [toStoreId], references: [id])
+
+  createdById String @map("created_by")
+  createdBy   User   @relation(fields: [createdById], references: [id])
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@index([itemId])
+  @@index([fromStoreId])
+  @@index([toStoreId])
+  @@map("inventory_movements")
 }

@@ -231,14 +231,14 @@ async function seedAdminRoleAssignment(userId: string, roleId: string): Promise<
   console.log('Assigned System Administrator (GLOBAL scope) to the admin user.');
 }
 
-async function seedSampleStore(organizationId: string, managerId: string): Promise<void> {
+async function seedSampleStore(organizationId: string, managerId: string): Promise<string> {
   const existing = await prisma.store.findUnique({ where: { code: 'ICT-STORE-01' } });
   if (existing) {
     console.log('Sample store already seeded — skipping.');
-    return;
+    return existing.id;
   }
 
-  await prisma.store.create({
+  const store = await prisma.store.create({
     data: {
       name: 'ICT Store',
       code: 'ICT-STORE-01',
@@ -248,6 +248,7 @@ async function seedSampleStore(organizationId: string, managerId: string): Promi
     },
   });
   console.log('Seeded sample store: ICT Store (ICT-STORE-01).');
+  return store.id;
 }
 
 async function seedItemCatalog(): Promise<void> {
@@ -304,6 +305,42 @@ async function seedItemCatalog(): Promise<void> {
   console.log(`Seeded ${createdCount} sample catalog item(s) (skipped any already present).`);
 }
 
+async function seedSampleInventory(storeId: string, createdById: string): Promise<void> {
+  const laptop = await prisma.item.findFirst({ where: { name: 'Laptop Dell Latitude' } });
+  if (!laptop) {
+    console.log('Laptop item not found — skipping sample inventory seed.');
+    return;
+  }
+
+  const existing = await prisma.storeInventory.findUnique({
+    where: { storeId_itemId: { storeId, itemId: laptop.id } },
+  });
+  if (existing) {
+    console.log('Sample inventory already seeded — skipping.');
+    return;
+  }
+
+  // Bootstraps initial stock the same way the app would: a movement row
+  // justifies the quantity, even here in the seed script — there's no
+  // "just set the number" path anywhere in this system, including seeding.
+  await prisma.$transaction([
+    prisma.storeInventory.create({
+      data: { storeId, itemId: laptop.id, quantity: 20, minimumStock: 5 },
+    }),
+    prisma.inventoryMovement.create({
+      data: {
+        itemId: laptop.id,
+        toStoreId: storeId,
+        quantity: 20,
+        movementType: 'PURCHASE_RECEIVE',
+        referenceId: 'seed-initial-stock',
+        createdById,
+      },
+    }),
+  ]);
+  console.log('Seeded initial inventory: 20x Laptop Dell Latitude at ICT Store.');
+}
+
 async function main() {
   const ictId = await seedOrganizationTree();
   const adminUserId = await seedAdminUser(ictId);
@@ -314,8 +351,9 @@ async function main() {
   const systemAdminRoleId = roleCodeToId.get('SYSTEM_ADMINISTRATOR')!;
   await seedAdminRoleAssignment(adminUserId, systemAdminRoleId);
 
-  await seedSampleStore(ictId, adminUserId);
+  const storeId = await seedSampleStore(ictId, adminUserId);
   await seedItemCatalog();
+  await seedSampleInventory(storeId, adminUserId);
 }
 
 main()

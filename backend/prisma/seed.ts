@@ -105,6 +105,8 @@ const PERMISSION_KEYS = [
   'purchase.approve',
   'disposal.request',
   'disposal.approve',
+  'item.view',
+  'item.manage',
   'audit.view',
   'report.view',
 ];
@@ -116,15 +118,23 @@ const ROLE_DEFINITIONS: Record<string, { name: string; permissions: string[] | '
   SYSTEM_ADMINISTRATOR: { name: 'System Administrator', permissions: '*' },
   UNIVERSITY_ADMINISTRATOR: {
     name: 'University Administrator',
-    permissions: ['organization.view', 'organization.manage', 'user.view', 'report.view', 'audit.view'],
+    permissions: [
+      'organization.view',
+      'organization.manage',
+      'user.view',
+      'item.view',
+      'item.manage',
+      'report.view',
+      'audit.view',
+    ],
   },
   COLLEGE_ADMINISTRATOR: {
     name: 'College Administrator',
-    permissions: ['organization.view', 'user.view', 'report.view'],
+    permissions: ['organization.view', 'user.view', 'item.view', 'report.view'],
   },
   DEPARTMENT_HEAD: {
     name: 'Department Head',
-    permissions: ['request.approve', 'transfer.approve', 'report.view'],
+    permissions: ['request.approve', 'transfer.approve', 'item.view', 'report.view'],
   },
   STORE_MANAGER: {
     name: 'Store Manager',
@@ -135,23 +145,24 @@ const ROLE_DEFINITIONS: Record<string, { name: string; permissions: string[] | '
       'inventory.adjust',
       'transfer.approve',
       'request.approve',
+      'item.view',
     ],
   },
   STORE_KEEPER: {
     name: 'Store Keeper',
-    permissions: ['inventory.view', 'inventory.issue', 'inventory.receive'],
+    permissions: ['inventory.view', 'inventory.issue', 'inventory.receive', 'item.view'],
   },
   FINANCE_OFFICER: {
     name: 'Finance Officer',
-    permissions: ['purchase.approve', 'report.view'],
+    permissions: ['purchase.approve', 'item.view', 'report.view'],
   },
   PROCUREMENT_OFFICER: {
     name: 'Procurement Officer',
-    permissions: ['purchase.create', 'purchase.approve'],
+    permissions: ['purchase.create', 'purchase.approve', 'item.view', 'item.manage'],
   },
   REQUESTER: {
     name: 'Requester',
-    permissions: ['request.create', 'transfer.request'],
+    permissions: ['request.create', 'transfer.request', 'item.view'],
   },
   AUDITOR: {
     name: 'Auditor',
@@ -239,6 +250,60 @@ async function seedSampleStore(organizationId: string, managerId: string): Promi
   console.log('Seeded sample store: ICT Store (ICT-STORE-01).');
 }
 
+async function seedItemCatalog(): Promise<void> {
+  const categoryNames = [
+    'IT Equipment',
+    'Furniture',
+    'Stationery',
+    'Laboratory Equipment',
+    'Vehicles',
+    'Consumables',
+  ];
+
+  const categoryIds = new Map<string, string>();
+  for (const name of categoryNames) {
+    const category = await prisma.itemCategory.upsert({
+      where: { name },
+      update: {},
+      create: { name },
+    });
+    categoryIds.set(name, category.id);
+  }
+  console.log(`Seeded ${categoryNames.length} item categories.`);
+
+  const sampleItems: {
+    name: string;
+    category: string;
+    unit: string;
+    serialRequired?: boolean;
+    assetType?: 'CONSUMABLE' | 'FIXED_ASSET';
+  }[] = [
+    { name: 'Laptop Dell Latitude', category: 'IT Equipment', unit: 'piece', serialRequired: true, assetType: 'FIXED_ASSET' },
+    { name: 'Printer HP LaserJet', category: 'IT Equipment', unit: 'piece', serialRequired: true, assetType: 'FIXED_ASSET' },
+    { name: 'A4 Paper', category: 'Stationery', unit: 'ream', assetType: 'CONSUMABLE' },
+    { name: 'Projector', category: 'IT Equipment', unit: 'piece', serialRequired: true, assetType: 'FIXED_ASSET' },
+    { name: 'Office Chair', category: 'Furniture', unit: 'piece', assetType: 'FIXED_ASSET' },
+  ];
+
+  let createdCount = 0;
+  for (const item of sampleItems) {
+    const existing = await prisma.item.findFirst({ where: { name: item.name } });
+    if (existing) continue;
+
+    await prisma.item.create({
+      data: {
+        name: item.name,
+        unit: item.unit,
+        serialRequired: item.serialRequired ?? false,
+        assetType: item.assetType ?? 'CONSUMABLE',
+        categoryId: categoryIds.get(item.category)!,
+      },
+    });
+    createdCount += 1;
+  }
+  console.log(`Seeded ${createdCount} sample catalog item(s) (skipped any already present).`);
+}
+
 async function main() {
   const ictId = await seedOrganizationTree();
   const adminUserId = await seedAdminUser(ictId);
@@ -250,6 +315,7 @@ async function main() {
   await seedAdminRoleAssignment(adminUserId, systemAdminRoleId);
 
   await seedSampleStore(ictId, adminUserId);
+  await seedItemCatalog();
 }
 
 main()

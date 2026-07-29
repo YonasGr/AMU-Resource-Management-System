@@ -12,6 +12,7 @@ import { JwtAuthGuard } from './modules/auth/guards/jwt-auth.guard';
 import { RbacModule } from './modules/rbac/rbac.module';
 import { PermissionGuard } from './modules/rbac/guards/permission.guard';
 import { StoreModule } from './modules/store/store.module';
+import { ItemCatalogModule } from './modules/item-catalog/item-catalog.module';
 
 @Module({
   imports: [
@@ -25,7 +26,8 @@ import { StoreModule } from './modules/store/store.module';
     AuthModule,
     RbacModule,
     StoreModule,
-    // Remaining Phase 2 module (Item Catalog) gets registered here next.
+    ItemCatalogModule,
+    // Phase 2 is now complete. Phase 3 (Inventory + Movements) gets registered here next.
   ],
   controllers: [AppController],
   providers: [

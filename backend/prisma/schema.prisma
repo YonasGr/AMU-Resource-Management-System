@@ -200,3 +200,55 @@ model Store {
   @@index([managerId])
   @@map("stores")
 }
+
+enum ItemAssetType {
+  // Consumed/used up (paper, cables) — no individual serial tracking, no
+  // linkage to the future Asset module.
+  CONSUMABLE
+  // Tracked as an individual, long-lived asset (laptop, vehicle) — this is
+  // what the Phase 7 Asset module will attach asset_tag/serial tracking to.
+  FIXED_ASSET
+}
+
+enum ItemStatus {
+  ACTIVE
+  INACTIVE
+}
+
+model ItemCategory {
+  id          String  @id @default(uuid())
+  name        String  @unique
+  description String?
+
+  items Item[]
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("item_categories")
+}
+
+// Items are centralized (spec section 9) — one catalog shared across the
+// whole university, not per-store. Store-level quantities live in the
+// Phase 3 Inventory module (StoreInventory), which references this Item.
+model Item {
+  id             String        @id @default(uuid())
+  name           String
+  description    String?
+  // Free-text unit of measure ("piece", "box", "liter", ...) rather than an
+  // enum — the catalog of possible units is open-ended and store/procurement
+  // staff should be able to use whatever unit fits, not a fixed list.
+  unit           String
+  serialRequired Boolean       @default(false) @map("serial_required")
+  assetType      ItemAssetType @default(CONSUMABLE) @map("asset_type")
+  status         ItemStatus    @default(ACTIVE)
+
+  categoryId String       @map("category_id")
+  category   ItemCategory @relation(fields: [categoryId], references: [id])
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([categoryId])
+  @@map("items")
+}

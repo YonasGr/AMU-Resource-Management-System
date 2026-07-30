@@ -67,6 +67,8 @@ model User {
   userRoles           UserRole[]
   managedStores       Store[]
   createdMovements    InventoryMovement[]
+  createdWorkflowInstances WorkflowInstance[]
+  approvalActions          ApprovalHistory[]
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -322,4 +324,126 @@ model InventoryMovement {
   @@index([fromStoreId])
   @@index([toStoreId])
   @@map("inventory_movements")
+}
+
+// How a step's eligible approver(s) get resolved at runtime, using data from
+// the instance's contextData JSON. All four reuse the existing RBAC scope
+// model (Phase 1.3) rather than inventing a parallel authorization system:
+enum ApproverResolutionType {
+  // Any user holding roleCode, at any scope (e.g. Finance Officer, Procurement Officer).
+  FIXED_ROLE
+  // Any user holding roleCode scoped (ORGANIZATION or GLOBAL) to the org unit
+  // found at contextData[contextOrgKey] — e.g. "requester's department head".
+  ORG_ROLE_AT_CONTEXT_ORG
+  // Any user holding roleCode scoped (STORE, ORGANIZATION, or GLOBAL) to the
+  // store found at contextData[contextStoreKey] — e.g. "store manager of the
+  // source/destination store".
+  STORE_ROLE_AT_CONTEXT_STORE
+  // Any user holding roleCode scoped to the PARENT of the org unit found at
+  // contextData[contextOrgKey] — e.g. "next org level up".
+  ORG_ROLE_AT_NEXT_LEVEL_UP
+}
+
+model WorkflowTemplate {
+  id       String  @id @default(uuid())
+  // e.g. "TRANSFER_REQUEST", "PURCHASE_REQUEST" — what Phase 5+ modules
+  // reference when starting an instance.
+  code     String  @unique
+  name     String
+  isActive Boolean @default(true) @map("is_active")
+
+  steps     WorkflowStepTemplate[]
+  instances WorkflowInstance[]
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("workflow_templates")
+}
+
+model WorkflowStepTemplate {
+  id    String @id @default(uuid())
+  order Int
+  name  String
+
+  approverResolutionType ApproverResolutionType @map("approver_resolution_type")
+  // Required for FIXED_ROLE, ORG_ROLE_AT_CONTEXT_ORG, STORE_ROLE_AT_CONTEXT_STORE,
+  // ORG_ROLE_AT_NEXT_LEVEL_UP — the Role.code to check for.
+  roleCode               String?                @map("role_code")
+  // Required for ORG_ROLE_AT_CONTEXT_ORG / ORG_ROLE_AT_NEXT_LEVEL_UP — which
+  // key in the instance's contextData JSON holds the relevant org unit id.
+  contextOrgKey          String?                @map("context_org_key")
+  // Required for STORE_ROLE_AT_CONTEXT_STORE — which key in contextData
+  // holds the relevant store id.
+  contextStoreKey        String?                @map("context_store_key")
+
+  workflowTemplateId String           @map("workflow_template_id")
+  workflowTemplate   WorkflowTemplate @relation(fields: [workflowTemplateId], references: [id])
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([workflowTemplateId, order])
+  @@map("workflow_step_templates")
+}
+
+enum WorkflowInstanceStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
+// One running approval chain, attached to some entity elsewhere in the
+// system. entityType/entityId are deliberately free strings, not a foreign
+// key, since Phase 4 has no entities of its own yet — Phase 5+ modules
+// (Request, Transfer, Purchase, Disposal, Borrow) will each pass their own
+// entityType ("TRANSFER_REQUEST") and their record's id here.
+model WorkflowInstance {
+  id               String                 @id @default(uuid())
+  entityType       String                 @map("entity_type")
+  entityId         String                 @map("entity_id")
+  status           WorkflowInstanceStatus @default(PENDING)
+  currentStepOrder Int                    @map("current_step_order")
+  // Arbitrary key-value data steps' approver resolution reads from —
+  // e.g. { "requesterOrganizationId": "...", "sourceStoreId": "...",
+  // "destinationStoreId": "..." }.
+  contextData      Json                   @map("context_data")
+
+  workflowTemplateId String           @map("workflow_template_id")
+  workflowTemplate   WorkflowTemplate @relation(fields: [workflowTemplateId], references: [id])
+
+  createdById String @map("created_by")
+  createdBy   User   @relation(fields: [createdById], references: [id])
+
+  history ApprovalHistory[]
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([entityType, entityId])
+  @@map("workflow_instances")
+}
+
+enum ApprovalAction {
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
+model ApprovalHistory {
+  id        String         @id @default(uuid())
+  stepOrder Int            @map("step_order")
+  action    ApprovalAction
+  comment   String?
+
+  workflowInstanceId String           @map("workflow_instance_id")
+  workflowInstance   WorkflowInstance @relation(fields: [workflowInstanceId], references: [id])
+
+  actedById String @map("acted_by")
+  actedBy   User   @relation(fields: [actedById], references: [id])
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([workflowInstanceId])
+  @@map("approval_history")
 }

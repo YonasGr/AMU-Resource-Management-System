@@ -133,13 +133,6 @@ export class AccessControlService {
     return false;
   }
 
-  /** True if targetOrgId is scopeOrgId itself, or a descendant of it. */
-  private async isOrgWithinScope(scopeOrgId: string, targetOrgId: string): Promise<boolean> {
-    if (scopeOrgId === targetOrgId) return true;
-    const ancestors = await this.organizationService.getAncestors(targetOrgId);
-    return ancestors.some((a) => a.id === scopeOrgId);
-  }
-
   /**
    * Returns 'ALL' if the user has a GLOBAL assignment (no filtering needed),
    * otherwise the full set of organization unit ids their ORGANIZATION-scoped
@@ -174,5 +167,84 @@ export class AccessControlService {
       where: { userId, scopeType: ScopeType.STORE },
     });
     return new Set(assignments.map((a) => a.scopeId!));
+  }
+
+  // --- Role-aware scope checks, used by the Phase 4 Workflow Engine's
+  // approver resolution. These differ from hasScopeAccess() above by also
+  // requiring a SPECIFIC role (not just any assignment) — a workflow step
+  // like "Department Head approval" needs someone holding that exact role,
+  // not merely someone with scope access for an unrelated reason.
+
+  /** Does the user hold roleCode at all, regardless of scope? (FIXED_ROLE steps.) */
+  async userHasRole(userId: string, roleCode: string): Promise<boolean> {
+    const count = await this.prisma.userRole.count({
+      where: { userId, role: { code: roleCode } },
+    });
+    return count > 0;
+  }
+
+  /** Does the user hold roleCode scoped (GLOBAL, or ORGANIZATION covering orgId)? */
+  async userHasRoleAtOrgScope(userId: string, roleCode: string, orgId: string): Promise<boolean> {
+    const assignments = await this.prisma.userRole.findMany({
+      where: { userId, role: { code: roleCode } },
+    });
+    for (const assignment of assignments) {
+      if (assignment.scopeType === ScopeType.GLOBAL) return true;
+      if (
+        assignment.scopeType === ScopeType.ORGANIZATION &&
+        (await this.isOrgWithinScope(assignment.scopeId!, orgId))
+      ) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /** Does the user hold roleCode scoped to the PARENT of orgId (or GLOBAL)? */
+  async userHasRoleAtParentOrgScope(
+    userId: string,
+    roleCode: string,
+    orgId: string,
+  ): Promise<boolean> {
+    const ancestors = await this.organizationService.getAncestors(orgId);
+    if (ancestors.length === 0) {
+      // orgId is already the root — there's no "level up", so only a GLOBAL
+      // assignment can satisfy this step.
+      return this.prisma.userRole
+        .count({ where: { userId, role: { code: roleCode }, scopeType: ScopeType.GLOBAL } })
+        .then((count) => count > 0);
+    }
+    const parentOrgId = ancestors[0].id;
+    return this.userHasRoleAtOrgScope(userId, roleCode, parentOrgId);
+  }
+
+  /** Does the user hold roleCode scoped (GLOBAL, STORE=storeId, or ORGANIZATION covering the store's org)? */
+  async userHasRoleAtStoreScope(
+    userId: string,
+    roleCode: string,
+    storeId: string,
+    storeOrganizationId: string,
+  ): Promise<boolean> {
+    const assignments = await this.prisma.userRole.findMany({
+      where: { userId, role: { code: roleCode } },
+    });
+    for (const assignment of assignments) {
+      if (assignment.scopeType === ScopeType.GLOBAL) return true;
+      if (assignment.scopeType === ScopeType.STORE && assignment.scopeId === storeId) return true;
+      if (
+        assignment.scopeType === ScopeType.ORGANIZATION &&
+        (await this.isOrgWithinScope(assignment.scopeId!, storeOrganizationId))
+      ) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /** True if targetOrgId is scopeOrgId itself, or a descendant of it. */
+  async isOrgWithinScope(scopeOrgId: string, targetOrgId: string): Promise<boolean> {
+    if (scopeOrgId === targetOrgId) return true;
+    const ancestors = await this.organizationService.getAncestors(targetOrgId);
+    return ancestors.some((a) => a.id === scopeOrgId);
   }
 }

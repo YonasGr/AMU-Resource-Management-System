@@ -3,15 +3,26 @@ import * as argon2 from 'argon2';
 
 const prisma = new PrismaClient();
 
-async function seedOrganizationTree(): Promise<string> {
+interface OrgIds {
+  ictId: string;
+  csDeptId: string;
+  itDeptId: string;
+}
+
+async function seedOrganizationTree(): Promise<OrgIds> {
   const existing = await prisma.organizationUnit.findFirst({
     where: { type: 'UNIVERSITY' },
   });
   if (existing) {
     console.log('Organization tree already seeded — skipping.');
-    // Still need the ICT Directorate id for admin seeding below.
     const ict = await prisma.organizationUnit.findFirst({ where: { name: 'ICT Directorate' } });
-    return ict!.id;
+    const csDept = await prisma.organizationUnit.findFirst({
+      where: { name: 'Computer Science Department' },
+    });
+    const itDept = await prisma.organizationUnit.findFirst({
+      where: { name: 'Information Technology Department' },
+    });
+    return { ictId: ict!.id, csDeptId: csDept!.id, itDeptId: itDept!.id };
   }
 
   const university = await prisma.organizationUnit.create({
@@ -22,11 +33,11 @@ async function seedOrganizationTree(): Promise<string> {
     data: { name: 'College of Engineering', type: 'COLLEGE', parentId: university.id },
   });
 
-  await prisma.organizationUnit.create({
+  const csDept = await prisma.organizationUnit.create({
     data: { name: 'Computer Science Department', type: 'DEPARTMENT', parentId: engineering.id },
   });
 
-  await prisma.organizationUnit.create({
+  const itDept = await prisma.organizationUnit.create({
     data: {
       name: 'Information Technology Department',
       type: 'DEPARTMENT',
@@ -55,7 +66,7 @@ async function seedOrganizationTree(): Promise<string> {
   });
 
   console.log('Seeded organization tree for Arba Minch University.');
-  return ict.id;
+  return { ictId: ict.id, csDeptId: csDept.id, itDeptId: itDept.id };
 }
 
 async function seedAdminUser(organizationId: string): Promise<string> {
@@ -341,8 +352,242 @@ async function seedSampleInventory(storeId: string, createdById: string): Promis
   console.log('Seeded initial inventory: 20x Laptop Dell Latitude at ICT Store.');
 }
 
+interface WorkflowStepDef {
+  order: number;
+  name: string;
+  approverResolutionType:
+    | 'FIXED_ROLE'
+    | 'ORG_ROLE_AT_CONTEXT_ORG'
+    | 'STORE_ROLE_AT_CONTEXT_STORE'
+    | 'ORG_ROLE_AT_NEXT_LEVEL_UP';
+  roleCode: string;
+  contextOrgKey?: string;
+  contextStoreKey?: string;
+}
+
+// Matches the chains described in the spec (sections 13-15, 20).
+const WORKFLOW_TEMPLATES: Record<string, { name: string; steps: WorkflowStepDef[] }> = {
+  ITEM_REQUEST: {
+    name: 'Item Request',
+    steps: [
+      {
+        order: 1,
+        name: 'Department Head Approval',
+        approverResolutionType: 'ORG_ROLE_AT_CONTEXT_ORG',
+        roleCode: 'DEPARTMENT_HEAD',
+        contextOrgKey: 'requesterOrganizationId',
+      },
+      {
+        order: 2,
+        name: 'Store Manager Approval',
+        approverResolutionType: 'STORE_ROLE_AT_CONTEXT_STORE',
+        roleCode: 'STORE_MANAGER',
+        contextStoreKey: 'targetStoreId',
+      },
+    ],
+  },
+  TRANSFER_REQUEST: {
+    name: 'Department-to-Department Transfer',
+    steps: [
+      {
+        order: 1,
+        name: 'Requester Department Head Approval',
+        approverResolutionType: 'ORG_ROLE_AT_CONTEXT_ORG',
+        roleCode: 'DEPARTMENT_HEAD',
+        contextOrgKey: 'requesterOrganizationId',
+      },
+      {
+        order: 2,
+        name: 'Source Store Manager Approval',
+        approverResolutionType: 'STORE_ROLE_AT_CONTEXT_STORE',
+        roleCode: 'STORE_MANAGER',
+        contextStoreKey: 'sourceStoreId',
+      },
+      {
+        order: 3,
+        name: 'Receiving Store Manager Approval',
+        approverResolutionType: 'STORE_ROLE_AT_CONTEXT_STORE',
+        roleCode: 'STORE_MANAGER',
+        contextStoreKey: 'destinationStoreId',
+      },
+    ],
+  },
+  PURCHASE_REQUEST: {
+    name: 'University Purchase',
+    steps: [
+      {
+        order: 1,
+        name: 'Department Head Approval',
+        approverResolutionType: 'ORG_ROLE_AT_CONTEXT_ORG',
+        roleCode: 'DEPARTMENT_HEAD',
+        contextOrgKey: 'requesterOrganizationId',
+      },
+      {
+        order: 2,
+        name: 'Finance Approval',
+        approverResolutionType: 'FIXED_ROLE',
+        roleCode: 'FINANCE_OFFICER',
+      },
+      {
+        order: 3,
+        name: 'Procurement Approval',
+        approverResolutionType: 'FIXED_ROLE',
+        roleCode: 'PROCUREMENT_OFFICER',
+      },
+      {
+        order: 4,
+        name: 'Central Receiving Store Confirmation',
+        approverResolutionType: 'STORE_ROLE_AT_CONTEXT_STORE',
+        roleCode: 'STORE_MANAGER',
+        contextStoreKey: 'destinationStoreId',
+      },
+    ],
+  },
+  DISPOSAL_REQUEST: {
+    name: 'Asset Disposal',
+    steps: [
+      {
+        order: 1,
+        name: 'Store Manager Inspection',
+        approverResolutionType: 'STORE_ROLE_AT_CONTEXT_STORE',
+        roleCode: 'STORE_MANAGER',
+        contextStoreKey: 'targetStoreId',
+      },
+      {
+        order: 2,
+        name: 'University Administrator Approval',
+        approverResolutionType: 'FIXED_ROLE',
+        roleCode: 'UNIVERSITY_ADMINISTRATOR',
+      },
+    ],
+  },
+  BORROW_REQUEST: {
+    name: 'Item Borrowing',
+    steps: [
+      {
+        order: 1,
+        name: 'Store Manager Approval',
+        approverResolutionType: 'STORE_ROLE_AT_CONTEXT_STORE',
+        roleCode: 'STORE_MANAGER',
+        contextStoreKey: 'targetStoreId',
+      },
+    ],
+  },
+};
+
+async function seedWorkflowTemplates(): Promise<void> {
+  for (const [code, def] of Object.entries(WORKFLOW_TEMPLATES)) {
+    const template = await prisma.workflowTemplate.upsert({
+      where: { code },
+      update: { name: def.name },
+      create: { code, name: def.name },
+    });
+
+    await prisma.$transaction([
+      prisma.workflowStepTemplate.deleteMany({ where: { workflowTemplateId: template.id } }),
+      prisma.workflowStepTemplate.createMany({
+        data: def.steps.map((s) => ({
+          workflowTemplateId: template.id,
+          order: s.order,
+          name: s.name,
+          approverResolutionType: s.approverResolutionType,
+          roleCode: s.roleCode,
+          contextOrgKey: s.contextOrgKey,
+          contextStoreKey: s.contextStoreKey,
+        })),
+      }),
+    ]);
+  }
+  console.log(`Seeded ${Object.keys(WORKFLOW_TEMPLATES).length} workflow templates.`);
+}
+
+/**
+ * Dev-only test accounts so the Transfer Request workflow (3 approval steps,
+ * 3 different resolution strategies) can be exercised end-to-end without
+ * manually creating users/stores/role-assignments through Swagger first.
+ * Password for all three: "ChangeMe123!" (same as the seed admin).
+ */
+async function seedWorkflowTestData(
+  csDeptId: string,
+  itDeptId: string,
+  roleCodeToId: Map<string, string>,
+): Promise<void> {
+  const passwordHash = await argon2.hash('ChangeMe123!');
+
+  async function ensureUser(email: string, fullName: string, organizationId: string): Promise<string> {
+    const existing = await prisma.user.findUnique({ where: { email } });
+    if (existing) return existing.id;
+    const user = await prisma.user.create({
+      data: { fullName, email, passwordHash, organizationId },
+    });
+    return user.id;
+  }
+
+  async function ensureStore(code: string, name: string, organizationId: string, managerId: string): Promise<string> {
+    const existing = await prisma.store.findUnique({ where: { code } });
+    if (existing) return existing.id;
+    const store = await prisma.store.create({
+      data: { code, name, organizationId, managerId },
+    });
+    return store.id;
+  }
+
+  async function ensureRoleAssignment(
+    userId: string,
+    roleId: string,
+    scopeType: 'ORGANIZATION' | 'STORE',
+    scopeId: string,
+  ): Promise<void> {
+    const existing = await prisma.userRole.findFirst({ where: { userId, roleId, scopeType, scopeId } });
+    if (existing) return;
+    await prisma.userRole.create({ data: { userId, roleId, scopeType, scopeId } });
+  }
+
+  const deptHeadRoleId = roleCodeToId.get('DEPARTMENT_HEAD')!;
+  const storeManagerRoleId = roleCodeToId.get('STORE_MANAGER')!;
+
+  const deptHeadUserId = await ensureUser(
+    'wftest.depthead@amu.edu.et',
+    'Workflow Test — CS Dept Head',
+    csDeptId,
+  );
+  await ensureRoleAssignment(deptHeadUserId, deptHeadRoleId, 'ORGANIZATION', csDeptId);
+
+  const sourceManagerUserId = await ensureUser(
+    'wftest.sourcemanager@amu.edu.et',
+    'Workflow Test — Source Store Manager',
+    csDeptId,
+  );
+  const sourceStoreId = await ensureStore(
+    'WF-TEST-SOURCE-01',
+    'Workflow Test Source Store',
+    csDeptId,
+    sourceManagerUserId,
+  );
+  await ensureRoleAssignment(sourceManagerUserId, storeManagerRoleId, 'STORE', sourceStoreId);
+
+  const destManagerUserId = await ensureUser(
+    'wftest.destmanager@amu.edu.et',
+    'Workflow Test — Destination Store Manager',
+    itDeptId,
+  );
+  const destStoreId = await ensureStore(
+    'WF-TEST-DEST-01',
+    'Workflow Test Destination Store',
+    itDeptId,
+    destManagerUserId,
+  );
+  await ensureRoleAssignment(destManagerUserId, storeManagerRoleId, 'STORE', destStoreId);
+
+  console.log('Seeded workflow test users/stores (password for all: ChangeMe123!):');
+  console.log('  wftest.depthead@amu.edu.et       — Department Head, scoped to CS Department');
+  console.log(`  wftest.sourcemanager@amu.edu.et  — Store Manager of WF-TEST-SOURCE-01 (${sourceStoreId})`);
+  console.log(`  wftest.destmanager@amu.edu.et    — Store Manager of WF-TEST-DEST-01 (${destStoreId})`);
+  console.log(`  CS Department id: ${csDeptId}`);
+}
+
 async function main() {
-  const ictId = await seedOrganizationTree();
+  const { ictId, csDeptId, itDeptId } = await seedOrganizationTree();
   const adminUserId = await seedAdminUser(ictId);
 
   const permissionKeyToId = await seedPermissions();
@@ -354,6 +599,9 @@ async function main() {
   const storeId = await seedSampleStore(ictId, adminUserId);
   await seedItemCatalog();
   await seedSampleInventory(storeId, adminUserId);
+
+  await seedWorkflowTemplates();
+  await seedWorkflowTestData(csDeptId, itDeptId, roleCodeToId);
 }
 
 main()

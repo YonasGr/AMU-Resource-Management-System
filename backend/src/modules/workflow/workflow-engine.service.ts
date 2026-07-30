@@ -1,0 +1,310 @@
+import {
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
+import { WorkflowInstance, WorkflowStepTemplate } from '@prisma/client';
+import { PrismaService } from '../../prisma/prisma.service';
+import { AccessControlService } from '../rbac/access-control.service';
+import { SafeUser } from '../auth/decorators/current-user.decorator';
+import { CreateWorkflowInstanceDto } from './dto/create-instance.dto';
+
+type ContextData = Record<string, string>;
+
+/**
+ * Runs configurable multi-step approval chains. Phase 5+ modules (Request,
+ * Transfer, Purchase, Disposal, Borrow) call createInstance() when their
+ * record needs approval, then check getPendingStep()/approve()/reject() as
+ * the chain progresses — none of them implement their own approval logic.
+ */
+@Injectable()
+export class WorkflowEngineService {
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly accessControlService: AccessControlService,
+  ) {}
+
+  async createInstance(
+    dto: CreateWorkflowInstanceDto,
+    createdById: string,
+  ): Promise<WorkflowInstance> {
+    const template = await this.prisma.workflowTemplate.findUnique({
+      where: { code: dto.templateCode },
+      include: { steps: { orderBy: { order: 'asc' } } },
+    });
+    if (!template || !template.isActive) {
+      throw new NotFoundException(`No active workflow template with code "${dto.templateCode}"`);
+    }
+    if (template.steps.length === 0) {
+      throw new BadRequestException(`Workflow template "${dto.templateCode}" has no steps`);
+    }
+
+    const existingActive = await this.prisma.workflowInstance.findFirst({
+      where: { entityType: dto.entityType, entityId: dto.entityId, status: 'PENDING' },
+    });
+    if (existingActive) {
+      throw new BadRequestException(
+        `An active workflow already exists for ${dto.entityType}:${dto.entityId}`,
+      );
+    }
+
+    return this.prisma.workflowInstance.create({
+      data: {
+        workflowTemplateId: template.id,
+        entityType: dto.entityType,
+        entityId: dto.entityId,
+        currentStepOrder: template.steps[0].order,
+        contextData: dto.contextData,
+        createdById,
+      },
+    });
+  }
+
+  async getInstance(id: string) {
+    const instance = await this.prisma.workflowInstance.findUnique({
+      where: { id },
+      include: {
+        workflowTemplate: { include: { steps: { orderBy: { order: 'asc' } } } },
+        history: { orderBy: { createdAt: 'asc' }, include: { actedBy: true } },
+        createdBy: true,
+      },
+    });
+    if (!instance) {
+      throw new NotFoundException(`Workflow instance ${id} not found`);
+    }
+    return instance;
+  }
+
+  async getInstanceForEntity(entityType: string, entityId: string) {
+    const instance = await this.prisma.workflowInstance.findFirst({
+      where: { entityType, entityId },
+      orderBy: { createdAt: 'desc' },
+      include: {
+        workflowTemplate: { include: { steps: { orderBy: { order: 'asc' } } } },
+        history: { orderBy: { createdAt: 'asc' }, include: { actedBy: true } },
+      },
+    });
+    if (!instance) {
+      throw new NotFoundException(`No workflow instance found for ${entityType}:${entityId}`);
+    }
+    return instance;
+  }
+
+  async listTemplates() {
+    return this.prisma.workflowTemplate.findMany({
+      include: { steps: { orderBy: { order: 'asc' } } },
+      orderBy: { code: 'asc' },
+    });
+  }
+
+  /**
+   * All PENDING instances where the given user is an eligible approver for
+   * the CURRENT step specifically (not just any step). Powers the "pending
+   * approvals inbox" — checks every pending instance's current step, so it
+   * scales linearly with open approvals rather than total workflow volume,
+   * which is fine at this system's scale.
+   */
+  async getMyPendingApprovals(userId: string) {
+    const pendingInstances = await this.prisma.workflowInstance.findMany({
+      where: { status: 'PENDING' },
+      include: {
+        workflowTemplate: { include: { steps: { orderBy: { order: 'asc' } } } },
+        createdBy: true,
+      },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    const eligible = [];
+    for (const instance of pendingInstances) {
+      const currentStep = instance.workflowTemplate.steps.find(
+        (s) => s.order === instance.currentStepOrder,
+      );
+      if (!currentStep) continue;
+
+      try {
+        const canAct = await this.canUserActOnStep(
+          userId,
+          currentStep,
+          instance.contextData as ContextData,
+        );
+        if (canAct) {
+          eligible.push({ ...instance, currentStep });
+        }
+      } catch {
+        // A single instance with malformed contextData (e.g. missing key,
+        // deleted store) shouldn't break the whole inbox — skip it.
+        continue;
+      }
+    }
+    return eligible;
+  }
+
+  async approve(instanceId: string, currentUser: SafeUser, comment?: string) {
+    const instance = await this.getInstance(instanceId);
+    if (instance.status !== 'PENDING') {
+      throw new BadRequestException(`Workflow is already ${instance.status.toLowerCase()}`);
+    }
+
+    const steps = instance.workflowTemplate.steps;
+    const currentStep = steps.find((s) => s.order === instance.currentStepOrder);
+    if (!currentStep) {
+      throw new BadRequestException('No step found at the current order — template may have changed');
+    }
+
+    const eligible = await this.canUserActOnStep(currentUser.id, currentStep, instance.contextData as ContextData);
+    if (!eligible) {
+      throw new ForbiddenException(
+        `You are not an eligible approver for step "${currentStep.name}"`,
+      );
+    }
+
+    const nextStep = steps.find((s) => s.order > instance.currentStepOrder);
+
+    return this.prisma.$transaction(async (tx) => {
+      await tx.approvalHistory.create({
+        data: {
+          workflowInstanceId: instance.id,
+          stepOrder: currentStep.order,
+          action: 'APPROVED',
+          comment,
+          actedById: currentUser.id,
+        },
+      });
+
+      return tx.workflowInstance.update({
+        where: { id: instance.id },
+        data: nextStep
+          ? { currentStepOrder: nextStep.order }
+          : { status: 'APPROVED' },
+      });
+    });
+  }
+
+  async reject(instanceId: string, currentUser: SafeUser, comment?: string) {
+    const instance = await this.getInstance(instanceId);
+    if (instance.status !== 'PENDING') {
+      throw new BadRequestException(`Workflow is already ${instance.status.toLowerCase()}`);
+    }
+
+    const currentStep = instance.workflowTemplate.steps.find(
+      (s) => s.order === instance.currentStepOrder,
+    );
+    if (!currentStep) {
+      throw new BadRequestException('No step found at the current order — template may have changed');
+    }
+
+    const eligible = await this.canUserActOnStep(currentUser.id, currentStep, instance.contextData as ContextData);
+    if (!eligible) {
+      throw new ForbiddenException(
+        `You are not an eligible approver for step "${currentStep.name}"`,
+      );
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      await tx.approvalHistory.create({
+        data: {
+          workflowInstanceId: instance.id,
+          stepOrder: currentStep.order,
+          action: 'REJECTED',
+          comment,
+          actedById: currentUser.id,
+        },
+      });
+
+      return tx.workflowInstance.update({
+        where: { id: instance.id },
+        data: { status: 'REJECTED' },
+      });
+    });
+  }
+
+  /** Only the original requester can cancel their own pending workflow. */
+  async cancel(instanceId: string, currentUser: SafeUser, comment?: string) {
+    const instance = await this.getInstance(instanceId);
+    if (instance.status !== 'PENDING') {
+      throw new BadRequestException(`Workflow is already ${instance.status.toLowerCase()}`);
+    }
+    if (instance.createdById !== currentUser.id) {
+      throw new ForbiddenException('Only the requester can cancel this workflow');
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      await tx.approvalHistory.create({
+        data: {
+          workflowInstanceId: instance.id,
+          stepOrder: instance.currentStepOrder,
+          action: 'CANCELLED',
+          comment,
+          actedById: currentUser.id,
+        },
+      });
+      return tx.workflowInstance.update({
+        where: { id: instance.id },
+        data: { status: 'CANCELLED' },
+      });
+    });
+  }
+
+  /**
+   * The approver-resolution logic: given a step's configured strategy, does
+   * this user qualify? Reuses AccessControlService's role+scope helpers
+   * rather than reimplementing scope-walking here.
+   */
+  private async canUserActOnStep(
+    userId: string,
+    step: WorkflowStepTemplate,
+    contextData: ContextData,
+  ): Promise<boolean> {
+    switch (step.approverResolutionType) {
+      case 'FIXED_ROLE':
+        return this.accessControlService.userHasRole(userId, step.roleCode!);
+
+      case 'ORG_ROLE_AT_CONTEXT_ORG': {
+        const orgId = contextData[step.contextOrgKey!];
+        if (!orgId) {
+          throw new BadRequestException(
+            `Missing "${step.contextOrgKey}" in contextData for step "${step.name}"`,
+          );
+        }
+        return this.accessControlService.userHasRoleAtOrgScope(userId, step.roleCode!, orgId);
+      }
+
+      case 'ORG_ROLE_AT_NEXT_LEVEL_UP': {
+        const orgId = contextData[step.contextOrgKey!];
+        if (!orgId) {
+          throw new BadRequestException(
+            `Missing "${step.contextOrgKey}" in contextData for step "${step.name}"`,
+          );
+        }
+        return this.accessControlService.userHasRoleAtParentOrgScope(
+          userId,
+          step.roleCode!,
+          orgId,
+        );
+      }
+
+      case 'STORE_ROLE_AT_CONTEXT_STORE': {
+        const storeId = contextData[step.contextStoreKey!];
+        if (!storeId) {
+          throw new BadRequestException(
+            `Missing "${step.contextStoreKey}" in contextData for step "${step.name}"`,
+          );
+        }
+        const store = await this.prisma.store.findUnique({ where: { id: storeId } });
+        if (!store) {
+          throw new NotFoundException(`Store ${storeId} not found`);
+        }
+        return this.accessControlService.userHasRoleAtStoreScope(
+          userId,
+          step.roleCode!,
+          storeId,
+          store.organizationId,
+        );
+      }
+
+      default:
+        return false;
+    }
+  }
+}

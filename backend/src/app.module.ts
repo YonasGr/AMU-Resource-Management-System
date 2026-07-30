@@ -14,6 +14,7 @@ import { PermissionGuard } from './modules/rbac/guards/permission.guard';
 import { StoreModule } from './modules/store/store.module';
 import { ItemCatalogModule } from './modules/item-catalog/item-catalog.module';
 import { InventoryModule } from './modules/inventory/inventory.module';
+import { WorkflowModule } from './modules/workflow/workflow.module';
 
 @Module({
   imports: [
@@ -29,7 +30,8 @@ import { InventoryModule } from './modules/inventory/inventory.module';
     StoreModule,
     ItemCatalogModule,
     InventoryModule,
-    // Phase 4 (Workflow Engine) gets registered here next.
+    WorkflowModule,
+    // Phase 5 (Requests) gets registered here next.
   ],
   controllers: [AppController],
   providers: [

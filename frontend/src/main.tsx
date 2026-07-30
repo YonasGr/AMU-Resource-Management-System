@@ -2,9 +2,17 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { BrowserRouter, Route, Routes } from 'react-router-dom';
-import App from './App';
 import LoginPage from './pages/LoginPage';
+import DashboardPage from './pages/DashboardPage';
+import OrgTreePage from './pages/organization/OrgTreePage';
+import RolesPermissionsPage from './pages/rbac/RolesPermissionsPage';
+import StoreListPage from './pages/stores/StoreListPage';
+import StoreDetailPage from './pages/stores/StoreDetailPage';
+import ItemCatalogPage from './pages/items/ItemCatalogPage';
+import InventoryDashboardPage from './pages/inventory/InventoryDashboardPage';
+import ApprovalsInboxPage from './pages/workflow/ApprovalsInboxPage';
 import ProtectedRoute from './routes/ProtectedRoute';
+import { AppShell } from './components/layout/AppShell';
 import './index.css';
 import './lib/api';
 
@@ -17,7 +25,16 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
         <Routes>
           <Route path="/login" element={<LoginPage />} />
           <Route element={<ProtectedRoute />}>
-            <Route path="/" element={<App />} />
+            <Route element={<AppShell />}>
+              <Route path="/" element={<DashboardPage />} />
+              <Route path="/organization" element={<OrgTreePage />} />
+              <Route path="/rbac" element={<RolesPermissionsPage />} />
+              <Route path="/stores" element={<StoreListPage />} />
+              <Route path="/stores/:id" element={<StoreDetailPage />} />
+              <Route path="/items" element={<ItemCatalogPage />} />
+              <Route path="/inventory" element={<InventoryDashboardPage />} />
+              <Route path="/approvals" element={<ApprovalsInboxPage />} />
+            </Route>
           </Route>
         </Routes>
       </BrowserRouter>

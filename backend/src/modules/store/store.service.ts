@@ -85,6 +85,21 @@ export class StoreService {
     return this.prisma.store.findMany({ where, orderBy: { name: 'asc' } });
   }
 
+  /**
+   * Unscoped id/name/code for every active store, no matter who's asking or
+   * what they manage. Used for "pick a store" pickers on request-creation
+   * forms — an ordinary requester naming a store they don't manage is the
+   * normal case, not an edge case, so this deliberately bypasses the
+   * scope filtering findAll() does for management purposes.
+   */
+  async listDirectory(): Promise<Pick<Store, 'id' | 'name' | 'code'>[]> {
+    return this.prisma.store.findMany({
+      where: { status: 'ACTIVE' },
+      select: { id: true, name: true, code: true },
+      orderBy: { name: 'asc' },
+    });
+  }
+
   async findOne(id: string, currentUser: SafeUser): Promise<Store> {
     const store = await this.prisma.store.findUnique({ where: { id } });
     if (!store) {

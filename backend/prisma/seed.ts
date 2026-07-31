@@ -511,7 +511,7 @@ async function seedWorkflowTestData(
   csDeptId: string,
   itDeptId: string,
   roleCodeToId: Map<string, string>,
-): Promise<void> {
+): Promise<{ sourceStoreId: string; destStoreId: string }> {
   const passwordHash = await argon2.hash('ChangeMe123!');
 
   async function ensureUser(email: string, fullName: string, organizationId: string): Promise<string> {
@@ -579,11 +579,65 @@ async function seedWorkflowTestData(
   );
   await ensureRoleAssignment(destManagerUserId, storeManagerRoleId, 'STORE', destStoreId);
 
+  // A requester who actually belongs to CS Department — request.organizationId
+  // comes from the REQUESTER's own org, not whoever happens to submit it, so
+  // submitting as admin (home org: ICT Directorate) would route to the wrong
+  // department head. This user exists specifically so the "CS needs 10
+  // chairs" scenario resolves to wftest.depthead correctly.
+  const requesterRoleId = roleCodeToId.get('REQUESTER')!;
+  const requesterUserId = await ensureUser(
+    'wftest.requester@amu.edu.et',
+    'Workflow Test — CS Dept Requester',
+    csDeptId,
+  );
+  await ensureRoleAssignment(requesterUserId, requesterRoleId, 'ORGANIZATION', csDeptId);
+
   console.log('Seeded workflow test users/stores (password for all: ChangeMe123!):');
+  console.log('  wftest.requester@amu.edu.et      — Requester, in CS Department (use this to submit test requests)');
   console.log('  wftest.depthead@amu.edu.et       — Department Head, scoped to CS Department');
   console.log(`  wftest.sourcemanager@amu.edu.et  — Store Manager of WF-TEST-SOURCE-01 (${sourceStoreId})`);
   console.log(`  wftest.destmanager@amu.edu.et    — Store Manager of WF-TEST-DEST-01 (${destStoreId})`);
   console.log(`  CS Department id: ${csDeptId}`);
+
+  return { sourceStoreId, destStoreId };
+}
+
+/**
+ * Stocks the workflow test source store with Office Chairs — matches the
+ * spec's own "CS needs 10 chairs" example (section 14) exactly, so the
+ * Transfer Request end-to-end test has real stock to move.
+ */
+async function seedTransferScenarioStock(sourceStoreId: string, createdById: string): Promise<void> {
+  const chair = await prisma.item.findFirst({ where: { name: 'Office Chair' } });
+  if (!chair) {
+    console.log('Office Chair item not found — skipping transfer scenario stock seed.');
+    return;
+  }
+
+  const existing = await prisma.storeInventory.findUnique({
+    where: { storeId_itemId: { storeId: sourceStoreId, itemId: chair.id } },
+  });
+  if (existing) {
+    console.log('Transfer scenario stock already seeded — skipping.');
+    return;
+  }
+
+  await prisma.$transaction([
+    prisma.storeInventory.create({
+      data: { storeId: sourceStoreId, itemId: chair.id, quantity: 20, minimumStock: 5 },
+    }),
+    prisma.inventoryMovement.create({
+      data: {
+        itemId: chair.id,
+        toStoreId: sourceStoreId,
+        quantity: 20,
+        movementType: 'PURCHASE_RECEIVE',
+        referenceId: 'seed-transfer-scenario-stock',
+        createdById,
+      },
+    }),
+  ]);
+  console.log('Seeded 20x Office Chair at the workflow test source store.');
 }
 
 async function main() {
@@ -601,7 +655,8 @@ async function main() {
   await seedSampleInventory(storeId, adminUserId);
 
   await seedWorkflowTemplates();
-  await seedWorkflowTestData(csDeptId, itDeptId, roleCodeToId);
+  const { sourceStoreId } = await seedWorkflowTestData(csDeptId, itDeptId, roleCodeToId);
+  await seedTransferScenarioStock(sourceStoreId, adminUserId);
 }
 
 main()

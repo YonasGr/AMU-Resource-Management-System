@@ -43,6 +43,17 @@ export class StoreController {
     return this.storeService.findAll(user, { organizationId, status });
   }
 
+  @Get('directory')
+  @ApiOperation({
+    summary:
+      'Unscoped id/name/code list of every active store — for picking a store when creating a ' +
+      "request. Deliberately not scoped: naming a store you don't manage is the whole point of " +
+      "a request. Doesn't expose anything beyond what a campus directory would.",
+  })
+  listDirectory() {
+    return this.storeService.listDirectory();
+  }
+
   @Get(':id')
   @RequirePermission('store.view')
   @ApiOperation({ summary: 'Get a single store by id' })

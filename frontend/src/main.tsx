@@ -10,6 +10,9 @@ import StoreListPage from './pages/stores/StoreListPage';
 import StoreDetailPage from './pages/stores/StoreDetailPage';
 import ItemCatalogPage from './pages/items/ItemCatalogPage';
 import InventoryDashboardPage from './pages/inventory/InventoryDashboardPage';
+import RequestsListPage from './pages/requests/RequestsListPage';
+import NewRequestPage from './pages/requests/NewRequestPage';
+import RequestDetailPage from './pages/requests/RequestDetailPage';
 import ApprovalsInboxPage from './pages/workflow/ApprovalsInboxPage';
 import ProtectedRoute from './routes/ProtectedRoute';
 import { AppShell } from './components/layout/AppShell';
@@ -33,6 +36,9 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
               <Route path="/stores/:id" element={<StoreDetailPage />} />
               <Route path="/items" element={<ItemCatalogPage />} />
               <Route path="/inventory" element={<InventoryDashboardPage />} />
+              <Route path="/requests" element={<RequestsListPage />} />
+              <Route path="/requests/new" element={<NewRequestPage />} />
+              <Route path="/requests/:id" element={<RequestDetailPage />} />
               <Route path="/approvals" element={<ApprovalsInboxPage />} />
             </Route>
           </Route>

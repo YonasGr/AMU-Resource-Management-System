@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { Link } from 'react-router-dom';
 import { CheckSquare, Check, X } from 'lucide-react';
 import { api } from '../../lib/api';
 import { PageHeader } from '../../components/ui/PageHeader';
@@ -8,6 +9,16 @@ import { Badge } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
 import { EmptyState } from '../../components/ui/EmptyState';
+
+const TYPE_LABEL: Record<string, string> = {
+  ITEM_REQUEST: 'Item Request',
+  TRANSFER_REQUEST: 'Transfer Request',
+  PURCHASE_REQUEST: 'Purchase Request',
+  DISTRIBUTION_REQUEST: 'Distribution Request',
+  BORROW_REQUEST: 'Borrow Request',
+  DISPOSAL_REQUEST: 'Disposal Request',
+  EXTERNAL_REQUEST: 'External Request',
+};
 
 interface PendingApproval {
   id: string;
@@ -23,9 +34,18 @@ function ApprovalRow({ approval, onDone }: { approval: PendingApproval; onDone: 
   const [comment, setComment] = useState('');
   const [showCommentFor, setShowCommentFor] = useState<'approve' | 'reject' | null>(null);
 
+  // entityId IS the Request's own id (see RequestService.submit) — going
+  // through /requests/... rather than the raw /workflows/instances/...
+  // endpoint means the "on final approval, execute the request" hook
+  // actually runs (issuing/transferring stock), not just advancing the
+  // approval chain.
+  const isKnownRequestType = Boolean(TYPE_LABEL[approval.entityType]);
+
   const actMutation = useMutation({
     mutationFn: (action: 'approve' | 'reject') =>
-      api.post(`/workflows/instances/${approval.id}/${action}`, { comment: comment || undefined }),
+      isKnownRequestType
+        ? api.post(`/requests/${approval.entityId}/${action}`, { comment: comment || undefined })
+        : api.post(`/workflows/instances/${approval.id}/${action}`, { comment: comment || undefined }),
     onSuccess: onDone,
   });
 
@@ -33,10 +53,16 @@ function ApprovalRow({ approval, onDone }: { approval: PendingApproval; onDone: 
     <div className="flex flex-col gap-3 border-b border-border px-5 py-4 last:border-0">
       <div className="flex items-center justify-between">
         <div>
-          <p className="font-medium text-ink">{approval.workflowTemplate.name}</p>
-          <p className="text-xs text-muted">
-            {approval.entityType} · {approval.entityId} · requested by {approval.createdBy.fullName}
+          <p className="font-medium text-ink">
+            {isKnownRequestType ? (
+              <Link to={`/requests/${approval.entityId}`} className="text-primary hover:underline">
+                {TYPE_LABEL[approval.entityType]}
+              </Link>
+            ) : (
+              approval.workflowTemplate.name
+            )}
           </p>
+          <p className="text-xs text-muted">requested by {approval.createdBy.fullName}</p>
         </div>
         <Badge tone="warning">{approval.currentStep.name}</Badge>
       </div>
@@ -91,6 +117,8 @@ export default function ApprovalsInboxPage() {
   const refresh = () => {
     queryClient.invalidateQueries({ queryKey: ['my-pending-approvals'] });
     queryClient.invalidateQueries({ queryKey: ['my-pending-approvals-count'] });
+    queryClient.invalidateQueries({ queryKey: ['request'] });
+    queryClient.invalidateQueries({ queryKey: ['requests'] });
   };
 
   return (

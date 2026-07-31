@@ -6,6 +6,7 @@ import {
   Warehouse,
   Package,
   ClipboardList,
+  FileText,
   CheckSquare,
 } from 'lucide-react';
 import { cn } from '../../lib/cn';
@@ -18,6 +19,7 @@ const NAV_ITEMS = [
   { to: '/stores', label: 'Stores', icon: Warehouse },
   { to: '/items', label: 'Item Catalog', icon: Package },
   { to: '/inventory', label: 'Inventory', icon: ClipboardList },
+  { to: '/requests', label: 'Requests', icon: FileText },
   { to: '/approvals', label: 'Approvals', icon: CheckSquare, badge: true },
 ];
 

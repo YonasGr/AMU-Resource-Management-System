@@ -15,6 +15,7 @@ import { StoreModule } from './modules/store/store.module';
 import { ItemCatalogModule } from './modules/item-catalog/item-catalog.module';
 import { InventoryModule } from './modules/inventory/inventory.module';
 import { WorkflowModule } from './modules/workflow/workflow.module';
+import { RequestModule } from './modules/request/request.module';
 
 @Module({
   imports: [
@@ -31,7 +32,8 @@ import { WorkflowModule } from './modules/workflow/workflow.module';
     ItemCatalogModule,
     InventoryModule,
     WorkflowModule,
-    // Phase 5 (Requests) gets registered here next.
+    RequestModule,
+    // Phase 6 (Procurement + Distribution) gets registered here next.
   ],
   controllers: [AppController],
   providers: [

@@ -38,6 +38,7 @@ model OrganizationUnit {
 
   users User[]
   stores Store[]
+  requests Request[]
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -69,6 +70,7 @@ model User {
   createdMovements    InventoryMovement[]
   createdWorkflowInstances WorkflowInstance[]
   approvalActions          ApprovalHistory[]
+  requests                 Request[]
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -416,6 +418,7 @@ model WorkflowInstance {
   createdBy   User   @relation(fields: [createdById], references: [id])
 
   history ApprovalHistory[]
+  request Request?
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -446,4 +449,60 @@ model ApprovalHistory {
 
   @@index([workflowInstanceId])
   @@map("approval_history")
+}
+
+enum RequestType {
+  ITEM_REQUEST
+  TRANSFER_REQUEST
+  PURCHASE_REQUEST
+  DISTRIBUTION_REQUEST
+  BORROW_REQUEST
+  DISPOSAL_REQUEST
+  EXTERNAL_REQUEST
+}
+
+enum RequestStatus {
+  DRAFT
+  SUBMITTED
+  PENDING_APPROVAL
+  APPROVED
+  EXECUTED
+  COMPLETED
+  REJECTED
+  CANCELLED
+}
+
+// The generic core every request type (spec section 12) builds on. `details`
+// is a JSON blob rather than one table per type — Phase 5 only fully
+// implements ITEM_REQUEST and TRANSFER_REQUEST end-to-end; Purchase,
+// Distribution, Borrow, and Disposal (Phase 6/7) can create Requests of
+// their own type immediately, using this same lifecycle and workflow
+// plumbing, without a schema change — RequestService just needs its own
+// details-shape validation and execute-on-approval logic added for each.
+model Request {
+  id     String        @id @default(uuid())
+  type   RequestType
+  status RequestStatus @default(DRAFT)
+  // Shape depends on `type` — see RequestService for what each type expects.
+  // e.g. ITEM_REQUEST: { itemId, targetStoreId, quantity, notes? }
+  //      TRANSFER_REQUEST: { itemId, sourceStoreId, destinationStoreId, quantity, notes? }
+  details Json
+
+  requesterId String @map("requester_id")
+  requester   User   @relation(fields: [requesterId], references: [id])
+
+  // The requester's org unit at time of request — this is what workflow
+  // steps like "requester's department head" resolve against.
+  organizationId String           @map("organization_id")
+  organization   OrganizationUnit @relation(fields: [organizationId], references: [id])
+
+  workflowInstanceId String?           @unique @map("workflow_instance_id")
+  workflowInstance   WorkflowInstance? @relation(fields: [workflowInstanceId], references: [id])
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([requesterId])
+  @@index([status])
+  @@map("requests")
 }

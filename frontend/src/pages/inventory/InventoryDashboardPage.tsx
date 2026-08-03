@@ -116,16 +116,21 @@ export default function InventoryDashboardPage() {
 
   const { data: stores } = useQuery({
     queryKey: ['stores-for-inventory'],
-    queryFn: async () => (await api.get<{ data: Store[] }>('/stores')).data.data,
+    queryFn: async () => (await api.get<{ data: Store[] }>('/stores/directory')).data.data,
   });
 
-  const effectiveStoreId = storeId || stores?.[0]?.id || '';
+  // Deliberately NOT defaulting to stores[0] — the directory is unscoped, so
+  // "the first store alphabetically" is frequently one this user has no
+  // access to at all. Only auto-select when there's exactly one store total
+  // (nothing else to choose from); otherwise the person picks explicitly.
+  const effectiveStoreId = storeId || (stores?.length === 1 ? stores[0].id : '');
 
-  const { data: stock, isLoading: stockLoading } = useQuery({
+  const { data: stock, isLoading: stockLoading, error: stockError } = useQuery({
     queryKey: ['store-inventory', effectiveStoreId],
     enabled: Boolean(effectiveStoreId),
     queryFn: async () =>
       (await api.get<{ data: StoreInventoryRow[] }>(`/inventory/stores/${effectiveStoreId}`)).data.data,
+    retry: false,
   });
 
   const { data: movements, isLoading: movementsLoading } = useQuery({
@@ -154,6 +159,7 @@ export default function InventoryDashboardPage() {
         actions={
           <div className="w-64">
             <Select value={effectiveStoreId} onChange={(e) => setStoreId(e.target.value)}>
+              <option value="">Select a store…</option>
               {stores?.map((s) => (
                 <option key={s.id} value={s.id}>{s.name}</option>
               ))}
@@ -185,9 +191,17 @@ export default function InventoryDashboardPage() {
       </div>
 
       <Card>
-        {tab === 'stock' && (
+        {!effectiveStoreId && (
+          <EmptyState title="Pick a store" description="Choose a store above to see its stock and movement history." />
+        )}
+        {effectiveStoreId && tab === 'stock' && (
           <>
             {stockLoading && <p className="py-8 text-center text-sm text-muted">Loading stock…</p>}
+            {stockError && (
+              <p className="py-8 text-center text-sm text-danger">
+                {(stockError as any)?.response?.data?.message ?? "Couldn't load this store's inventory."}
+              </p>
+            )}
             {stock?.length === 0 && (
               <EmptyState title="No stock recorded" description="Nothing has been received into this store yet." />
             )}
@@ -223,7 +237,7 @@ export default function InventoryDashboardPage() {
           </>
         )}
 
-        {tab === 'movements' && (
+        {effectiveStoreId && tab === 'movements' && (
           <>
             {movementsLoading && <p className="py-8 text-center text-sm text-muted">Loading history…</p>}
             {movements?.length === 0 && <EmptyState title="No movements yet" description="Nothing has happened at this store yet." />}

@@ -265,6 +265,57 @@ model Item {
   @@map("items")
 }
 
+enum SupplierStatus {
+  ACTIVE
+  INACTIVE
+}
+
+model Supplier {
+  id            String         @id @default(uuid())
+  name          String
+  contactPerson String?        @map("contact_person")
+  email         String?
+  phone         String?
+  address       String?
+  tin           String?        // Tax Identification Number
+  status        SupplierStatus @default(ACTIVE)
+
+  purchaseOrders PurchaseOrder[]
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("suppliers")
+}
+
+enum PurchaseOrderStatus {
+  DRAFT
+  ISSUED
+  RECEIVED
+  CANCELLED
+}
+
+model PurchaseOrder {
+  id       String              @id @default(uuid())
+  poNumber String              @unique @map("po_number")
+  status   PurchaseOrderStatus @default(DRAFT)
+
+  supplierId String   @map("supplier_id")
+  supplier   Supplier @relation(fields: [supplierId], references: [id])
+
+  requestId String?  @unique @map("request_id")
+  request   Request? @relation(fields: [requestId], references: [id])
+
+  totalAmount Decimal? @map("total_amount") @db.Decimal(18, 2)
+  notes       String?
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([supplierId])
+  @@map("purchase_orders")
+}
+
 // Per-store quantity for a given item. NEVER written to directly by any
 // endpoint — only MovementService touches this table, always inside the
 // same transaction as the InventoryMovement row that justifies the change.
@@ -498,6 +549,8 @@ model Request {
 
   workflowInstanceId String?           @unique @map("workflow_instance_id")
   workflowInstance   WorkflowInstance? @relation(fields: [workflowInstanceId], references: [id])
+
+  purchaseOrder PurchaseOrder?
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")

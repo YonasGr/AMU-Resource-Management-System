@@ -1,5 +1,6 @@
 import { ChevronRight, LogOut } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import { api } from '../../lib/api';
 import { useAuthStore } from '../../store/auth.store';
 import { useMyOrgPath } from '../../hooks/useMyOrgPath';
@@ -11,6 +12,7 @@ import { useMyOrgPath } from '../../hooks/useMyOrgPath';
  */
 export function TopBar() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const user = useAuthStore((s) => s.user);
   const refreshToken = useAuthStore((s) => s.refreshToken);
   const clearSession = useAuthStore((s) => s.clearSession);
@@ -21,6 +23,11 @@ export function TopBar() {
       await api.post('/auth/logout', { refreshToken }).catch(() => undefined);
     }
     clearSession();
+    // Query keys (['stores'], ['my-pending-approvals'], ...) aren't scoped
+    // by user id, so without this, logging in as a different account in the
+    // same tab can briefly show the previous account's cached data —
+    // clearing on every logout means there's never anything to leak.
+    queryClient.clear();
     navigate('/login');
   };
 

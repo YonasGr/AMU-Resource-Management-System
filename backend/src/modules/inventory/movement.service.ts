@@ -17,6 +17,15 @@ interface SingleStoreMovementParams {
   >;
   referenceId?: string;
   currentUser: SafeUser;
+  /**
+   * Set by RequestService when a movement is the automatic result of a
+   * FULLY-approved workflow (not a direct call to the movement API). In that
+   * case the completed approval chain — not the individual who happened to
+   * click the final "approve" — is the authorization, so the caller's own
+   * personal store scope isn't re-checked. Direct API calls always leave
+   * this false/unset and stay fully scope-checked.
+   */
+  authorizedByWorkflow?: boolean;
 }
 
 interface TransferParams {
@@ -26,6 +35,11 @@ interface TransferParams {
   quantity: number;
   referenceId?: string;
   currentUser: SafeUser;
+  /** See SingleStoreMovementParams.authorizedByWorkflow — same reasoning applies
+   * doubly here, since NEITHER the source nor destination store manager has
+   * personal scope over both sides of a transfer; only the completed
+   * 3-step approval chain, taken together, actually authorizes it. */
+  authorizedByWorkflow?: boolean;
 }
 
 /**
@@ -44,14 +58,16 @@ export class MovementService {
   ) {}
 
   async applyMovement(params: SingleStoreMovementParams): Promise<InventoryMovement> {
-    const { itemId, storeId, quantity, movementType, referenceId, currentUser } = params;
+    const { itemId, storeId, quantity, movementType, referenceId, currentUser, authorizedByWorkflow } = params;
 
     const store = await this.prisma.store.findUnique({ where: { id: storeId } });
     if (!store) {
       throw new NotFoundException(`Store ${storeId} not found`);
     }
     await this.assertItemExists(itemId);
-    await this.assertStoreAccess(currentUser, store.id, store.organizationId);
+    if (!authorizedByWorkflow) {
+      await this.assertStoreAccess(currentUser, store.id, store.organizationId);
+    }
 
     // Sign convention: PURCHASE_RECEIVE/RETURN always increase; ISSUE/DISPOSAL
     // always decrease; ADJUSTMENT is signed by the caller (positive or
@@ -110,7 +126,7 @@ export class MovementService {
     transferOut: InventoryMovement;
     transferIn: InventoryMovement;
   }> {
-    const { itemId, fromStoreId, toStoreId, quantity, currentUser } = params;
+    const { itemId, fromStoreId, toStoreId, quantity, authorizedByWorkflow } = params;
 
     if (fromStoreId === toStoreId) {
       throw new BadRequestException('fromStoreId and toStoreId must be different stores');
@@ -127,10 +143,17 @@ export class MovementService {
     if (!toStore) throw new NotFoundException(`Store ${toStoreId} not found`);
     await this.assertItemExists(itemId);
 
-    // Both sides need scope access — a transfer touches two stores, and a
-    // user might manage one but not the other.
-    await this.assertStoreAccess(currentUser, fromStore.id, fromStore.organizationId);
-    await this.assertStoreAccess(currentUser, toStore.id, toStore.organizationId);
+    const { currentUser } = params;
+
+    // Both sides need scope access for a DIRECT call — but skip this for a
+    // workflow-authorized execution: no single approver in a transfer chain
+    // (dept head, source manager, destination manager) has personal scope
+    // over BOTH stores, so re-checking here would make every workflow-driven
+    // transfer fail at the exact moment its approval chain completes.
+    if (!authorizedByWorkflow) {
+      await this.assertStoreAccess(currentUser, fromStore.id, fromStore.organizationId);
+      await this.assertStoreAccess(currentUser, toStore.id, toStore.organizationId);
+    }
 
     const referenceId = params.referenceId ?? crypto.randomUUID();
 

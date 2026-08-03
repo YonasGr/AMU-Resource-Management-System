@@ -288,6 +288,7 @@ export class RequestService {
         movementType: 'ISSUE',
         referenceId: request.id,
         currentUser,
+        authorizedByWorkflow: true,
       });
     } else if (request.type === 'TRANSFER_REQUEST') {
       await this.movementService.applyTransfer({
@@ -297,6 +298,7 @@ export class RequestService {
         quantity: details.quantity,
         referenceId: request.id,
         currentUser,
+        authorizedByWorkflow: true,
       });
     }
 

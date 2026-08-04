@@ -162,6 +162,23 @@ export class WorkflowEngineService {
     const nextStep = steps.find((s) => s.order > instance.currentStepOrder);
 
     return this.prisma.$transaction(async (tx) => {
+      // Claim this exact pending step before recording its history. Without
+      // this conditional update, two near-simultaneous approvals can both
+      // read the same step and write duplicate history entries.
+      const claimed = await tx.workflowInstance.updateMany({
+        where: {
+          id: instance.id,
+          status: 'PENDING',
+          currentStepOrder: instance.currentStepOrder,
+        },
+        data: nextStep
+          ? { currentStepOrder: nextStep.order }
+          : { status: 'APPROVED' },
+      });
+      if (claimed.count !== 1) {
+        throw new BadRequestException('This workflow step has already been acted on');
+      }
+
       await tx.approvalHistory.create({
         data: {
           workflowInstanceId: instance.id,
@@ -172,11 +189,8 @@ export class WorkflowEngineService {
         },
       });
 
-      return tx.workflowInstance.update({
+      return tx.workflowInstance.findUniqueOrThrow({
         where: { id: instance.id },
-        data: nextStep
-          ? { currentStepOrder: nextStep.order }
-          : { status: 'APPROVED' },
       });
     });
   }

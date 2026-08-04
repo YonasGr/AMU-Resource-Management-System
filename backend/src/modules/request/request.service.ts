@@ -12,6 +12,7 @@ import { AccessControlService } from '../rbac/access-control.service';
 import { SafeUser } from '../auth/decorators/current-user.decorator';
 import { CreateItemRequestDto } from './dto/create-item-request.dto';
 import { CreateTransferRequestDto } from './dto/create-transfer-request.dto';
+import { CreatePurchaseRequestDto } from './dto/create-purchase-request.dto';
 
 interface ItemRequestDetails {
   itemId: string;
@@ -25,6 +26,11 @@ interface TransferRequestDetails {
   sourceStoreId: string;
   destinationStoreId: string;
   quantity: number;
+  notes?: string;
+}
+
+interface PurchaseRequestDetails {
+  lines: Array<{ itemId: string; quantity: number }>;
   notes?: string;
 }
 
@@ -99,6 +105,27 @@ export class RequestService {
     });
   }
 
+  async createPurchaseRequest(
+    dto: CreatePurchaseRequestDto,
+    requester: SafeUser,
+  ): Promise<RequestRecord> {
+    const itemIds = dto.lines.map((line) => line.itemId);
+    if (new Set(itemIds).size !== itemIds.length) {
+      throw new BadRequestException('Each item may appear only once in a purchase request');
+    }
+    await Promise.all(itemIds.map((itemId) => this.assertItemExists(itemId)));
+
+    const details: PurchaseRequestDetails = { lines: dto.lines, notes: dto.notes };
+    return this.prisma.request.create({
+      data: {
+        type: 'PURCHASE_REQUEST',
+        requesterId: requester.id,
+        organizationId: requester.organizationId,
+        details: details as unknown as Prisma.InputJsonValue,
+      },
+    });
+  }
+
   /** Starts the approval chain — from here on, the workflow engine drives progress. */
   async submit(requestId: string, requester: SafeUser): Promise<RequestRecord> {
     const request = await this.findOneRaw(requestId);
@@ -137,6 +164,17 @@ export class RequestService {
     const request = await this.findOneRaw(requestId);
     if (!request.workflowInstanceId) {
       throw new BadRequestException('This request has not been submitted yet');
+    }
+
+    // A final approval can succeed while execution later fails (for example,
+    // because stock is temporarily insufficient). Allow the same endpoint to
+    // retry execution; MovementService's execution keys make that safe even
+    // if the movement committed but the final status update did not.
+    if (request.status === 'APPROVED') {
+      return this.execute(request, currentUser);
+    }
+    if (request.status === 'COMPLETED') {
+      return request;
     }
 
     const instance = await this.workflowEngineService.approve(
@@ -269,6 +307,8 @@ export class RequestService {
           sourceStoreId: details.sourceStoreId,
           destinationStoreId: details.destinationStoreId,
         };
+      case 'PURCHASE_REQUEST':
+        return { requesterOrganizationId: request.organizationId };
       default:
         throw new BadRequestException(
           `Request type ${request.type} isn't submittable yet — its workflow template/execution isn't implemented in this phase`,
@@ -280,6 +320,11 @@ export class RequestService {
   private async execute(request: RequestRecord, currentUser: SafeUser): Promise<RequestRecord> {
     const details = request.details as unknown as ItemRequestDetails & TransferRequestDetails;
 
+    if (request.type === 'PURCHASE_REQUEST') {
+      // Approval authorizes procurement to create one or more purchase
+      // orders. Physical receiving is a later, explicit inventory action.
+      return request;
+    }
     if (request.type === 'ITEM_REQUEST') {
       await this.movementService.applyMovement({
         itemId: details.itemId,
@@ -289,6 +334,7 @@ export class RequestService {
         referenceId: request.id,
         currentUser,
         authorizedByWorkflow: true,
+        executionKey: `request:${request.id}:issue`,
       });
     } else if (request.type === 'TRANSFER_REQUEST') {
       await this.movementService.applyTransfer({
@@ -299,6 +345,7 @@ export class RequestService {
         referenceId: request.id,
         currentUser,
         authorizedByWorkflow: true,
+        executionKey: `request:${request.id}:transfer`,
       });
     }
 

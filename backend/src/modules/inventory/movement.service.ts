@@ -26,6 +26,9 @@ interface SingleStoreMovementParams {
    * this false/unset and stay fully scope-checked.
    */
   authorizedByWorkflow?: boolean;
+  /** Stable key for an automatically executed business action. */
+  executionKey?: string;
+  transaction?: TxClient;
 }
 
 interface TransferParams {
@@ -40,6 +43,9 @@ interface TransferParams {
    * personal scope over both sides of a transfer; only the completed
    * 3-step approval chain, taken together, actually authorizes it. */
   authorizedByWorkflow?: boolean;
+  /** Stable key shared by the logical transfer; OUT/IN rows get suffixes. */
+  executionKey?: string;
+  transaction?: TxClient;
 }
 
 /**
@@ -58,13 +64,32 @@ export class MovementService {
   ) {}
 
   async applyMovement(params: SingleStoreMovementParams): Promise<InventoryMovement> {
-    const { itemId, storeId, quantity, movementType, referenceId, currentUser, authorizedByWorkflow } = params;
+    const {
+      itemId,
+      storeId,
+      quantity,
+      movementType,
+      referenceId,
+      currentUser,
+      authorizedByWorkflow,
+      executionKey,
+      transaction,
+    } = params;
 
-    const store = await this.prisma.store.findUnique({ where: { id: storeId } });
+    const client = transaction ?? this.prisma;
+
+    if (executionKey) {
+      const existing = await client.inventoryMovement.findUnique({
+        where: { executionKey },
+      });
+      if (existing) return existing;
+    }
+
+    const store = await client.store.findUnique({ where: { id: storeId } });
     if (!store) {
       throw new NotFoundException(`Store ${storeId} not found`);
     }
-    await this.assertItemExists(itemId);
+    await this.assertItemExists(itemId, client);
     if (!authorizedByWorkflow) {
       await this.assertStoreAccess(currentUser, store.id, store.organizationId);
     }
@@ -95,7 +120,7 @@ export class MovementService {
     const isReceivingType = movementType === 'PURCHASE_RECEIVE' || movementType === 'RETURN';
     const isIssuingType = movementType === 'ISSUE' || movementType === 'DISPOSAL';
 
-    return this.prisma.$transaction(async (tx) => {
+    const apply = async (tx: TxClient) => {
       await this.adjustStoreInventory(tx, storeId, itemId, delta);
 
       return tx.inventoryMovement.create({
@@ -104,6 +129,7 @@ export class MovementService {
           quantity: movementType === 'ADJUSTMENT' ? quantity : Math.abs(quantity),
           movementType,
           referenceId,
+          executionKey,
           // Receiving-type movements land AT this store (toStore); issuing-type
           // movements leave FROM this store (fromStore); an adjustment is
           // recorded against the store it targets, using toStoreId as "the
@@ -113,7 +139,8 @@ export class MovementService {
           createdById: currentUser.id,
         },
       });
-    });
+    };
+    return transaction ? apply(transaction) : this.prisma.$transaction(apply);
   }
 
   /**
@@ -126,7 +153,13 @@ export class MovementService {
     transferOut: InventoryMovement;
     transferIn: InventoryMovement;
   }> {
-    const { itemId, fromStoreId, toStoreId, quantity, authorizedByWorkflow } = params;
+    const { itemId, fromStoreId, toStoreId, quantity, authorizedByWorkflow, executionKey, transaction } = params;
+    const client = transaction ?? this.prisma;
+
+    if (executionKey) {
+      const existing = await this.findExistingTransfer(executionKey, client);
+      if (existing) return existing;
+    }
 
     if (fromStoreId === toStoreId) {
       throw new BadRequestException('fromStoreId and toStoreId must be different stores');
@@ -136,12 +169,12 @@ export class MovementService {
     }
 
     const [fromStore, toStore] = await Promise.all([
-      this.prisma.store.findUnique({ where: { id: fromStoreId } }),
-      this.prisma.store.findUnique({ where: { id: toStoreId } }),
+      client.store.findUnique({ where: { id: fromStoreId } }),
+      client.store.findUnique({ where: { id: toStoreId } }),
     ]);
     if (!fromStore) throw new NotFoundException(`Store ${fromStoreId} not found`);
     if (!toStore) throw new NotFoundException(`Store ${toStoreId} not found`);
-    await this.assertItemExists(itemId);
+    await this.assertItemExists(itemId, client);
 
     const { currentUser } = params;
 
@@ -157,7 +190,7 @@ export class MovementService {
 
     const referenceId = params.referenceId ?? crypto.randomUUID();
 
-    return this.prisma.$transaction(async (tx) => {
+    const apply = async (tx: TxClient) => {
       await this.adjustStoreInventory(tx, fromStoreId, itemId, -quantity);
       await this.adjustStoreInventory(tx, toStoreId, itemId, quantity);
 
@@ -167,6 +200,7 @@ export class MovementService {
           quantity,
           movementType: 'TRANSFER_OUT',
           referenceId,
+          executionKey: executionKey ? `${executionKey}:out` : undefined,
           fromStoreId,
           toStoreId,
           createdById: currentUser.id,
@@ -178,6 +212,7 @@ export class MovementService {
           quantity,
           movementType: 'TRANSFER_IN',
           referenceId,
+          executionKey: executionKey ? `${executionKey}:in` : undefined,
           fromStoreId,
           toStoreId,
           createdById: currentUser.id,
@@ -185,7 +220,31 @@ export class MovementService {
       });
 
       return { transferOut, transferIn };
-    });
+    };
+    return transaction ? apply(transaction) : this.prisma.$transaction(apply);
+  }
+
+  private async findExistingTransfer(
+    executionKey: string,
+    client: TxClient | PrismaService = this.prisma,
+  ): Promise<{
+    transferOut: InventoryMovement;
+    transferIn: InventoryMovement;
+  } | null> {
+    const [transferOut, transferIn] = await Promise.all([
+      client.inventoryMovement.findUnique({
+        where: { executionKey: `${executionKey}:out` },
+      }),
+      client.inventoryMovement.findUnique({
+        where: { executionKey: `${executionKey}:in` },
+      }),
+    ]);
+
+    if (!transferOut && !transferIn) return null;
+    if (!transferOut || !transferIn) {
+      throw new BadRequestException(`Transfer execution ${executionKey} is incomplete`);
+    }
+    return { transferOut, transferIn };
   }
 
   async getMovementHistory(
@@ -233,8 +292,11 @@ export class MovementService {
     });
   }
 
-  private async assertItemExists(itemId: string): Promise<void> {
-    const item = await this.prisma.item.findUnique({ where: { id: itemId } });
+  private async assertItemExists(
+    itemId: string,
+    client: TxClient | PrismaService = this.prisma,
+  ): Promise<void> {
+    const item = await client.item.findUnique({ where: { id: itemId } });
     if (!item) {
       throw new NotFoundException(`Item ${itemId} not found`);
     }

@@ -9,3 +9,13 @@ coverage/
 .turbo/
 backend/generated/
 frontend/dist/
+frontend/.pnpm-store/
+frontend/pnpm-lock.yaml
+frontend/*.tsbuildinfo
+frontend/vite.config.js
+frontend/vite.config.d.ts
+
+# Local backups created when Docker leaves root-owned build/dependency artifacts.
+backend/.dist.docker-owned/
+backend/prisma/.migrations.docker-owned/
+backend/prisma/migrations/*.docker-owned/

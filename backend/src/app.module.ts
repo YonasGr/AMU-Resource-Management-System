@@ -16,6 +16,8 @@ import { ItemCatalogModule } from './modules/item-catalog/item-catalog.module';
 import { InventoryModule } from './modules/inventory/inventory.module';
 import { WorkflowModule } from './modules/workflow/workflow.module';
 import { RequestModule } from './modules/request/request.module';
+import { ProcurementModule } from './modules/procurement/procurement.module';
+import { DistributionModule } from './modules/distribution/distribution.module';
 
 @Module({
   imports: [
@@ -33,7 +35,8 @@ import { RequestModule } from './modules/request/request.module';
     InventoryModule,
     WorkflowModule,
     RequestModule,
-    // Phase 6 (Procurement + Distribution) gets registered here next.
+    ProcurementModule,
+    DistributionModule,
   ],
   controllers: [AppController],
   providers: [

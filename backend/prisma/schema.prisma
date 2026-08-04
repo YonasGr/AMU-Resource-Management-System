@@ -71,6 +71,10 @@ model User {
   createdWorkflowInstances WorkflowInstance[]
   approvalActions          ApprovalHistory[]
   requests                 Request[]
+  createdPurchaseOrders    PurchaseOrder[] @relation("PurchaseOrderCreatedBy")
+  goodsReceipts            GoodsReceipt[]
+  createdDistributionPlans DistributionPlan[] @relation("DistributionPlanCreatedBy")
+  confirmedAllocations     DistributionAllocation[] @relation("DistributionConfirmedBy")
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -201,6 +205,10 @@ model Store {
   inventory       StoreInventory[]
   movementsOut    InventoryMovement[] @relation("MovementFromStore")
   movementsIn     InventoryMovement[] @relation("MovementToStore")
+  purchaseOrders  PurchaseOrder[]
+  goodsReceipts   GoodsReceipt[]
+  distributionPlansSource DistributionPlan[]
+  distributionAllocations DistributionAllocation[]
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -257,6 +265,9 @@ model Item {
 
   storeInventories StoreInventory[]
   movements        InventoryMovement[]
+  purchaseOrderLines PurchaseOrderLine[]
+  goodsReceiptLines GoodsReceiptLine[]
+  distributionAllocations DistributionAllocation[]
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -277,43 +288,157 @@ model Supplier {
   email         String?
   phone         String?
   address       String?
-  tin           String?        // Tax Identification Number
+  tin           String?        @unique
   status        SupplierStatus @default(ACTIVE)
-
   purchaseOrders PurchaseOrder[]
+  createdAt     DateTime       @default(now()) @map("created_at")
+  updatedAt     DateTime       @updatedAt @map("updated_at")
 
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
-
+  @@index([name])
   @@map("suppliers")
 }
 
 enum PurchaseOrderStatus {
   DRAFT
   ISSUED
+  PARTIALLY_RECEIVED
   RECEIVED
   CANCELLED
 }
 
 model PurchaseOrder {
-  id       String              @id @default(uuid())
-  poNumber String              @unique @map("po_number")
-  status   PurchaseOrderStatus @default(DRAFT)
+  id                   String              @id @default(uuid())
+  poNumber             String              @unique @map("po_number")
+  status               PurchaseOrderStatus @default(DRAFT)
+  currency             String              @default("ETB")
+  notes                String?
+  issuedAt             DateTime?           @map("issued_at")
+  expectedDeliveryDate DateTime?           @map("expected_delivery_date")
 
   supplierId String   @map("supplier_id")
   supplier   Supplier @relation(fields: [supplierId], references: [id])
+  requestId  String   @map("request_id")
+  request    Request  @relation(fields: [requestId], references: [id])
+  destinationStoreId String @map("destination_store_id")
+  destinationStore   Store  @relation(fields: [destinationStoreId], references: [id])
+  createdById String @map("created_by")
+  createdBy   User   @relation("PurchaseOrderCreatedBy", fields: [createdById], references: [id])
 
-  requestId String?  @unique @map("request_id")
-  request   Request? @relation(fields: [requestId], references: [id])
-
-  totalAmount Decimal? @map("total_amount") @db.Decimal(18, 2)
-  notes       String?
-
+  lines PurchaseOrderLine[]
+  receipts GoodsReceipt[]
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
+  @@index([requestId])
   @@index([supplierId])
+  @@index([destinationStoreId])
   @@map("purchase_orders")
+}
+
+model PurchaseOrderLine {
+  id               String  @id @default(uuid())
+  orderedQuantity  Int     @map("ordered_quantity")
+  receivedQuantity Int     @default(0) @map("received_quantity")
+  unitPrice         Decimal @map("unit_price") @db.Decimal(18, 2)
+
+  purchaseOrderId String        @map("purchase_order_id")
+  purchaseOrder   PurchaseOrder @relation(fields: [purchaseOrderId], references: [id])
+  itemId          String        @map("item_id")
+  item            Item          @relation(fields: [itemId], references: [id])
+  receiptLines    GoodsReceiptLine[]
+
+  @@unique([purchaseOrderId, itemId])
+  @@index([itemId])
+  @@map("purchase_order_lines")
+}
+
+model GoodsReceipt {
+  id            String   @id @default(uuid())
+  receiptNumber String   @unique @map("receipt_number")
+  notes         String?
+  receivedAt    DateTime @default(now()) @map("received_at")
+
+  purchaseOrderId String        @map("purchase_order_id")
+  purchaseOrder   PurchaseOrder @relation(fields: [purchaseOrderId], references: [id])
+  storeId          String        @map("store_id")
+  store            Store         @relation(fields: [storeId], references: [id])
+  receivedById     String        @map("received_by")
+  receivedBy       User          @relation(fields: [receivedById], references: [id])
+  lines            GoodsReceiptLine[]
+  createdAt        DateTime      @default(now()) @map("created_at")
+
+  @@index([purchaseOrderId])
+  @@index([storeId])
+  @@map("goods_receipts")
+}
+
+model GoodsReceiptLine {
+  id               String @id @default(uuid())
+  acceptedQuantity Int    @map("accepted_quantity")
+  damagedQuantity  Int    @default(0) @map("damaged_quantity")
+  rejectedQuantity Int    @default(0) @map("rejected_quantity")
+  notes             String?
+
+  goodsReceiptId      String            @map("goods_receipt_id")
+  goodsReceipt        GoodsReceipt      @relation(fields: [goodsReceiptId], references: [id])
+  purchaseOrderLineId String            @map("purchase_order_line_id")
+  purchaseOrderLine   PurchaseOrderLine @relation(fields: [purchaseOrderLineId], references: [id])
+  itemId              String            @map("item_id")
+  item                Item              @relation(fields: [itemId], references: [id])
+
+  @@unique([goodsReceiptId, purchaseOrderLineId])
+  @@index([purchaseOrderLineId])
+  @@map("goods_receipt_lines")
+}
+
+enum DistributionPlanStatus {
+  DRAFT
+  ACTIVE
+  COMPLETED
+  CANCELLED
+}
+
+enum DistributionAllocationStatus {
+  PENDING
+  CONFIRMED
+}
+
+model DistributionPlan {
+  id        String                 @id @default(uuid())
+  planNumber String                @unique @map("plan_number")
+  status    DistributionPlanStatus @default(DRAFT)
+  notes     String?
+
+  sourceStoreId String @map("source_store_id")
+  sourceStore   Store  @relation(fields: [sourceStoreId], references: [id])
+  createdById String @map("created_by")
+  createdBy   User   @relation("DistributionPlanCreatedBy", fields: [createdById], references: [id])
+  allocations DistributionAllocation[]
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([sourceStoreId])
+  @@map("distribution_plans")
+}
+
+model DistributionAllocation {
+  id       String                       @id @default(uuid())
+  quantity Int
+  status   DistributionAllocationStatus @default(PENDING)
+  confirmedAt DateTime? @map("confirmed_at")
+
+  distributionPlanId String           @map("distribution_plan_id")
+  distributionPlan   DistributionPlan @relation(fields: [distributionPlanId], references: [id])
+  itemId String @map("item_id")
+  item   Item   @relation(fields: [itemId], references: [id])
+  destinationStoreId String @map("destination_store_id")
+  destinationStore   Store  @relation(fields: [destinationStoreId], references: [id])
+  confirmedById String? @map("confirmed_by")
+  confirmedBy   User? @relation("DistributionConfirmedBy", fields: [confirmedById], references: [id])
+
+  @@unique([distributionPlanId, itemId, destinationStoreId])
+  @@index([destinationStoreId])
+  @@map("distribution_allocations")
 }
 
 // Per-store quantity for a given item. NEVER written to directly by any
@@ -360,6 +485,9 @@ model InventoryMovement {
   quantity     Int
   movementType MovementType @map("movement_type")
   referenceId  String?      @map("reference_id")
+  // Set for workflow-driven execution so retries cannot apply the same
+  // business action twice. Direct/manual movements leave this null.
+  executionKey String?      @unique @map("execution_key")
 
   itemId String @map("item_id")
   item   Item   @relation(fields: [itemId], references: [id])
@@ -549,8 +677,7 @@ model Request {
 
   workflowInstanceId String?           @unique @map("workflow_instance_id")
   workflowInstance   WorkflowInstance? @relation(fields: [workflowInstanceId], references: [id])
-
-  purchaseOrder PurchaseOrder?
+  purchaseOrders     PurchaseOrder[]
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")

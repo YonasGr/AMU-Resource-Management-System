@@ -8,6 +8,8 @@ import {
   ClipboardList,
   FileText,
   CheckSquare,
+  ShoppingCart,
+  Send,
 } from 'lucide-react';
 import { cn } from '../../lib/cn';
 import { usePendingApprovalsCount } from '../../hooks/usePendingApprovalsCount';
@@ -21,6 +23,8 @@ const NAV_ITEMS = [
   { to: '/inventory', label: 'Inventory', icon: ClipboardList },
   { to: '/requests', label: 'Requests', icon: FileText },
   { to: '/approvals', label: 'Approvals', icon: CheckSquare, badge: true },
+  { to: '/procurement', label: 'Procurement', icon: ShoppingCart },
+  { to: '/distribution', label: 'Distribution', icon: Send },
 ];
 
 export function Sidebar() {

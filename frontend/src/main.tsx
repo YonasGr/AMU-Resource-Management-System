@@ -14,6 +14,8 @@ import RequestsListPage from './pages/requests/RequestsListPage';
 import NewRequestPage from './pages/requests/NewRequestPage';
 import RequestDetailPage from './pages/requests/RequestDetailPage';
 import ApprovalsInboxPage from './pages/workflow/ApprovalsInboxPage';
+import ProcurementPage from './pages/procurement/ProcurementPage';
+import DistributionPage from './pages/distribution/DistributionPage';
 import ProtectedRoute from './routes/ProtectedRoute';
 import { AppShell } from './components/layout/AppShell';
 import './index.css';
@@ -40,6 +42,8 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
               <Route path="/requests/new" element={<NewRequestPage />} />
               <Route path="/requests/:id" element={<RequestDetailPage />} />
               <Route path="/approvals" element={<ApprovalsInboxPage />} />
+              <Route path="/procurement" element={<ProcurementPage />} />
+              <Route path="/distribution" element={<DistributionPage />} />
             </Route>
           </Route>
         </Routes>

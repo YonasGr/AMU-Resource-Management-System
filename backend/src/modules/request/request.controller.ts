@@ -3,6 +3,7 @@ import { ApiBearerAuth, ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger'
 import { RequestService } from './request.service';
 import { CreateItemRequestDto } from './dto/create-item-request.dto';
 import { CreateTransferRequestDto } from './dto/create-transfer-request.dto';
+import { CreatePurchaseRequestDto } from './dto/create-purchase-request.dto';
 import { RequestActionDto } from './dto/approval-action.dto';
 import { RequirePermission } from '../rbac/decorators/require-permission.decorator';
 import { CurrentUser, SafeUser } from '../auth/decorators/current-user.decorator';
@@ -25,6 +26,13 @@ export class RequestController {
   @ApiOperation({ summary: 'Draft a request to transfer an item between two stores' })
   createTransferRequest(@Body() dto: CreateTransferRequestDto, @CurrentUser() user: SafeUser) {
     return this.requestService.createTransferRequest(dto, user);
+  }
+
+  @Post('purchase-request')
+  @RequirePermission('purchase.create')
+  @ApiOperation({ summary: 'Draft a multi-line university purchase request' })
+  createPurchaseRequest(@Body() dto: CreatePurchaseRequestDto, @CurrentUser() user: SafeUser) {
+    return this.requestService.createPurchaseRequest(dto, user);
   }
 
   @Get()

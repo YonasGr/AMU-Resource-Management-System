@@ -4,9 +4,10 @@ import { PurchaseOrderService } from './purchase-order.service';
 import { SupplierService } from './supplier.service';
 import { GoodsReceiptService } from './goods-receipt.service';
 import { InventoryModule } from '../inventory/inventory.module';
+import { NotificationModule } from '../notification/notification.module';
 
 @Module({
-  imports: [InventoryModule],
+  imports: [InventoryModule, NotificationModule],
   controllers: [ProcurementController],
   providers: [SupplierService, PurchaseOrderService, GoodsReceiptService],
   exports: [SupplierService, PurchaseOrderService, GoodsReceiptService],

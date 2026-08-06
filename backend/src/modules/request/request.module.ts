@@ -4,11 +4,13 @@ import { RequestService } from './request.service';
 import { WorkflowModule } from '../workflow/workflow.module';
 import { InventoryModule } from '../inventory/inventory.module';
 import { RbacModule } from '../rbac/rbac.module';
+import { NotificationModule } from '../notification/notification.module';
 
 @Module({
-  imports: [WorkflowModule, InventoryModule, RbacModule],
+  imports: [WorkflowModule, InventoryModule, RbacModule, NotificationModule],
   controllers: [RequestController],
   providers: [RequestService],
   exports: [RequestService],
 })
 export class RequestModule {}
+

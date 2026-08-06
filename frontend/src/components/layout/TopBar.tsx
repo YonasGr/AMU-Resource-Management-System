@@ -1,15 +1,10 @@
-import { ChevronRight, LogOut } from 'lucide-react';
+import { ChevronRight, LogOut, Bell } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../lib/api';
 import { useAuthStore } from '../../store/auth.store';
 import { useMyOrgPath } from '../../hooks/useMyOrgPath';
 
-/**
- * The org path breadcrumb is this app's signature element: every screen
- * nests under the organization hierarchy, so this pill keeps that hierarchy
- * visibly present at all times, wherever you are in the system.
- */
 export function TopBar() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -18,15 +13,20 @@ export function TopBar() {
   const clearSession = useAuthStore((s) => s.clearSession);
   const { data: orgPath } = useMyOrgPath();
 
+  const { data: unreadData } = useQuery({
+    queryKey: ['notifications', 'unread-count'],
+    queryFn: async () => {
+      const res = await api.get<{ count: number }>('/notifications/unread-count');
+      return res.data;
+    },
+    refetchInterval: 15000,
+  });
+
   const handleLogout = async () => {
     if (refreshToken) {
       await api.post('/auth/logout', { refreshToken }).catch(() => undefined);
     }
     clearSession();
-    // Query keys (['stores'], ['my-pending-approvals'], ...) aren't scoped
-    // by user id, so without this, logging in as a different account in the
-    // same tab can briefly show the previous account's cached data —
-    // clearing on every logout means there's never anything to leak.
     queryClient.clear();
     navigate('/login');
   };
@@ -51,6 +51,19 @@ export function TopBar() {
       </div>
 
       <div className="flex items-center gap-4">
+        <button
+          onClick={() => navigate('/notifications')}
+          className="relative rounded-full p-2 text-muted hover:bg-surface-alt hover:text-ink transition-colors"
+          title="Notifications"
+        >
+          <Bell className="h-5 w-5" />
+          {(unreadData?.count ?? 0) > 0 && (
+            <span className="absolute top-1 right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white">
+              {unreadData?.count}
+            </span>
+          )}
+        </button>
+
         <div className="text-right">
           <p className="text-sm font-medium leading-tight text-ink">{user?.fullName}</p>
           <p className="text-xs text-muted">{user?.email}</p>

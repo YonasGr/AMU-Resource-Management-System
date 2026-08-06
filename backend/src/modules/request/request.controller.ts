@@ -4,6 +4,8 @@ import { RequestService } from './request.service';
 import { CreateItemRequestDto } from './dto/create-item-request.dto';
 import { CreateTransferRequestDto } from './dto/create-transfer-request.dto';
 import { CreatePurchaseRequestDto } from './dto/create-purchase-request.dto';
+import { CreateBorrowRequestDto } from './dto/create-borrow-request.dto';
+import { CreateDisposalRequestDto } from './dto/create-disposal-request.dto';
 import { RequestActionDto } from './dto/approval-action.dto';
 import { RequirePermission } from '../rbac/decorators/require-permission.decorator';
 import { CurrentUser, SafeUser } from '../auth/decorators/current-user.decorator';
@@ -33,6 +35,20 @@ export class RequestController {
   @ApiOperation({ summary: 'Draft a multi-line university purchase request' })
   createPurchaseRequest(@Body() dto: CreatePurchaseRequestDto, @CurrentUser() user: SafeUser) {
     return this.requestService.createPurchaseRequest(dto, user);
+  }
+
+  @Post('borrow-request')
+  @RequirePermission('borrow.request')
+  @ApiOperation({ summary: 'Draft a request to borrow an available serialized asset' })
+  createBorrowRequest(@Body() dto: CreateBorrowRequestDto, @CurrentUser() user: SafeUser) {
+    return this.requestService.createBorrowRequest(dto, user);
+  }
+
+  @Post('disposal-request')
+  @RequirePermission('disposal.request')
+  @ApiOperation({ summary: 'Draft a request to inspect and permanently dispose of an asset' })
+  createDisposalRequest(@Body() dto: CreateDisposalRequestDto, @CurrentUser() user: SafeUser) {
+    return this.requestService.createDisposalRequest(dto, user);
   }
 
   @Get()

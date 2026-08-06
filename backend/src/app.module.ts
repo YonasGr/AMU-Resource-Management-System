@@ -18,6 +18,10 @@ import { WorkflowModule } from './modules/workflow/workflow.module';
 import { RequestModule } from './modules/request/request.module';
 import { ProcurementModule } from './modules/procurement/procurement.module';
 import { DistributionModule } from './modules/distribution/distribution.module';
+import { AssetModule } from './modules/asset/asset.module';
+import { AuditModule } from './modules/audit/audit.module';
+import { NotificationModule } from './modules/notification/notification.module';
+import { ReportingModule } from './modules/reporting/reporting.module';
 
 @Module({
   imports: [
@@ -37,6 +41,10 @@ import { DistributionModule } from './modules/distribution/distribution.module';
     RequestModule,
     ProcurementModule,
     DistributionModule,
+    AssetModule,
+    AuditModule,
+    NotificationModule,
+    ReportingModule,
   ],
   controllers: [AppController],
   providers: [

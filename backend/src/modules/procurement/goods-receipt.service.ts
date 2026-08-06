@@ -4,12 +4,15 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { SafeUser } from '../auth/decorators/current-user.decorator';
 import { MovementService } from '../inventory/movement.service';
 import { CreateGoodsReceiptDto } from './dto/create-goods-receipt.dto';
+import { NotificationService } from '../notification/notification.service';
+
 
 @Injectable()
 export class GoodsReceiptService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly movements: MovementService,
+    private readonly notificationService: NotificationService,
   ) {}
 
   async create(purchaseOrderId: string, dto: CreateGoodsReceiptDto, currentUser: SafeUser) {
@@ -31,7 +34,7 @@ export class GoodsReceiptService {
       throw new BadRequestException('Every receipt line must record at least one delivered unit');
     }
 
-    return this.prisma.$transaction(async (tx) => {
+    const result = await this.prisma.$transaction(async (tx) => {
       const order = await tx.purchaseOrder.findUnique({
         where: { id: purchaseOrderId }, include: { lines: true },
       });
@@ -108,6 +111,29 @@ export class GoodsReceiptService {
         include: { lines: { include: { item: true, purchaseOrderLine: true } }, purchaseOrder: true },
       });
     }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+
+    setImmediate(() => this.notifyGoodsReceived(purchaseOrderId, result.id));
+    return result;
+  }
+
+  // Notify the purchase-order creator that goods were received
+  private async notifyGoodsReceived(purchaseOrderId: string, receiptId: string): Promise<void> {
+    try {
+      const po = await this.prisma.purchaseOrder.findUnique({
+        where: { id: purchaseOrderId },
+        select: { createdById: true, poNumber: true },
+      });
+      if (po) {
+        await this.notificationService.notify(
+          [po.createdById],
+          'GOODS_RECEIVED',
+          'Goods Received',
+          `Goods receipt recorded for PO ${po.poNumber}.`,
+          'GoodsReceipt',
+          receiptId,
+        );
+      }
+    } catch { /* non-blocking */ }
   }
 
   findAll(purchaseOrderId?: string) {

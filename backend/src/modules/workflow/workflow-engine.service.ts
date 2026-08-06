@@ -9,6 +9,8 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { AccessControlService } from '../rbac/access-control.service';
 import { SafeUser } from '../auth/decorators/current-user.decorator';
 import { CreateWorkflowInstanceDto } from './dto/create-instance.dto';
+import { NotificationService } from '../notification/notification.service';
+
 
 type ContextData = Record<string, string>;
 
@@ -23,6 +25,7 @@ export class WorkflowEngineService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly accessControlService: AccessControlService,
+    private readonly notificationService: NotificationService,
   ) {}
 
   async createInstance(
@@ -189,9 +192,37 @@ export class WorkflowEngineService {
         },
       });
 
-      return tx.workflowInstance.findUniqueOrThrow({
+      const updated = await tx.workflowInstance.findUniqueOrThrow({
         where: { id: instance.id },
       });
+
+      // Notify after the transaction commits — fire and forget (non-blocking)
+      setImmediate(async () => {
+        try {
+          const req = await this.prisma.request.findFirst({
+            where: { workflowInstanceId: instance.id },
+            select: { id: true, requesterId: true, type: true },
+          });
+          if (updated.status === 'APPROVED') {
+            // Final approval — notify the requester
+            if (req) {
+              await this.notificationService.notify(
+                [req.requesterId],
+                'REQUEST_APPROVED',
+                'Request Approved',
+                `Your ${req.type.replace(/_/g, ' ').toLowerCase()} has been approved.`,
+                req.type,
+                req.id,
+              );
+            }
+          } else if (nextStep) {
+            // Advance to next step — notify eligible approvers
+            await this.notifyEligibleApprovers(instance.id, nextStep, instance.contextData as ContextData, req?.type, req?.id);
+          }
+        } catch { /* non-blocking */ }
+      });
+
+      return updated;
     });
   }
 
@@ -226,10 +257,31 @@ export class WorkflowEngineService {
         },
       });
 
-      return tx.workflowInstance.update({
+      const updated = await tx.workflowInstance.update({
         where: { id: instance.id },
         data: { status: 'REJECTED' },
       });
+
+      setImmediate(async () => {
+        try {
+          const req = await this.prisma.request.findFirst({
+            where: { workflowInstanceId: instance.id },
+            select: { id: true, requesterId: true, type: true },
+          });
+          if (req) {
+            await this.notificationService.notify(
+              [req.requesterId],
+              'REQUEST_REJECTED',
+              'Request Rejected',
+              `Your ${req.type.replace(/_/g, ' ').toLowerCase()} was rejected${comment ? `: ${comment}` : '.'}`,
+              req.type,
+              req.id,
+            );
+          }
+        } catch { /* non-blocking */ }
+      });
+
+      return updated;
     });
   }
 
@@ -320,5 +372,61 @@ export class WorkflowEngineService {
       default:
         return false;
     }
+  }
+
+  /**
+   * Finds all users eligible for a given workflow step and sends them an
+   * APPROVAL_REQUIRED notification. Scans the full UserRole table using the
+   * same role+scope resolution logic as canUserActOnStep, but in reverse:
+   * starting from the role and scope, collecting matching user IDs.
+   */
+  private async notifyEligibleApprovers(
+    instanceId: string,
+    step: WorkflowStepTemplate,
+    contextData: ContextData,
+    entityType?: string,
+    entityId?: string,
+  ): Promise<void> {
+    if (!step.roleCode) return;
+
+    const userRoles = await this.prisma.userRole.findMany({
+      where: { role: { code: step.roleCode } },
+      select: { userId: true, scopeType: true, scopeId: true },
+    });
+
+    const userIds = new Set<string>();
+    for (const ur of userRoles) {
+      if (ur.scopeType === 'GLOBAL') {
+        userIds.add(ur.userId);
+        continue;
+      }
+      if (step.approverResolutionType === 'FIXED_ROLE') {
+        userIds.add(ur.userId);
+        continue;
+      }
+      if (step.approverResolutionType === 'ORG_ROLE_AT_CONTEXT_ORG' && step.contextOrgKey) {
+        const orgId = contextData[step.contextOrgKey];
+        if (orgId && (ur.scopeId === orgId || ur.scopeType === 'GLOBAL')) {
+          userIds.add(ur.userId);
+        }
+      }
+      if (step.approverResolutionType === 'STORE_ROLE_AT_CONTEXT_STORE' && step.contextStoreKey) {
+        const storeId = contextData[step.contextStoreKey];
+        if (storeId && ur.scopeId === storeId) {
+          userIds.add(ur.userId);
+        }
+      }
+    }
+
+    if (userIds.size === 0) return;
+
+    await this.notificationService.notify(
+      Array.from(userIds),
+      'APPROVAL_REQUIRED',
+      `Approval Required: ${step.name}`,
+      `You have a pending approval for step "${step.name}".`,
+      entityType,
+      entityId,
+    );
   }
 }

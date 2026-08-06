@@ -4,6 +4,8 @@ import * as crypto from 'crypto';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AccessControlService } from '../rbac/access-control.service';
 import { SafeUser } from '../auth/decorators/current-user.decorator';
+import { NotificationService } from '../notification/notification.service';
+
 
 type TxClient = Prisma.TransactionClient;
 
@@ -61,6 +63,7 @@ export class MovementService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly accessControlService: AccessControlService,
+    private readonly notificationService: NotificationService,
   ) {}
 
   async applyMovement(params: SingleStoreMovementParams): Promise<InventoryMovement> {
@@ -140,7 +143,46 @@ export class MovementService {
         },
       });
     };
-    return transaction ? apply(transaction) : this.prisma.$transaction(apply);
+    const movement = await (transaction ? apply(transaction) : this.prisma.$transaction(apply));
+
+    // After a quantity-decreasing movement, check if we crossed the min-stock
+    // threshold and notify the store manager. Fire-and-forget, non-blocking.
+    const isDecreasing =
+      movementType === 'ISSUE' ||
+      movementType === 'DISPOSAL' ||
+      (movementType === 'ADJUSTMENT' && quantity < 0);
+    if (isDecreasing) {
+      setImmediate(async () => {
+        try {
+          const inv = await this.prisma.storeInventory.findUnique({
+            where: { storeId_itemId: { storeId, itemId } },
+            include: {
+              store: { select: { name: true, managerId: true } },
+              item: { select: { name: true } },
+            },
+          });
+          if (
+            inv &&
+            inv.minimumStock > 0 &&
+            inv.quantity < inv.minimumStock &&
+            inv.store.managerId
+          ) {
+            await this.notificationService.notify(
+              [inv.store.managerId],
+              'STOCK_LOW',
+              'Low Stock Alert',
+              `${inv.item.name} in ${inv.store.name} is below minimum stock (${inv.quantity} remaining, minimum: ${inv.minimumStock}).`,
+              'StoreInventory',
+              inv.id,
+            );
+          }
+        } catch {
+          /* non-blocking */
+        }
+      });
+    }
+
+    return movement;
   }
 
   /**

@@ -13,6 +13,10 @@ import { SafeUser } from '../auth/decorators/current-user.decorator';
 import { CreateItemRequestDto } from './dto/create-item-request.dto';
 import { CreateTransferRequestDto } from './dto/create-transfer-request.dto';
 import { CreatePurchaseRequestDto } from './dto/create-purchase-request.dto';
+import { CreateBorrowRequestDto } from './dto/create-borrow-request.dto';
+import { CreateDisposalRequestDto } from './dto/create-disposal-request.dto';
+import { NotificationService } from '../notification/notification.service';
+
 
 interface ItemRequestDetails {
   itemId: string;
@@ -34,6 +38,22 @@ interface PurchaseRequestDetails {
   notes?: string;
 }
 
+interface BorrowRequestDetails {
+  assetId: string;
+  targetStoreId: string;
+  purpose: string;
+  expectedReturnDate: string;
+  notes?: string;
+}
+
+interface DisposalRequestDetails {
+  assetId: string;
+  targetStoreId: string;
+  reason: string;
+  method: string;
+  inspectionNotes?: string;
+}
+
 /**
  * The generic request lifecycle every request type (spec section 12) runs
  * through: Draft -> Submitted -> Pending Approval -> Approved -> Executed ->
@@ -50,6 +70,7 @@ export class RequestService {
     private readonly workflowEngineService: WorkflowEngineService,
     private readonly movementService: MovementService,
     private readonly accessControlService: AccessControlService,
+    private readonly notificationService: NotificationService,
   ) {}
 
   async createItemRequest(
@@ -126,6 +147,64 @@ export class RequestService {
     });
   }
 
+  async createBorrowRequest(dto: CreateBorrowRequestDto, requester: SafeUser): Promise<RequestRecord> {
+    const asset = await this.prisma.asset.findUnique({ where: { id: dto.assetId } });
+    if (!asset) throw new NotFoundException(`Asset ${dto.assetId} not found`);
+    if (!['AVAILABLE', 'ASSIGNED'].includes(asset.status)) {
+      throw new BadRequestException(`Asset ${asset.assetTag} is not available to borrow`);
+    }
+    const returnDate = new Date(dto.expectedReturnDate);
+    if (returnDate <= new Date()) {
+      throw new BadRequestException('Expected return date must be in the future');
+    }
+    const details: BorrowRequestDetails = {
+      assetId: asset.id,
+      targetStoreId: asset.storeId,
+      purpose: dto.purpose,
+      expectedReturnDate: dto.expectedReturnDate,
+      notes: dto.notes,
+    };
+    return this.prisma.request.create({
+      data: {
+        type: 'BORROW_REQUEST',
+        requesterId: requester.id,
+        organizationId: requester.organizationId,
+        details: details as unknown as Prisma.InputJsonValue,
+      },
+    });
+  }
+
+  async createDisposalRequest(dto: CreateDisposalRequestDto, requester: SafeUser): Promise<RequestRecord> {
+    const asset = await this.prisma.asset.findUnique({ where: { id: dto.assetId } });
+    if (!asset) throw new NotFoundException(`Asset ${dto.assetId} not found`);
+    if (['BORROWED', 'UNDER_INSPECTION', 'DISPOSED'].includes(asset.status)) {
+      throw new BadRequestException(`Asset ${asset.assetTag} cannot be disposed while ${asset.status.toLowerCase()}`);
+    }
+    const activeRequest = await this.prisma.request.findFirst({
+      where: {
+        type: 'DISPOSAL_REQUEST',
+        status: { in: ['DRAFT', 'SUBMITTED', 'PENDING_APPROVAL', 'APPROVED'] },
+        details: { path: ['assetId'], equals: asset.id },
+      },
+    });
+    if (activeRequest) throw new BadRequestException('This asset already has an active disposal request');
+    const details: DisposalRequestDetails = {
+      assetId: asset.id,
+      targetStoreId: asset.storeId,
+      reason: dto.reason,
+      method: dto.method,
+      inspectionNotes: dto.inspectionNotes,
+    };
+    return this.prisma.request.create({
+      data: {
+        type: 'DISPOSAL_REQUEST',
+        requesterId: requester.id,
+        organizationId: requester.organizationId,
+        details: details as unknown as Prisma.InputJsonValue,
+      },
+    });
+  }
+
   /** Starts the approval chain — from here on, the workflow engine drives progress. */
   async submit(requestId: string, requester: SafeUser): Promise<RequestRecord> {
     const request = await this.findOneRaw(requestId);
@@ -148,10 +227,24 @@ export class RequestService {
       requester.id,
     );
 
-    return this.prisma.request.update({
+    const updated = await this.prisma.request.update({
       where: { id: request.id },
       data: { status: 'PENDING_APPROVAL', workflowInstanceId: instance.id },
     });
+
+    // Notify requester that the request is now moving through approval
+    setImmediate(() =>
+      this.notificationService.notify(
+        [requester.id],
+        'REQUEST_SUBMITTED',
+        'Request Submitted',
+        `Your ${request.type.replace(/_/g, ' ').toLowerCase()} has been submitted for approval.`,
+        request.type,
+        request.id,
+      ).catch(() => {/* non-blocking */}),
+    );
+
+    return updated;
   }
 
   /**
@@ -293,7 +386,7 @@ export class RequestService {
   }
 
   private buildContextData(request: RequestRecord): Record<string, string> {
-    const details = request.details as unknown as ItemRequestDetails & TransferRequestDetails;
+    const details = request.details as unknown as ItemRequestDetails & TransferRequestDetails & BorrowRequestDetails & DisposalRequestDetails;
 
     switch (request.type) {
       case 'ITEM_REQUEST':
@@ -309,6 +402,12 @@ export class RequestService {
         };
       case 'PURCHASE_REQUEST':
         return { requesterOrganizationId: request.organizationId };
+      case 'BORROW_REQUEST':
+      case 'DISPOSAL_REQUEST':
+        return {
+          requesterOrganizationId: request.organizationId,
+          targetStoreId: details.targetStoreId,
+        };
       default:
         throw new BadRequestException(
           `Request type ${request.type} isn't submittable yet — its workflow template/execution isn't implemented in this phase`,
@@ -318,12 +417,90 @@ export class RequestService {
 
   /** The "on final approval, call the relevant execution service" hook. */
   private async execute(request: RequestRecord, currentUser: SafeUser): Promise<RequestRecord> {
-    const details = request.details as unknown as ItemRequestDetails & TransferRequestDetails;
+    const details = request.details as unknown as ItemRequestDetails & TransferRequestDetails & BorrowRequestDetails & DisposalRequestDetails;
 
     if (request.type === 'PURCHASE_REQUEST') {
       // Approval authorizes procurement to create one or more purchase
       // orders. Physical receiving is a later, explicit inventory action.
       return request;
+    }
+    if (request.type === 'BORROW_REQUEST') {
+      await this.prisma.$transaction(async (tx) => {
+        const existing = await tx.borrowTransaction.findUnique({ where: { requestId: request.id } });
+        if (existing) return existing;
+        const asset = await tx.asset.findUnique({ where: { id: details.assetId } });
+        if (!asset || !['AVAILABLE', 'ASSIGNED'].includes(asset.status)) {
+          throw new BadRequestException('Asset is no longer available to borrow');
+        }
+        const created = await tx.borrowTransaction.create({
+          data: {
+            requestId: request.id,
+            assetId: asset.id,
+            storeId: asset.storeId,
+            borrowerId: request.requesterId,
+            purpose: details.purpose,
+            expectedReturnDate: new Date(details.expectedReturnDate),
+          },
+        });
+        await tx.assetHistory.create({
+          data: {
+            assetId: asset.id,
+            actedById: currentUser.id,
+            eventType: 'BORROW_APPROVED',
+            details: { requestId: request.id, borrowTransactionId: created.id },
+          },
+        });
+        return created;
+      });
+      return this.prisma.request.update({
+        where: { id: request.id },
+        data: { status: 'APPROVED' },
+      });
+    }
+    if (request.type === 'DISPOSAL_REQUEST') {
+      return this.prisma.$transaction(async (tx) => {
+        const existing = await tx.disposalRecord.findUnique({ where: { requestId: request.id } });
+        if (existing) {
+          return tx.request.update({ where: { id: request.id }, data: { status: 'COMPLETED' } });
+        }
+        const asset = await tx.asset.findUnique({ where: { id: details.assetId } });
+        if (!asset || ['BORROWED', 'UNDER_INSPECTION', 'DISPOSED'].includes(asset.status)) {
+          throw new BadRequestException('Asset is no longer eligible for disposal');
+        }
+        await this.movementService.applyMovement({
+          itemId: asset.itemId,
+          storeId: asset.storeId,
+          quantity: 1,
+          movementType: 'DISPOSAL',
+          referenceId: request.id,
+          currentUser,
+          authorizedByWorkflow: true,
+          executionKey: `request:${request.id}:disposal`,
+          transaction: tx,
+        });
+        const record = await tx.disposalRecord.create({
+          data: {
+            certificateNumber: `DSP-${request.id.slice(0, 8).toUpperCase()}`,
+            requestId: request.id,
+            assetId: asset.id,
+            storeId: asset.storeId,
+            disposedById: currentUser.id,
+            reason: details.reason,
+            method: details.method,
+            inspectionNotes: details.inspectionNotes,
+          },
+        });
+        await tx.asset.update({ where: { id: asset.id }, data: { status: 'DISPOSED' } });
+        await tx.assetHistory.create({
+          data: {
+            assetId: asset.id,
+            actedById: currentUser.id,
+            eventType: 'DISPOSED',
+            details: { requestId: request.id, disposalRecordId: record.id },
+          },
+        });
+        return tx.request.update({ where: { id: request.id }, data: { status: 'COMPLETED' } });
+      });
     }
     if (request.type === 'ITEM_REQUEST') {
       await this.movementService.applyMovement({
@@ -349,10 +526,23 @@ export class RequestService {
       });
     }
 
-    return this.prisma.request.update({
+    const completed = await this.prisma.request.update({
       where: { id: request.id },
       data: { status: 'COMPLETED' },
     });
+
+    setImmediate(() =>
+      this.notificationService.notify(
+        [request.requesterId],
+        'REQUEST_COMPLETED',
+        'Request Completed',
+        `Your ${request.type.replace(/_/g, ' ').toLowerCase()} has been completed and processed.`,
+        request.type,
+        request.id,
+      ).catch(() => {/* non-blocking */}),
+    );
+
+    return completed;
   }
 
   private async assertItemExists(itemId: string): Promise<void> {

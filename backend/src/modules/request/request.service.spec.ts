@@ -98,4 +98,52 @@ describe('RequestService approval execution', () => {
       where: { id: 'request-1' }, data: { status: 'COMPLETED' },
     });
   });
+
+  it('creates one approved borrow transaction without moving stock', async () => {
+    const borrowRequest = request({
+      type: 'BORROW_REQUEST',
+      details: { assetId: 'asset-1', targetStoreId: 'store-1', purpose: 'Teaching', expectedReturnDate: '2026-09-01' },
+    });
+    const tx = {
+      borrowTransaction: {
+        findUnique: jest.fn().mockResolvedValue(null),
+        create: jest.fn().mockResolvedValue({ id: 'loan-1' }),
+      },
+      asset: { findUnique: jest.fn().mockResolvedValue({ id: 'asset-1', assetTag: 'AMU-1', storeId: 'store-1', status: 'AVAILABLE' }) },
+      assetHistory: { create: jest.fn().mockResolvedValue({}) },
+    };
+    prisma.$transaction = jest.fn((callback: any) => callback(tx));
+    prisma.request.update.mockResolvedValue({ ...borrowRequest, status: 'APPROVED' });
+
+    const result = await (service as any).execute(borrowRequest, currentUser);
+
+    expect(result.status).toBe('APPROVED');
+    expect(tx.borrowTransaction.create).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ requestId: 'request-1', assetId: 'asset-1' }) }));
+    expect(movement.applyMovement).not.toHaveBeenCalled();
+  });
+
+  it('disposes an eligible asset atomically with a stable movement key', async () => {
+    const disposalRequest = request({
+      type: 'DISPOSAL_REQUEST',
+      details: { assetId: 'asset-1', targetStoreId: 'store-1', reason: 'Beyond repair', method: 'Recycler' },
+    });
+    const tx = {
+      disposalRecord: { findUnique: jest.fn().mockResolvedValue(null), create: jest.fn().mockResolvedValue({ id: 'disposal-1' }) },
+      asset: {
+        findUnique: jest.fn().mockResolvedValue({ id: 'asset-1', itemId: 'item-1', storeId: 'store-1', status: 'AVAILABLE' }),
+        update: jest.fn().mockResolvedValue({}),
+      },
+      assetHistory: { create: jest.fn().mockResolvedValue({}) },
+      request: { update: jest.fn().mockResolvedValue({ ...disposalRequest, status: 'COMPLETED' }) },
+    };
+    prisma.$transaction = jest.fn((callback: any) => callback(tx));
+
+    const result = await (service as any).execute(disposalRequest, currentUser);
+
+    expect(result.status).toBe('COMPLETED');
+    expect(movement.applyMovement).toHaveBeenCalledWith(expect.objectContaining({
+      movementType: 'DISPOSAL', executionKey: 'request:request-1:disposal', transaction: tx,
+    }));
+    expect(tx.asset.update).toHaveBeenCalledWith({ where: { id: 'asset-1' }, data: { status: 'DISPOSED' } });
+  });
 });

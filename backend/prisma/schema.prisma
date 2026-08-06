@@ -36,9 +36,10 @@ model OrganizationUnit {
   parent   OrganizationUnit?  @relation("OrganizationHierarchy", fields: [parentId], references: [id])
   children OrganizationUnit[] @relation("OrganizationHierarchy")
 
-  users User[]
-  stores Store[]
-  requests Request[]
+  users          User[]
+  stores         Store[]
+  requests       Request[]
+  assignedAssets Asset[]
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -63,18 +64,27 @@ model User {
   organizationId String           @map("organization_id")
   organization   OrganizationUnit @relation(fields: [organizationId], references: [id])
 
-  refreshTokens       RefreshToken[]
-  passwordResetTokens PasswordResetToken[]
-  userRoles           UserRole[]
-  managedStores       Store[]
-  createdMovements    InventoryMovement[]
-  createdWorkflowInstances WorkflowInstance[]
-  approvalActions          ApprovalHistory[]
-  requests                 Request[]
-  createdPurchaseOrders    PurchaseOrder[] @relation("PurchaseOrderCreatedBy")
-  goodsReceipts            GoodsReceipt[]
-  createdDistributionPlans DistributionPlan[] @relation("DistributionPlanCreatedBy")
-  confirmedAllocations     DistributionAllocation[] @relation("DistributionConfirmedBy")
+  refreshTokens               RefreshToken[]
+  passwordResetTokens         PasswordResetToken[]
+  userRoles                   UserRole[]
+  managedStores               Store[]
+  createdMovements            InventoryMovement[]
+  createdWorkflowInstances    WorkflowInstance[]
+  approvalActions             ApprovalHistory[]
+  requests                    Request[]
+  createdPurchaseOrders       PurchaseOrder[]          @relation("PurchaseOrderCreatedBy")
+  goodsReceipts               GoodsReceipt[]
+  createdDistributionPlans    DistributionPlan[]       @relation("DistributionPlanCreatedBy")
+  confirmedAllocations        DistributionAllocation[] @relation("DistributionConfirmedBy")
+  registeredAssets            Asset[]                  @relation("AssetRegisteredBy")
+  assetHistoryEntries         AssetHistory[]
+  borrowedTransactions        BorrowTransaction[]      @relation("Borrower")
+  issuedBorrowTransactions    BorrowTransaction[]      @relation("BorrowIssuedBy")
+  returnedBorrowTransactions  BorrowTransaction[]      @relation("BorrowReturnedBy")
+  inspectedBorrowTransactions BorrowTransaction[]      @relation("BorrowInspectedBy")
+  disposedAssets              DisposalRecord[]         @relation("AssetDisposedBy")
+  auditLogs                   AuditLog[]
+  notifications               Notification[]
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -202,13 +212,16 @@ model Store {
   managerId String? @map("manager_id")
   manager   User?   @relation(fields: [managerId], references: [id])
 
-  inventory       StoreInventory[]
-  movementsOut    InventoryMovement[] @relation("MovementFromStore")
-  movementsIn     InventoryMovement[] @relation("MovementToStore")
-  purchaseOrders  PurchaseOrder[]
-  goodsReceipts   GoodsReceipt[]
+  inventory               StoreInventory[]
+  movementsOut            InventoryMovement[]      @relation("MovementFromStore")
+  movementsIn             InventoryMovement[]      @relation("MovementToStore")
+  purchaseOrders          PurchaseOrder[]
+  goodsReceipts           GoodsReceipt[]
   distributionPlansSource DistributionPlan[]
   distributionAllocations DistributionAllocation[]
+  assets                  Asset[]
+  borrowTransactions      BorrowTransaction[]
+  disposalRecords         DisposalRecord[]
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -263,11 +276,12 @@ model Item {
   categoryId String       @map("category_id")
   category   ItemCategory @relation(fields: [categoryId], references: [id])
 
-  storeInventories StoreInventory[]
-  movements        InventoryMovement[]
-  purchaseOrderLines PurchaseOrderLine[]
-  goodsReceiptLines GoodsReceiptLine[]
+  storeInventories        StoreInventory[]
+  movements               InventoryMovement[]
+  purchaseOrderLines      PurchaseOrderLine[]
+  goodsReceiptLines       GoodsReceiptLine[]
   distributionAllocations DistributionAllocation[]
+  assets                  Asset[]
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -282,17 +296,17 @@ enum SupplierStatus {
 }
 
 model Supplier {
-  id            String         @id @default(uuid())
-  name          String
-  contactPerson String?        @map("contact_person")
-  email         String?
-  phone         String?
-  address       String?
-  tin           String?        @unique
-  status        SupplierStatus @default(ACTIVE)
+  id             String          @id @default(uuid())
+  name           String
+  contactPerson  String?         @map("contact_person")
+  email          String?
+  phone          String?
+  address        String?
+  tin            String?         @unique
+  status         SupplierStatus  @default(ACTIVE)
   purchaseOrders PurchaseOrder[]
-  createdAt     DateTime       @default(now()) @map("created_at")
-  updatedAt     DateTime       @updatedAt @map("updated_at")
+  createdAt      DateTime        @default(now()) @map("created_at")
+  updatedAt      DateTime        @updatedAt @map("updated_at")
 
   @@index([name])
   @@map("suppliers")
@@ -315,19 +329,19 @@ model PurchaseOrder {
   issuedAt             DateTime?           @map("issued_at")
   expectedDeliveryDate DateTime?           @map("expected_delivery_date")
 
-  supplierId String   @map("supplier_id")
-  supplier   Supplier @relation(fields: [supplierId], references: [id])
-  requestId  String   @map("request_id")
-  request    Request  @relation(fields: [requestId], references: [id])
-  destinationStoreId String @map("destination_store_id")
-  destinationStore   Store  @relation(fields: [destinationStoreId], references: [id])
-  createdById String @map("created_by")
-  createdBy   User   @relation("PurchaseOrderCreatedBy", fields: [createdById], references: [id])
+  supplierId         String   @map("supplier_id")
+  supplier           Supplier @relation(fields: [supplierId], references: [id])
+  requestId          String   @map("request_id")
+  request            Request  @relation(fields: [requestId], references: [id])
+  destinationStoreId String   @map("destination_store_id")
+  destinationStore   Store    @relation(fields: [destinationStoreId], references: [id])
+  createdById        String   @map("created_by")
+  createdBy          User     @relation("PurchaseOrderCreatedBy", fields: [createdById], references: [id])
 
-  lines PurchaseOrderLine[]
-  receipts GoodsReceipt[]
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
+  lines     PurchaseOrderLine[]
+  receipts  GoodsReceipt[]
+  createdAt DateTime            @default(now()) @map("created_at")
+  updatedAt DateTime            @updatedAt @map("updated_at")
 
   @@index([requestId])
   @@index([supplierId])
@@ -339,12 +353,12 @@ model PurchaseOrderLine {
   id               String  @id @default(uuid())
   orderedQuantity  Int     @map("ordered_quantity")
   receivedQuantity Int     @default(0) @map("received_quantity")
-  unitPrice         Decimal @map("unit_price") @db.Decimal(18, 2)
+  unitPrice        Decimal @map("unit_price") @db.Decimal(18, 2)
 
-  purchaseOrderId String        @map("purchase_order_id")
-  purchaseOrder   PurchaseOrder @relation(fields: [purchaseOrderId], references: [id])
-  itemId          String        @map("item_id")
-  item            Item          @relation(fields: [itemId], references: [id])
+  purchaseOrderId String             @map("purchase_order_id")
+  purchaseOrder   PurchaseOrder      @relation(fields: [purchaseOrderId], references: [id])
+  itemId          String             @map("item_id")
+  item            Item               @relation(fields: [itemId], references: [id])
   receiptLines    GoodsReceiptLine[]
 
   @@unique([purchaseOrderId, itemId])
@@ -358,14 +372,14 @@ model GoodsReceipt {
   notes         String?
   receivedAt    DateTime @default(now()) @map("received_at")
 
-  purchaseOrderId String        @map("purchase_order_id")
-  purchaseOrder   PurchaseOrder @relation(fields: [purchaseOrderId], references: [id])
-  storeId          String        @map("store_id")
-  store            Store         @relation(fields: [storeId], references: [id])
-  receivedById     String        @map("received_by")
-  receivedBy       User          @relation(fields: [receivedById], references: [id])
-  lines            GoodsReceiptLine[]
-  createdAt        DateTime      @default(now()) @map("created_at")
+  purchaseOrderId String             @map("purchase_order_id")
+  purchaseOrder   PurchaseOrder      @relation(fields: [purchaseOrderId], references: [id])
+  storeId         String             @map("store_id")
+  store           Store              @relation(fields: [storeId], references: [id])
+  receivedById    String             @map("received_by")
+  receivedBy      User               @relation(fields: [receivedById], references: [id])
+  lines           GoodsReceiptLine[]
+  createdAt       DateTime           @default(now()) @map("created_at")
 
   @@index([purchaseOrderId])
   @@index([storeId])
@@ -373,11 +387,11 @@ model GoodsReceipt {
 }
 
 model GoodsReceiptLine {
-  id               String @id @default(uuid())
-  acceptedQuantity Int    @map("accepted_quantity")
-  damagedQuantity  Int    @default(0) @map("damaged_quantity")
-  rejectedQuantity Int    @default(0) @map("rejected_quantity")
-  notes             String?
+  id               String  @id @default(uuid())
+  acceptedQuantity Int     @map("accepted_quantity")
+  damagedQuantity  Int     @default(0) @map("damaged_quantity")
+  rejectedQuantity Int     @default(0) @map("rejected_quantity")
+  notes            String?
 
   goodsReceiptId      String            @map("goods_receipt_id")
   goodsReceipt        GoodsReceipt      @relation(fields: [goodsReceiptId], references: [id])
@@ -385,10 +399,154 @@ model GoodsReceiptLine {
   purchaseOrderLine   PurchaseOrderLine @relation(fields: [purchaseOrderLineId], references: [id])
   itemId              String            @map("item_id")
   item                Item              @relation(fields: [itemId], references: [id])
+  assets              Asset[]
 
   @@unique([goodsReceiptId, purchaseOrderLineId])
   @@index([purchaseOrderLineId])
   @@map("goods_receipt_lines")
+}
+
+enum AssetCondition {
+  NEW
+  GOOD
+  FAIR
+  POOR
+  DAMAGED
+}
+
+enum AssetStatus {
+  AVAILABLE
+  ASSIGNED
+  BORROWED
+  UNDER_INSPECTION
+  UNDER_MAINTENANCE
+  DISPOSED
+}
+
+model Asset {
+  id           String         @id @default(uuid())
+  assetTag     String         @unique @map("asset_tag")
+  serialNumber String?        @unique @map("serial_number")
+  purchaseDate DateTime?      @map("purchase_date") @db.Date
+  condition    AssetCondition @default(GOOD)
+  status       AssetStatus    @default(AVAILABLE)
+  notes        String?
+
+  itemId                 String            @map("item_id")
+  item                   Item              @relation(fields: [itemId], references: [id])
+  storeId                String            @map("store_id")
+  store                  Store             @relation(fields: [storeId], references: [id])
+  assignedOrganizationId String?           @map("assigned_organization_id")
+  assignedOrganization   OrganizationUnit? @relation(fields: [assignedOrganizationId], references: [id])
+  goodsReceiptLineId     String?           @map("goods_receipt_line_id")
+  goodsReceiptLine       GoodsReceiptLine? @relation(fields: [goodsReceiptLineId], references: [id])
+  registeredById         String            @map("registered_by")
+  registeredBy           User              @relation("AssetRegisteredBy", fields: [registeredById], references: [id])
+
+  history            AssetHistory[]
+  borrowTransactions BorrowTransaction[]
+  disposalRecord     DisposalRecord?
+  createdAt          DateTime            @default(now()) @map("created_at")
+  updatedAt          DateTime            @updatedAt @map("updated_at")
+
+  @@index([itemId])
+  @@index([storeId])
+  @@index([assignedOrganizationId])
+  @@index([goodsReceiptLineId])
+  @@index([status])
+  @@map("assets")
+}
+
+enum AssetEventType {
+  REGISTERED
+  ASSIGNED
+  UNASSIGNED
+  BORROW_APPROVED
+  BORROW_ISSUED
+  BORROW_RETURNED
+  BORROW_INSPECTED
+  DISPOSED
+  UPDATED
+}
+
+model AssetHistory {
+  id        String         @id @default(uuid())
+  eventType AssetEventType @map("event_type")
+  details   Json?
+  assetId   String         @map("asset_id")
+  asset     Asset          @relation(fields: [assetId], references: [id])
+  actedById String         @map("acted_by")
+  actedBy   User           @relation(fields: [actedById], references: [id])
+  createdAt DateTime       @default(now()) @map("created_at")
+
+  @@index([assetId, createdAt])
+  @@map("asset_history")
+}
+
+enum BorrowStatus {
+  APPROVED
+  ISSUED
+  RETURNED_PENDING_INSPECTION
+  COMPLETED
+}
+
+model BorrowTransaction {
+  id                 String          @id @default(uuid())
+  status             BorrowStatus    @default(APPROVED)
+  purpose            String
+  expectedReturnDate DateTime        @map("expected_return_date") @db.Date
+  issuedAt           DateTime?       @map("issued_at")
+  returnedAt         DateTime?       @map("returned_at")
+  inspectedAt        DateTime?       @map("inspected_at")
+  issueNotes         String?         @map("issue_notes")
+  returnNotes        String?         @map("return_notes")
+  inspectionNotes    String?         @map("inspection_notes")
+  returnCondition    AssetCondition? @map("return_condition")
+
+  requestId     String   @unique @map("request_id")
+  request       Request  @relation(fields: [requestId], references: [id])
+  assetId       String   @map("asset_id")
+  asset         Asset    @relation(fields: [assetId], references: [id])
+  storeId       String   @map("store_id")
+  store         Store    @relation(fields: [storeId], references: [id])
+  borrowerId    String   @map("borrower_id")
+  borrower      User     @relation("Borrower", fields: [borrowerId], references: [id])
+  issuedById    String?  @map("issued_by")
+  issuedBy      User?    @relation("BorrowIssuedBy", fields: [issuedById], references: [id])
+  returnedById  String?  @map("returned_by")
+  returnedBy    User?    @relation("BorrowReturnedBy", fields: [returnedById], references: [id])
+  inspectedById String?  @map("inspected_by")
+  inspectedBy   User?    @relation("BorrowInspectedBy", fields: [inspectedById], references: [id])
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  @@index([assetId])
+  @@index([borrowerId])
+  @@index([storeId])
+  @@index([status])
+  @@map("borrow_transactions")
+}
+
+model DisposalRecord {
+  id                String   @id @default(uuid())
+  certificateNumber String   @unique @map("certificate_number")
+  reason            String
+  method            String
+  inspectionNotes   String?  @map("inspection_notes")
+  disposedAt        DateTime @default(now()) @map("disposed_at")
+
+  requestId    String   @unique @map("request_id")
+  request      Request  @relation(fields: [requestId], references: [id])
+  assetId      String   @unique @map("asset_id")
+  asset        Asset    @relation(fields: [assetId], references: [id])
+  storeId      String   @map("store_id")
+  store        Store    @relation(fields: [storeId], references: [id])
+  disposedById String   @map("disposed_by")
+  disposedBy   User     @relation("AssetDisposedBy", fields: [disposedById], references: [id])
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  @@index([storeId])
+  @@map("disposal_records")
 }
 
 enum DistributionPlanStatus {
@@ -404,37 +562,37 @@ enum DistributionAllocationStatus {
 }
 
 model DistributionPlan {
-  id        String                 @id @default(uuid())
-  planNumber String                @unique @map("plan_number")
-  status    DistributionPlanStatus @default(DRAFT)
-  notes     String?
+  id         String                 @id @default(uuid())
+  planNumber String                 @unique @map("plan_number")
+  status     DistributionPlanStatus @default(DRAFT)
+  notes      String?
 
-  sourceStoreId String @map("source_store_id")
-  sourceStore   Store  @relation(fields: [sourceStoreId], references: [id])
-  createdById String @map("created_by")
-  createdBy   User   @relation("DistributionPlanCreatedBy", fields: [createdById], references: [id])
-  allocations DistributionAllocation[]
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
+  sourceStoreId String                   @map("source_store_id")
+  sourceStore   Store                    @relation(fields: [sourceStoreId], references: [id])
+  createdById   String                   @map("created_by")
+  createdBy     User                     @relation("DistributionPlanCreatedBy", fields: [createdById], references: [id])
+  allocations   DistributionAllocation[]
+  createdAt     DateTime                 @default(now()) @map("created_at")
+  updatedAt     DateTime                 @updatedAt @map("updated_at")
 
   @@index([sourceStoreId])
   @@map("distribution_plans")
 }
 
 model DistributionAllocation {
-  id       String                       @id @default(uuid())
-  quantity Int
-  status   DistributionAllocationStatus @default(PENDING)
-  confirmedAt DateTime? @map("confirmed_at")
+  id          String                       @id @default(uuid())
+  quantity    Int
+  status      DistributionAllocationStatus @default(PENDING)
+  confirmedAt DateTime?                    @map("confirmed_at")
 
   distributionPlanId String           @map("distribution_plan_id")
   distributionPlan   DistributionPlan @relation(fields: [distributionPlanId], references: [id])
-  itemId String @map("item_id")
-  item   Item   @relation(fields: [itemId], references: [id])
-  destinationStoreId String @map("destination_store_id")
-  destinationStore   Store  @relation(fields: [destinationStoreId], references: [id])
-  confirmedById String? @map("confirmed_by")
-  confirmedBy   User? @relation("DistributionConfirmedBy", fields: [confirmedById], references: [id])
+  itemId             String           @map("item_id")
+  item               Item             @relation(fields: [itemId], references: [id])
+  destinationStoreId String           @map("destination_store_id")
+  destinationStore   Store            @relation(fields: [destinationStoreId], references: [id])
+  confirmedById      String?          @map("confirmed_by")
+  confirmedBy        User?            @relation("DistributionConfirmedBy", fields: [confirmedById], references: [id])
 
   @@unique([distributionPlanId, itemId, destinationStoreId])
   @@index([destinationStoreId])
@@ -497,8 +655,8 @@ model InventoryMovement {
   toStoreId   String? @map("to_store_id")
   toStore     Store?  @relation("MovementToStore", fields: [toStoreId], references: [id])
 
-  createdById String @map("created_by")
-  createdBy   User   @relation(fields: [createdById], references: [id])
+  createdById String   @map("created_by")
+  createdBy   User     @relation(fields: [createdById], references: [id])
   createdAt   DateTime @default(now()) @map("created_at")
 
   @@index([itemId])
@@ -659,9 +817,9 @@ enum RequestStatus {
 // plumbing, without a schema change — RequestService just needs its own
 // details-shape validation and execute-on-approval logic added for each.
 model Request {
-  id     String        @id @default(uuid())
-  type   RequestType
-  status RequestStatus @default(DRAFT)
+  id      String        @id @default(uuid())
+  type    RequestType
+  status  RequestStatus @default(DRAFT)
   // Shape depends on `type` — see RequestService for what each type expects.
   // e.g. ITEM_REQUEST: { itemId, targetStoreId, quantity, notes? }
   //      TRANSFER_REQUEST: { itemId, sourceStoreId, destinationStoreId, quantity, notes? }
@@ -675,9 +833,11 @@ model Request {
   organizationId String           @map("organization_id")
   organization   OrganizationUnit @relation(fields: [organizationId], references: [id])
 
-  workflowInstanceId String?           @unique @map("workflow_instance_id")
-  workflowInstance   WorkflowInstance? @relation(fields: [workflowInstanceId], references: [id])
+  workflowInstanceId String?            @unique @map("workflow_instance_id")
+  workflowInstance   WorkflowInstance?  @relation(fields: [workflowInstanceId], references: [id])
   purchaseOrders     PurchaseOrder[]
+  borrowTransaction  BorrowTransaction?
+  disposalRecord     DisposalRecord?
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -685,4 +845,80 @@ model Request {
   @@index([requesterId])
   @@index([status])
   @@map("requests")
+}
+
+// ---------------------------------------------------------------------------
+// Phase 8 — Audit
+// ---------------------------------------------------------------------------
+
+enum AuditAction {
+  CREATE
+  UPDATE
+  DELETE
+  DEACTIVATE
+  LOGIN
+  LOGOUT
+  PASSWORD_RESET
+  ROLE_ASSIGNED
+  ROLE_REVOKED
+}
+
+// Tracks administrative/config-level events (user created, role assigned, store
+// deactivated, login, etc.) — events that don't have a more specific home in
+// InventoryMovement, AssetHistory, or ApprovalHistory.
+model AuditLog {
+  id         String      @id @default(uuid())
+  entityType String      @map("entity_type")
+  entityId   String      @map("entity_id")
+  action     AuditAction
+  before     Json?       // snapshot of relevant fields before the change
+  after      Json?       // snapshot of relevant fields after the change
+
+  actedById String   @map("acted_by")
+  actedBy   User     @relation(fields: [actedById], references: [id])
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([entityType, entityId])
+  @@index([actedById])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+// ---------------------------------------------------------------------------
+// Phase 8 — Notifications
+// ---------------------------------------------------------------------------
+
+enum NotificationType {
+  REQUEST_SUBMITTED
+  APPROVAL_REQUIRED
+  REQUEST_APPROVED
+  REQUEST_REJECTED
+  REQUEST_COMPLETED
+  REQUEST_CANCELLED
+  STOCK_LOW
+  GOODS_RECEIVED
+  TRANSFER_COMPLETED
+  BORROW_ISSUED
+  BORROW_RETURNED
+  DISPOSAL_COMPLETED
+  DISTRIBUTION_CONFIRMED
+}
+
+model Notification {
+  id         String           @id @default(uuid())
+  type       NotificationType
+  title      String
+  body       String
+  isRead     Boolean          @default(false) @map("is_read")
+  // Optional link back to the triggering entity so the frontend can navigate
+  entityType String?          @map("entity_type")
+  entityId   String?          @map("entity_id")
+
+  userId    String   @map("user_id")
+  user      User     @relation(fields: [userId], references: [id])
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([userId, isRead])
+  @@index([userId, createdAt])
+  @@map("notifications")
 }

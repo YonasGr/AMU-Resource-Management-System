@@ -5,6 +5,8 @@ import { SafeUser } from '../auth/decorators/current-user.decorator';
 import { MovementService } from '../inventory/movement.service';
 import { AccessControlService } from '../rbac/access-control.service';
 import { CreateDistributionPlanDto } from './dto/create-distribution-plan.dto';
+import { NotificationService } from '../notification/notification.service';
+
 
 @Injectable()
 export class DistributionService {
@@ -12,6 +14,7 @@ export class DistributionService {
     private readonly prisma: PrismaService,
     private readonly movements: MovementService,
     private readonly access: AccessControlService,
+    private readonly notificationService: NotificationService,
   ) {}
 
   async create(dto: CreateDistributionPlanDto, currentUser: SafeUser) {
@@ -108,7 +111,7 @@ export class DistributionService {
       executionKey: `distribution-allocation:${allocation.id}`,
     });
 
-    return this.prisma.$transaction(async (tx) => {
+    const result = await this.prisma.$transaction(async (tx) => {
       await tx.distributionAllocation.updateMany({
         where: { id: allocation.id, status: 'PENDING' },
         data: { status: 'CONFIRMED', confirmedAt: new Date(), confirmedById: currentUser.id },
@@ -125,6 +128,28 @@ export class DistributionService {
         where: { id: allocation.id }, include: { item: true, destinationStore: true },
       });
     }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+
+    // Notify the plan creator of this allocation confirmation
+    setImmediate(async () => {
+      try {
+        const plan = await this.prisma.distributionPlan.findUnique({
+          where: { id: allocation.distributionPlanId },
+          select: { createdById: true, planNumber: true },
+        });
+        if (plan) {
+          await this.notificationService.notify(
+            [plan.createdById],
+            'DISTRIBUTION_CONFIRMED',
+            'Distribution Allocation Confirmed',
+            `An allocation in plan ${plan.planNumber} has been confirmed.`,
+            'DistributionPlan',
+            allocation.distributionPlanId,
+          );
+        }
+      } catch { /* non-blocking */ }
+    });
+
+    return result;
   }
 
   async cancel(id: string) {

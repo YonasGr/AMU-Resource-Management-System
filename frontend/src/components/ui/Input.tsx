@@ -31,6 +31,6 @@ export const Select = forwardRef<HTMLSelectElement, SelectHTMLAttributes<HTMLSel
 );
 Select.displayName = 'Select';
 
-export function Label({ children }: { children: React.ReactNode }) {
-  return <label className="mb-1 block text-xs font-medium text-muted">{children}</label>;
+export function Label({ children, className }: { children: React.ReactNode; className?: string }) {
+  return <label className={cn("mb-1 block text-xs font-medium text-muted", className)}>{children}</label>;
 }

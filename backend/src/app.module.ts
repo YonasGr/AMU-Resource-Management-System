@@ -22,6 +22,7 @@ import { AssetModule } from './modules/asset/asset.module';
 import { AuditModule } from './modules/audit/audit.module';
 import { NotificationModule } from './modules/notification/notification.module';
 import { ReportingModule } from './modules/reporting/reporting.module';
+import { MailModule } from './modules/mail/mail.module';
 
 @Module({
   imports: [
@@ -45,6 +46,7 @@ import { ReportingModule } from './modules/reporting/reporting.module';
     AuditModule,
     NotificationModule,
     ReportingModule,
+    MailModule,
   ],
   controllers: [AppController],
   providers: [

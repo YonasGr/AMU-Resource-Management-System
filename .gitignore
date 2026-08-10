@@ -19,3 +19,6 @@ frontend/vite.config.d.ts
 backend/.dist.docker-owned/
 backend/prisma/.migrations.docker-owned/
 backend/prisma/migrations/*.docker-owned/
+
+backend/.pnpm/*
+**/.pnpm-store/

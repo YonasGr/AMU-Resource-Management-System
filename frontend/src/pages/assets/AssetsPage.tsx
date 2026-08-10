@@ -24,6 +24,7 @@ interface Asset {
   serialNumber?: string;
   condition: string;
   status: string;
+  assignedOrganizationId?: string | null;
   item: Item;
   store: Store;
 }

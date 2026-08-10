@@ -5,6 +5,7 @@ import * as argon2 from 'argon2';
 import * as crypto from 'crypto';
 import { PrismaService } from '../../prisma/prisma.service';
 import { UsersService } from '../users/users.service';
+import { MailService } from '../mail/mail.service';
 import { parseDurationToMs } from '../../common/utils/duration.util';
 
 export interface AuthTokens {
@@ -19,6 +20,7 @@ export class AuthService {
     private readonly usersService: UsersService,
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
+    private readonly mailService: MailService,
   ) {}
 
   async login(email: string, password: string): Promise<AuthTokens> {
@@ -43,44 +45,36 @@ export class AuthService {
       include: { user: true },
     });
 
-    if (!stored || stored.revokedAt || stored.expiresAt < new Date()) {
+    if (
+      !stored ||
+      stored.revokedAt ||
+      stored.expiresAt < new Date() ||
+      stored.user.status !== 'ACTIVE'
+    ) {
       throw new UnauthorizedException('Refresh token is invalid or expired');
     }
 
-    if (stored.user.status !== 'ACTIVE') {
-      throw new UnauthorizedException('User is no longer active');
-    }
-
-    // Rotation: revoke the used token, then issue a brand new pair.
+    // Refresh token rotation — revoke old token and issue a new pair
     await this.prisma.refreshToken.update({
       where: { id: stored.id },
       data: { revokedAt: new Date() },
     });
 
-    return this.issueTokens(stored.user.id, stored.user.email);
+    return this.issueTokens(stored.userId, stored.user.email);
   }
 
   async logout(rawRefreshToken: string): Promise<void> {
     const tokenHash = this.hashToken(rawRefreshToken);
-    const stored = await this.prisma.refreshToken.findUnique({ where: { tokenHash } });
-    if (stored && !stored.revokedAt) {
-      await this.prisma.refreshToken.update({
-        where: { id: stored.id },
-        data: { revokedAt: new Date() },
-      });
-    }
-    // Logging out with an already-invalid token is a no-op, not an error —
-    // the end state the caller wants (no active session) is already true.
+    await this.prisma.refreshToken.updateMany({
+      where: { tokenHash, revokedAt: null },
+      data: { revokedAt: new Date() },
+    });
   }
 
   /**
-   * Dev-only note: since there's no email channel yet (spec section 22 lists
-   * email as a later addition), this returns the raw reset token directly in
-   * the response instead of emailing it. Swap this for an email send once
-   * the Notification module's email channel exists — never log/return the
-   * raw token in production.
+   * Generates a single-use 1-hour password reset token and emails it to the user.
    */
-  async requestPasswordReset(email: string): Promise<{ resetToken: string } | null> {
+  async requestPasswordReset(email: string): Promise<{ sent: true } | null> {
     const user = await this.usersService.findByEmail(email);
     if (!user) {
       // Don't reveal whether the email exists.
@@ -98,7 +92,11 @@ export class AuthService {
       },
     });
 
-    return { resetToken: rawToken };
+    setImmediate(() => {
+      this.mailService.sendPasswordResetEmail(user.email, rawToken).catch(() => undefined);
+    });
+
+    return { sent: true };
   }
 
   async resetPassword(rawToken: string, newPassword: string): Promise<void> {

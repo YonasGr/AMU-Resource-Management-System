@@ -406,7 +406,7 @@ export class WorkflowEngineService {
       }
       if (step.approverResolutionType === 'ORG_ROLE_AT_CONTEXT_ORG' && step.contextOrgKey) {
         const orgId = contextData[step.contextOrgKey];
-        if (orgId && (ur.scopeId === orgId || ur.scopeType === 'GLOBAL')) {
+        if (orgId && ur.scopeId === orgId) {
           userIds.add(ur.userId);
         }
       }

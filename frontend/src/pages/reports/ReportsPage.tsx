@@ -209,18 +209,18 @@ function ReportCard({
               <div className="grid grid-cols-2 gap-2">
                 <div>
                   <Label className="text-xs">From</Label>
-                  <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} bsSize="sm" />
+                  <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
                 </div>
                 <div>
                   <Label className="text-xs">To</Label>
-                  <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} bsSize="sm" />
+                  <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} />
                 </div>
               </div>
             )}
             {report.hasStoreFilter && (
               <div>
                 <Label className="text-xs">Store</Label>
-                <Select value={storeId} onChange={(e) => setStoreId(e.target.value)} bsSize="sm">
+                <Select value={storeId} onChange={(e) => setStoreId(e.target.value)}>
                   <option value="">All Stores</option>
                   {stores?.map((s) => (
                     <option key={s.id} value={s.id}>
@@ -233,7 +233,7 @@ function ReportCard({
             {report.hasOrgFilter && (
               <div>
                 <Label className="text-xs">Organization Unit</Label>
-                <Select value={orgId} onChange={(e) => setOrgId(e.target.value)} bsSize="sm">
+                <Select value={orgId} onChange={(e) => setOrgId(e.target.value)}>
                   <option value="">All Units</option>
                   {orgs.map((o) => (
                     <option key={o.id} value={o.id}>

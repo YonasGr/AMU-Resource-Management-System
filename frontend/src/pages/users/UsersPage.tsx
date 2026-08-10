@@ -4,7 +4,7 @@ import { Plus, Users as UsersIcon } from 'lucide-react';
 import { api } from '../../lib/api';
 import { PageHeader } from '../../components/ui/PageHeader';
 import { Card, CardBody, CardHeader } from '../../components/ui/Card';
-import { Badge, statusTone } from '../../components/ui/Badge';
+import { Badge } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
 import { Input, Select, Label } from '../../components/ui/Input';
 import { EmptyState } from '../../components/ui/EmptyState';
@@ -143,7 +143,6 @@ export default function UsersPage() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="w-64"
-            bsSize="sm"
           />
         </CardHeader>
         {isLoading && <p className="py-8 text-center text-sm text-muted">Loading users…</p>}

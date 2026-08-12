@@ -1,7 +1,7 @@
 # Arba Minch University (AMU) Resource Management System
 ## Enterprise Inventory, Store, Fixed Asset & Multi-Step Workflow ERP Platform
 
-![Build Status](https://img.shields.io/badge/status-production_ready-brightgreen.style=for-the-badge)
+![Build Status](https://img.shields.io/badge/status-production_ready-brightgreen?style=for-the-badge)
 ![NestJS](https://img.shields.io/badge/backend-NestJS_10-red.svg?style=for-the-badge&logo=nestjs)
 ![React](https://img.shields.io/badge/frontend-React_18-blue.svg?style=for-the-badge&logo=react)
 ![Prisma](https://img.shields.io/badge/ORM-Prisma_5-indigo.svg?style=for-the-badge&logo=prisma)

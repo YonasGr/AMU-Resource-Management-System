@@ -334,7 +334,7 @@ export class RequestService {
     });
   }
 
-  /** Every request — only meaningful for a GLOBAL-scoped user (e.g. an auditor/admin). */
+  /** Every request accessible within the user's scope (or all requests for GLOBAL scope). */
   async findAll(currentUser: SafeUser): Promise<RequestRecord[]> {
     const accessibleOrgIds = await this.accessControlService.getAccessibleOrganizationIds(
       currentUser.id,
@@ -342,9 +342,17 @@ export class RequestService {
     if (accessibleOrgIds === 'ALL') {
       return this.prisma.request.findMany({ orderBy: { createdAt: 'desc' } });
     }
-    // Non-global users get the same view as findMine() for now — full
-    // "requests I could approve, across the org" visibility is a
-    // reasonable Phase 6+ enhancement once more request types exist.
+    if (Array.isArray(accessibleOrgIds) && accessibleOrgIds.length > 0) {
+      return this.prisma.request.findMany({
+        where: {
+          OR: [
+            { requesterId: currentUser.id },
+            { organizationId: { in: accessibleOrgIds } },
+          ],
+        },
+        orderBy: { createdAt: 'desc' },
+      });
+    }
     return this.findMine(currentUser);
   }
 
@@ -370,7 +378,24 @@ export class RequestService {
         currentUser.id,
       );
       if (accessibleOrgIds !== 'ALL') {
-        throw new ForbiddenException('You do not have access to this request');
+        const canAccessOrg =
+          Array.isArray(accessibleOrgIds) &&
+          accessibleOrgIds.includes(request.organizationId);
+
+        let isWorkflowApprover = false;
+        if (!canAccessOrg && request.workflowInstanceId) {
+          try {
+            const pendingApprovals =
+              await this.workflowEngineService.getMyPendingApprovals(currentUser.id);
+            isWorkflowApprover = pendingApprovals.some((p) => p.entityId === request.id);
+          } catch {
+            /* ignore */
+          }
+        }
+
+        if (!canAccessOrg && !isWorkflowApprover) {
+          throw new ForbiddenException('You do not have access to this request');
+        }
       }
     }
 

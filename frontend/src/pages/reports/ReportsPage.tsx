@@ -103,15 +103,17 @@ export default function ReportsPage() {
 
   const { data: orgTree } = useQuery({
     queryKey: ['org-directory'],
-    queryFn: async () => (await api.get<{ data: any }>('/organization')).data.data,
+    queryFn: async () => (await api.get<{ data: any }>('/organization-units/tree')).data.data,
   });
 
-  const flattenOrgs = (node: any, depth = 0): { id: string; name: string; depth: number }[] => {
-    if (!node) return [];
-    let result = [{ id: node.id, name: node.name, depth }];
-    if (node.children) {
-      for (const child of node.children) {
-        result = result.concat(flattenOrgs(child, depth + 1));
+  const flattenOrgs = (nodes: any[], depth = 0): { id: string; name: string; depth: number }[] => {
+    if (!nodes) return [];
+    const list = Array.isArray(nodes) ? nodes : [nodes];
+    let result: { id: string; name: string; depth: number }[] = [];
+    for (const node of list) {
+      result.push({ id: node.id, name: node.name, depth });
+      if (node.children && node.children.length > 0) {
+        result = result.concat(flattenOrgs(node.children, depth + 1));
       }
     }
     return result;

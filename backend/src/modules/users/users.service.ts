@@ -41,16 +41,54 @@ export class UsersService {
     return user;
   }
 
-  async findAll(): Promise<Omit<User, 'passwordHash'>[]> {
-    const users = await this.prisma.user.findMany({ orderBy: { fullName: 'asc' } });
+  async findAll(): Promise<any[]> {
+    const users = await this.prisma.user.findMany({
+      include: {
+        organization: { select: { id: true, name: true } },
+        userRoles: {
+          include: {
+            role: { select: { id: true, name: true, code: true } },
+          },
+        },
+      },
+      orderBy: { fullName: 'asc' },
+    });
     return users.map((u) => this.stripPassword(u));
+  }
+
+  async update(id: string, dto: any): Promise<any> {
+    const user = await this.prisma.user.findUnique({ where: { id } });
+    if (!user) {
+      throw new NotFoundException(`User ${id} not found`);
+    }
+
+    const updated = await this.prisma.user.update({
+      where: { id },
+      data: {
+        ...(dto.fullName ? { fullName: dto.fullName } : {}),
+        ...(dto.email ? { email: dto.email } : {}),
+        ...(dto.phone !== undefined ? { phone: dto.phone } : {}),
+        ...(dto.organizationId ? { organizationId: dto.organizationId } : {}),
+        ...(dto.status ? { status: dto.status } : {}),
+      },
+      include: {
+        organization: { select: { id: true, name: true } },
+        userRoles: {
+          include: {
+            role: { select: { id: true, name: true, code: true } },
+          },
+        },
+      },
+    });
+
+    return this.stripPassword(updated);
   }
 
   async updatePasswordHash(userId: string, passwordHash: string): Promise<void> {
     await this.prisma.user.update({ where: { id: userId }, data: { passwordHash } });
   }
 
-  private stripPassword(user: User): Omit<User, 'passwordHash'> {
+  private stripPassword(user: any): any {
     const { passwordHash, ...rest } = user;
     return rest;
   }

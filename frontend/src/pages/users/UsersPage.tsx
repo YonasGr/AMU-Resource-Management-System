@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, Users as UsersIcon } from 'lucide-react';
+import { Plus, Users as UsersIcon, Edit2, Check, X } from 'lucide-react';
 import { api } from '../../lib/api';
 import { PageHeader } from '../../components/ui/PageHeader';
 import { Card, CardBody, CardHeader } from '../../components/ui/Card';
@@ -9,6 +9,10 @@ import { Button } from '../../components/ui/Button';
 import { Input, Select, Label } from '../../components/ui/Input';
 import { EmptyState } from '../../components/ui/EmptyState';
 
+interface UserRoleAssignment {
+  role: { id: string; name: string; code: string };
+}
+
 interface User {
   id: string;
   fullName: string;
@@ -16,21 +20,37 @@ interface User {
   phone?: string;
   status: string;
   organizationId: string;
-  organization?: { name: string };
-  userRoles: { role: { name: string } }[];
+  organization?: { id: string; name: string };
+  userRoles: UserRoleAssignment[];
+}
+
+interface Role {
+  id: string;
+  code: string;
+  name: string;
 }
 
 export default function UsersPage() {
   const queryClient = useQueryClient();
   const [showCreate, setShowCreate] = useState(false);
+  const [editingUser, setEditingUser] = useState<User | null>(null);
   const [search, setSearch] = useState('');
-  
+
   const [form, setForm] = useState({
     fullName: '',
     email: '',
     phone: '',
     password: '',
     organizationId: '',
+    roleId: '',
+  });
+
+  const [editForm, setEditForm] = useState({
+    fullName: '',
+    email: '',
+    phone: '',
+    organizationId: '',
+    status: 'ACTIVE',
   });
 
   const { data: users, isLoading } = useQuery({
@@ -38,17 +58,24 @@ export default function UsersPage() {
     queryFn: async () => (await api.get<{ data: User[] }>('/users')).data.data,
   });
 
-  const { data: orgTree } = useQuery({
-    queryKey: ['org-directory'],
-    queryFn: async () => (await api.get<{ data: any }>('/organization')).data.data,
+  const { data: roles } = useQuery({
+    queryKey: ['roles'],
+    queryFn: async () => (await api.get<{ data: Role[] }>('/roles')).data.data,
   });
 
-  const flattenOrgs = (node: any, depth = 0): { id: string; name: string; depth: number }[] => {
-    if (!node) return [];
-    let result = [{ id: node.id, name: node.name, depth }];
-    if (node.children) {
-      for (const child of node.children) {
-        result = result.concat(flattenOrgs(child, depth + 1));
+  const { data: orgTree } = useQuery({
+    queryKey: ['org-directory'],
+    queryFn: async () => (await api.get<{ data: any }>('/organization-units/tree')).data.data,
+  });
+
+  const flattenOrgs = (nodes: any[], depth = 0): { id: string; name: string; depth: number }[] => {
+    if (!nodes) return [];
+    const list = Array.isArray(nodes) ? nodes : [nodes];
+    let result: { id: string; name: string; depth: number }[] = [];
+    for (const node of list) {
+      result.push({ id: node.id, name: node.name, depth });
+      if (node.children && node.children.length > 0) {
+        result = result.concat(flattenOrgs(node.children, depth + 1));
       }
     }
     return result;
@@ -57,13 +84,59 @@ export default function UsersPage() {
   const orgs = orgTree ? flattenOrgs(orgTree) : [];
 
   const createMutation = useMutation({
-    mutationFn: () => api.post('/users', form),
+    mutationFn: async () => {
+      const createdUser = (await api.post<{ data: User }>('/users', {
+        fullName: form.fullName,
+        email: form.email,
+        phone: form.phone || undefined,
+        password: form.password,
+        organizationId: form.organizationId,
+      })).data.data;
+
+      if (form.roleId) {
+        await api.post('/user-roles', {
+          userId: createdUser.id,
+          roleId: form.roleId,
+          scopeType: 'ORGANIZATION',
+          scopeId: form.organizationId,
+        });
+      }
+      return createdUser;
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['users'] });
       setShowCreate(false);
-      setForm({ fullName: '', email: '', phone: '', password: '', organizationId: '' });
+      setForm({ fullName: '', email: '', phone: '', password: '', organizationId: '', roleId: '' });
     },
   });
+
+  const updateMutation = useMutation({
+    mutationFn: async () => {
+      if (!editingUser) return;
+      await api.patch(`/users/${editingUser.id}`, {
+        fullName: editForm.fullName,
+        email: editForm.email,
+        phone: editForm.phone || undefined,
+        organizationId: editForm.organizationId,
+        status: editForm.status,
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['users'] });
+      setEditingUser(null);
+    },
+  });
+
+  const startEdit = (user: User) => {
+    setEditingUser(user);
+    setEditForm({
+      fullName: user.fullName,
+      email: user.email,
+      phone: user.phone || '',
+      organizationId: user.organizationId,
+      status: user.status || 'ACTIVE',
+    });
+  };
 
   const filteredUsers = useMemo(() => {
     if (!users) return [];
@@ -77,7 +150,7 @@ export default function UsersPage() {
     <div>
       <PageHeader
         title="Users"
-        description="Manage system users"
+        description="Manage system users, initial roles, and organization unit assignments."
         actions={
           <Button size="sm" onClick={() => setShowCreate(!showCreate)}>
             <Plus className="h-4 w-4" /> {showCreate ? 'Cancel' : 'Create User'}
@@ -86,47 +159,114 @@ export default function UsersPage() {
       />
 
       {showCreate && (
-        <Card className="mb-6">
-          <CardHeader className="font-medium">Create New User</CardHeader>
+        <Card className="mb-6 border-primary/30 shadow-md">
+          <CardHeader className="font-semibold text-primary">Create New User Account</CardHeader>
           <CardBody className="grid gap-4 md:grid-cols-2">
             <div>
-              <Label>Full Name</Label>
-              <Input value={form.fullName} onChange={(e) => field('fullName', e.target.value)} />
+              <Label>Full Name *</Label>
+              <Input placeholder="e.g. Abebe Bikila" value={form.fullName} onChange={(e) => field('fullName', e.target.value)} />
             </div>
             <div>
-              <Label>Email</Label>
-              <Input type="email" value={form.email} onChange={(e) => field('email', e.target.value)} />
+              <Label>Email *</Label>
+              <Input type="email" placeholder="user@amu.edu.et" value={form.email} onChange={(e) => field('email', e.target.value)} />
             </div>
             <div>
               <Label>Phone (optional)</Label>
-              <Input type="tel" value={form.phone} onChange={(e) => field('phone', e.target.value)} />
+              <Input type="tel" placeholder="+251911..." value={form.phone} onChange={(e) => field('phone', e.target.value)} />
             </div>
             <div>
-              <Label>Password</Label>
-              <Input type="password" value={form.password} onChange={(e) => field('password', e.target.value)} />
+              <Label>Password *</Label>
+              <Input type="password" placeholder="••••••••" value={form.password} onChange={(e) => field('password', e.target.value)} />
             </div>
-            <div className="md:col-span-2">
-              <Label>Organization Unit</Label>
+            <div>
+              <Label>Organization Unit *</Label>
               <Select value={form.organizationId} onChange={(e) => field('organizationId', e.target.value)}>
-                <option value="">Select an organization…</option>
+                <option value="">Select an organization unit…</option>
                 {orgs.map((o) => (
                   <option key={o.id} value={o.id}>
-                    {'\u00A0'.repeat(o.depth * 4)}
+                    {'\u00A0'.repeat(o.depth * 3)}
                     {o.name}
                   </option>
                 ))}
               </Select>
             </div>
-            <div className="md:col-span-2">
+            <div>
+              <Label>Initial Role (optional)</Label>
+              <Select value={form.roleId} onChange={(e) => field('roleId', e.target.value)}>
+                <option value="">Select initial role…</option>
+                {roles?.map((r) => (
+                  <option key={r.id} value={r.id}>
+                    {r.name}
+                  </option>
+                ))}
+              </Select>
+            </div>
+            <div className="md:col-span-2 flex items-center gap-3 mt-2">
               <Button
                 disabled={!form.fullName || !form.email || !form.password || !form.organizationId || createMutation.isPending}
                 onClick={() => createMutation.mutate()}
               >
-                Save User
+                Save User Account
               </Button>
               {createMutation.isError && (
-                <p className="mt-2 text-sm text-danger">
+                <p className="text-sm text-danger font-medium">
                   {(createMutation.error as any)?.response?.data?.message ?? 'Failed to create user.'}
+                </p>
+              )}
+            </div>
+          </CardBody>
+        </Card>
+      )}
+
+      {editingUser && (
+        <Card className="mb-6 border-accent/40 bg-accent/5">
+          <CardHeader className="flex items-center justify-between font-semibold text-accent">
+            <span>Edit User — {editingUser.fullName}</span>
+            <button onClick={() => setEditingUser(null)} className="text-muted hover:text-ink">
+              <X className="h-4 w-4" />
+            </button>
+          </CardHeader>
+          <CardBody className="grid gap-4 md:grid-cols-2 text-sm">
+            <div>
+              <Label>Full Name</Label>
+              <Input value={editForm.fullName} onChange={(e) => setEditForm({ ...editForm, fullName: e.target.value })} />
+            </div>
+            <div>
+              <Label>Email</Label>
+              <Input type="email" value={editForm.email} onChange={(e) => setEditForm({ ...editForm, email: e.target.value })} />
+            </div>
+            <div>
+              <Label>Phone</Label>
+              <Input value={editForm.phone} onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })} />
+            </div>
+            <div>
+              <Label>Account Status</Label>
+              <Select value={editForm.status} onChange={(e) => setEditForm({ ...editForm, status: e.target.value })}>
+                <option value="ACTIVE">ACTIVE</option>
+                <option value="INACTIVE">INACTIVE</option>
+              </Select>
+            </div>
+            <div className="md:col-span-2">
+              <Label>Organization Unit</Label>
+              <Select value={editForm.organizationId} onChange={(e) => setEditForm({ ...editForm, organizationId: e.target.value })}>
+                {orgs.map((o) => (
+                  <option key={o.id} value={o.id}>
+                    {'\u00A0'.repeat(o.depth * 3)}
+                    {o.name}
+                  </option>
+                ))}
+              </Select>
+            </div>
+            <div className="md:col-span-2 flex items-center gap-3">
+              <Button size="sm" disabled={updateMutation.isPending} onClick={() => updateMutation.mutate()}>
+                <Check className="h-4 w-4" /> Save Changes
+              </Button>
+              <Button size="sm" variant="ghost" onClick={() => setEditingUser(null)}>
+                Cancel
+              </Button>
+              {updateMutation.isError && (
+                <p className="text-xs text-danger">
+                  {(updateMutation.error as any)?.response?.data?.message ?? 'Failed to update user.'}
                 </p>
               )}
             </div>
@@ -136,7 +276,7 @@ export default function UsersPage() {
 
       <Card>
         <CardHeader className="flex items-center justify-between">
-          <div className="font-medium text-ink">Directory</div>
+          <div className="font-medium text-ink">User Directory</div>
           <Input
             type="search"
             placeholder="Search name or email…"
@@ -145,7 +285,7 @@ export default function UsersPage() {
             className="w-64"
           />
         </CardHeader>
-        {isLoading && <p className="py-8 text-center text-sm text-muted">Loading users…</p>}
+        {isLoading && <p className="py-8 text-center text-sm text-muted">Loading user directory…</p>}
         {users?.length === 0 && (
           <EmptyState icon={UsersIcon} title="No users found" description="Create your first user using the button above." />
         )}
@@ -155,8 +295,8 @@ export default function UsersPage() {
               <thead className="border-b border-border bg-surface-subtle text-xs uppercase tracking-wide text-muted">
                 <tr>
                   <th className="px-5 py-3 font-medium">Name & Email</th>
-                  <th className="px-5 py-3 font-medium">Organization</th>
-                  <th className="px-5 py-3 font-medium">Roles</th>
+                  <th className="px-5 py-3 font-medium">Organization Unit</th>
+                  <th className="px-5 py-3 font-medium">Assigned Roles</th>
                   <th className="px-5 py-3 font-medium">Status</th>
                   <th className="px-5 py-3 font-medium">Actions</th>
                 </tr>
@@ -169,17 +309,17 @@ export default function UsersPage() {
                       <div className="text-xs text-muted">{user.email}</div>
                       {user.phone && <div className="text-xs text-muted">{user.phone}</div>}
                     </td>
-                    <td className="px-5 py-3 text-muted">{user.organization?.name || '—'}</td>
+                    <td className="px-5 py-3 text-ink font-medium">{user.organization?.name || '—'}</td>
                     <td className="px-5 py-3">
                       <div className="flex flex-wrap gap-1">
                         {user.userRoles?.length > 0 ? (
                           user.userRoles.map((ur, idx) => (
-                            <Badge key={idx} tone="neutral" className="text-[10px]">
+                            <Badge key={idx} tone="accent" className="text-[11px]">
                               {ur.role.name}
                             </Badge>
                           ))
                         ) : (
-                          <span className="text-xs text-muted">—</span>
+                          <span className="text-xs text-muted">No roles assigned</span>
                         )}
                       </div>
                     </td>
@@ -189,9 +329,8 @@ export default function UsersPage() {
                       </Badge>
                     </td>
                     <td className="px-5 py-3">
-                      {/* Deactivate logic omitted because endpoint does not exist currently */}
-                      <Button variant="ghost" size="sm" disabled>
-                        Edit
+                      <Button variant="ghost" size="sm" onClick={() => startEdit(user)}>
+                        <Edit2 className="h-3.5 w-3.5" /> Edit
                       </Button>
                     </td>
                   </tr>

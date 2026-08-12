@@ -8,7 +8,14 @@ export class RoleService {
   constructor(private readonly prisma: PrismaService) {}
 
   async findAll(): Promise<Role[]> {
-    return this.prisma.role.findMany({ orderBy: { name: 'asc' } });
+    return this.prisma.role.findMany({
+      include: {
+        rolePermissions: {
+          include: { permission: true },
+        },
+      },
+      orderBy: { name: 'asc' },
+    });
   }
 
   async findById(id: string): Promise<Role> {

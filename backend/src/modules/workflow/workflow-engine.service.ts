@@ -132,15 +132,122 @@ export class WorkflowEngineService {
           instance.contextData as ContextData,
         );
         if (canAct) {
-          eligible.push({ ...instance, currentStep });
+          let requestDetails: any = null;
+          if (instance.entityId) {
+            const req = await this.prisma.request.findUnique({
+              where: { id: instance.entityId },
+              include: { organization: { select: { name: true } } },
+            });
+            if (req) {
+              const details = req.details as any;
+              let itemsSummary: Array<{ name: string; quantity: number; unit?: string }> = [];
+              let sourceStoreName: string | undefined;
+              let destinationStoreName: string | undefined;
+              let targetStoreName: string | undefined;
+              let assetInfo: string | undefined;
+
+              if (req.type === 'PURCHASE_REQUEST' && Array.isArray(details?.lines)) {
+                const itemIds = details.lines.map((l: any) => l.itemId).filter(Boolean);
+                const itemsList = await this.prisma.item.findMany({
+                  where: { id: { in: itemIds } },
+                  select: { id: true, name: true, unit: true },
+                });
+                const itemMap = new Map(itemsList.map((i) => [i.id, i]));
+                itemsSummary = details.lines.map((l: any) => ({
+                  name: itemMap.get(l.itemId)?.name || 'Unknown Item',
+                  quantity: l.quantity,
+                  unit: itemMap.get(l.itemId)?.unit,
+                }));
+              } else if (['ITEM_REQUEST', 'TRANSFER_REQUEST'].includes(req.type) && details?.itemId) {
+                const item = await this.prisma.item.findUnique({
+                  where: { id: details.itemId },
+                  select: { name: true, unit: true },
+                });
+                if (item) {
+                  itemsSummary = [{ name: item.name, quantity: details.quantity, unit: item.unit }];
+                }
+              }
+
+              if (details?.targetStoreId) {
+                const s = await this.prisma.store.findUnique({ where: { id: details.targetStoreId }, select: { name: true } });
+                targetStoreName = s?.name;
+              }
+              if (details?.sourceStoreId) {
+                const s = await this.prisma.store.findUnique({ where: { id: details.sourceStoreId }, select: { name: true } });
+                sourceStoreName = s?.name;
+              }
+              if (details?.destinationStoreId) {
+                const s = await this.prisma.store.findUnique({ where: { id: details.destinationStoreId }, select: { name: true } });
+                destinationStoreName = s?.name;
+              }
+              if (details?.assetId) {
+                const a = await this.prisma.asset.findUnique({
+                  where: { id: details.assetId },
+                  select: { assetTag: true, item: { select: { name: true } } },
+                });
+                if (a) assetInfo = `${a.assetTag} (${a.item.name})`;
+              }
+
+              requestDetails = {
+                id: req.id,
+                type: req.type,
+                notes: details?.notes || details?.purpose || details?.reason,
+                items: itemsSummary,
+                targetStoreName,
+                sourceStoreName,
+                destinationStoreName,
+                assetInfo,
+                organizationName: req.organization?.name,
+              };
+            }
+          }
+
+          eligible.push({ ...instance, currentStep, requestDetails });
         }
       } catch {
-        // A single instance with malformed contextData (e.g. missing key,
-        // deleted store) shouldn't break the whole inbox — skip it.
+        // A single instance with malformed contextData shouldn't break the inbox — skip it.
         continue;
       }
     }
     return eligible;
+  }
+
+  /**
+   * History of all approval/rejection decisions recorded by the current user.
+   */
+  async getMyApprovalHistory(userId: string) {
+    const history = await this.prisma.approvalHistory.findMany({
+      where: { actedById: userId },
+      include: {
+        workflowInstance: {
+          include: {
+            workflowTemplate: true,
+            createdBy: { select: { fullName: true, email: true } },
+          },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 50,
+    });
+
+    const result = [];
+    for (const h of history) {
+      let requestDetails: any = null;
+      if (h.workflowInstance?.entityId) {
+        const req = await this.prisma.request.findUnique({
+          where: { id: h.workflowInstance.entityId },
+          select: { id: true, type: true, status: true },
+        });
+        if (req) {
+          requestDetails = req;
+        }
+      }
+      result.push({
+        ...h,
+        requestDetails,
+      });
+    }
+    return result;
   }
 
   async approve(instanceId: string, currentUser: SafeUser, comment?: string) {
@@ -322,6 +429,12 @@ export class WorkflowEngineService {
     step: WorkflowStepTemplate,
     contextData: ContextData,
   ): Promise<boolean> {
+    const isGlobalAdmin = await this.accessControlService.userHasRole(
+      userId,
+      'SYSTEM_ADMINISTRATOR',
+    );
+    if (isGlobalAdmin) return true;
+
     switch (step.approverResolutionType) {
       case 'FIXED_ROLE':
         return this.accessControlService.userHasRole(userId, step.roleCode!);

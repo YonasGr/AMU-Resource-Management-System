@@ -202,3 +202,167 @@ Follow these exact steps during your live presentation to demonstrate all system
 
 ### Q5: "How does the system prevent race conditions if two users approve requests simultaneously?"
 > **Answer**: "All movement applications use Prisma serializable transaction isolation (`isolationLevel: Serializable`) and unique `executionKey` idempotency tokens (e.g. `request:ID:transfer`). If an execution key has already been processed, duplicate executions are safely ignored."
+
+---
+
+## 6. Real-World Case Study: 100 Desktop Computers Procurement & Multi-Store Distribution
+
+### Scenario Summary
+Arba Minch University procures **100 Desktop Computers** from an external vendor. The computers arrive at the Central Property Warehouse and must be distributed across 4 different academic and administrative stores:
+- **40 Computers** → Computer Science Department Store
+- **30 Computers** → Information Technology Department Store
+- **20 Computers** → Library Store
+- **10 Computers** → Administration Office Store
+
+---
+
+### Step-by-Step System Operational Flow
+
+```
+┌────────────────────────┐      ┌────────────────────────┐      ┌────────────────────────┐
+│ 1. Purchase Request &  │      │ 2. Central Receiving   │      │ 3. Fixed Asset Tagging │
+│    Approval Workflow   ├─────►│    Goods Receipt (GRN) ├─────►│    & Serial Registry   │
+└────────────────────────┘      └────────────────────────┘      └────────────────────────┘
+                                                                             │
+                                                                             ▼
+┌────────────────────────┐      ┌────────────────────────┐      ┌────────────────────────┐
+│ 6. End-User Issuance   │      │ 5. Local Store Receipt │      │ 4. Multi-Allocation    │
+│    to Staff / Labs     │◄─────┤    Confirmation        │◄─────┤    Distribution Plan   │
+└────────────────────────┘      └────────────────────────┘      └────────────────────────┘
+```
+
+#### Phase A: Procurement & Central Stock Ingestion
+1. **Purchase Requisition**:
+   - The Procurement Officer / ICT Directorate logs into the Web UI and submits a **Purchase Request** (`PURCHASE_REQUEST`) for 100 units of item `Desktop Computer` (Category: *IT Equipment*, `serialRequired: true`).
+   - The request routes through the multi-step approval workflow: *Finance Officer Approval → Vice President Approval → Procurement Clearance*.
+2. **Goods Receipt Note (GRN) Generation**:
+   - Upon physical vendor delivery, the Central Store Manager opens **Procurement & Goods Receipt** (`/procurement`).
+   - Creates a **Goods Receipt**, verifying that 100 computers match the PO.
+   - The system executes `MovementService.applyMovement('PURCHASE_RECEIVE')`, adding 100 computers to the `Central Property Store` inventory (`StoreInventory.quantity += 100`).
+3. **Fixed Asset Registry Creation**:
+   - Because `Desktop Computer` has `serialRequired: true`, the system generates 100 individual `Asset` records (`AMU-PC-2026-001` through `AMU-PC-2026-100`) linked to vendor serial numbers. Status: `AVAILABLE` at `Central Property Store`.
+
+#### Phase B: Multi-Department Distribution Plan
+4. **Distribution Plan Construction**:
+   - The Central Property Directorate opens **Distribution** (`/distribution`).
+   - Creates a **Distribution Plan** linked to the Goods Receipt, specifying 4 allocation lines:
+     - Line 1: 40 units → `CS Department Store`
+     - Line 2: 30 units → `IT Department Store`
+     - Line 3: 20 units → `Library Store`
+     - Line 4: 10 units → `Administration Store`
+   - Plan is submitted and approved.
+
+#### Phase C: Physical Dispatch & Atomic Stock Handshake
+5. **Dispatch & Transfer Out**:
+   - Central Store dispatches the physical items. The system executes `TRANSFER_OUT` movements from `Central Property Store`.
+   - Central stock decreases from 100 → 0.
+6. **Local Store Receipt Confirmation**:
+   - As each truck arrives at a recipient store:
+     - The CS Store Manager logs in, opens **Distribution** → Clicks **Confirm Receipt (40 units)**.
+     - The system executes `TRANSFER_IN` movement at `CS Department Store` (`+40 units`).
+     - Asset tags `AMU-PC-2026-001` to `040` update their store location to `CS Department Store`.
+     - The IT, Library, and Admin store managers confirm their respective receipts in the same manner.
+
+#### Phase D: End-User Issuance & Lab Assignment
+7. **Issuing to Personnel / Computer Labs**:
+   - A CS Lecturer files an `ITEM_REQUEST` for 1 computer for their office, or a `BORROW_REQUEST` for a computer lab batch.
+   - Upon approval by CS Department Head & CS Store Manager, the asset status updates to `IN_USE` or `BORROWED` with full user custody tracking.
+
+---
+
+## 7. Step-by-Step Web GUI Walkthrough Script (Click-by-Click)
+
+### Scenario Setup:
+- **Base Application URL**: `http://localhost:5173` (or via Nginx at `http://localhost:8080`)
+- **Default Password for all accounts**: `ChangeMe123!`
+
+---
+
+### PART 1: Filing & Approving the Purchase Request (100 Computers)
+
+#### Step 1.1: Submit Purchase Request as Requester
+1. Navigate to `http://localhost:5173/login`.
+2. **Email**: `wftest.requester@amu.edu.et` | **Password**: `ChangeMe123!`. Click **Sign In**.
+3. In sidebar, click **Requests** (`/requests`).
+4. Click top-right button: **+ New Request**.
+5. Fill form:
+   - **Request Type**: Click **Purchase Request** tab.
+   - **Requested items**: Select `Laptop Dell Latitude` in dropdown, Type `100` in Quantity.
+   - **Notes (optional)**: Type `Annual Computer Lab Refresh for Engineering Colleges`.
+6. Click **Create draft** button.
+7. On the Request Detail screen (`/requests/:id`), click **Submit Request** to send it into approval workflow.
+8. *Observe*: Status becomes yellow badge **`PENDING_APPROVAL`** (Step 1: Department Head Approval). Notice bell icon increments.
+
+#### Step 1.2: Step 1 Approval as Department Head
+1. Click top-right avatar → **Log Out**.
+2. **Email**: `wftest.depthead@amu.edu.et` | **Password**: `ChangeMe123!`. Click **Sign In**.
+3. In sidebar, click **Approvals** (`/approvals`) (notice red badge `1`).
+4. Locate request: *Purchase Request for 100 units of Laptop Dell Latitude*.
+5. Click green **Approve** button → Type comment: `Approved for CS & IT Labs upgrade` → Click **Confirm Approval**.
+6. *Observe*: Request advances to Step 2 Approval.
+
+#### Step 1.3: Step 2 Final Approval as Store Manager
+1. Log out → Log in as **Email**: `wftest.sourcemanager@amu.edu.et` | **Password**: `ChangeMe123!`.
+2. Click **Approvals** (`/approvals`).
+3. Click **Approve** on the request → Type comment: `Stock allocation cleared for purchase` → Click **Confirm Approval**.
+4. *Observe*: Status updates to green badge **`COMPLETED`**. Behind the scenes, NestJS generates a `PurchaseOrder` record.
+
+---
+
+### PART 2: Central Receiving & Goods Receipt (Vendor Delivery)
+
+#### Step 2.1: Record Delivery as Admin
+1. Log out → Log in as **Email**: `admin@amu.edu.et` | **Password**: `ChangeMe123!`.
+2. In sidebar, click **Procurement** (`/procurement`).
+3. Click **+ Create Goods Receipt** button.
+4. Fill form:
+   - **Store**: Select `Workflow Test Source Store`.
+   - **Supplier**: Select `Ethio-Telecom IT Suppliers`.
+   - **Receipt Number**: Type `GRN-2026-00100`.
+   - **Item**: Select `Laptop Dell Latitude`.
+   - **Accepted Quantity**: Type `100`.
+5. Click **Save Goods Receipt**.
+6. *Observe*:
+   - Check **Inventory** (`/inventory`) → `Workflow Test Source Store` stock increases to **100 units**.
+   - Check **Assets** (`/assets`) → 100 individual asset tags (`AMU-LAP-2026-001` through `100`) are created in `AVAILABLE` status!
+
+---
+
+### PART 3: Multi-Store Distribution Plan & Dispatch
+
+#### Step 3.1: Create Distribution Plan as Admin
+1. Logged in as `admin@amu.edu.et`, click **Distribution** (`/distribution`) in sidebar.
+2. Click **+ New Distribution Plan** button.
+3. Fill form:
+   - **Plan Title**: Type `100 Computers Multi-College Distribution`.
+   - **Source Store**: Select `Workflow Test Source Store`.
+4. Add Allocation Lines:
+   - **Line 1**: Item `Laptop Dell Latitude`, Destination Store: `Workflow Test Destination Store`, Quantity: `40`.
+   - **Line 2**: Item `Laptop Dell Latitude`, Destination Store: `ICT Store`, Quantity: `60`.
+5. Click **Create & Approve Plan**.
+6. *Observe*: Plan status becomes `APPROVED`. The system executes `TRANSFER_OUT` from `Workflow Test Source Store` (Stock drops from 100 → 0).
+
+---
+
+### PART 4: Destination Store Receipt Confirmation
+
+#### Step 4.1: Confirm Receipt as Destination Store Manager
+1. Log out → Log in as **Email**: `wftest.destmanager@amu.edu.et` | **Password**: `ChangeMe123!`.
+2. In sidebar, click **Distribution** (`/distribution`).
+3. Click **Pending Receipts** tab → Locate line: *40 Units of Laptop Dell Latitude assigned to your store*.
+4. Click green **Confirm Receipt** button → Type note: `Received 40 units in good physical condition` → Click **Confirm**.
+5. *Observe*:
+   - Status updates to `CONFIRMED`.
+   - System executes `TRANSFER_IN` at `Workflow Test Destination Store` (`+40 units`).
+   - Check **Inventory** (`/inventory`) → Quantity shows **40 units**.
+   - Asset tag locations update to `Workflow Test Destination Store`!
+
+---
+
+### PART 5: Audit Log & Reports Verification
+
+1. Log in as `admin@amu.edu.et` → Click **Audit Log** (`/audit`).
+2. Filter by Entity: **Request** or **Asset** → Click **View diff** to inspect side-by-side JSON snapshots of `before` and `after` states.
+3. Click **Reports** (`/reports`) → Click **Export CSV** or **Export PDF** to show downloaded formatted files.
+
+

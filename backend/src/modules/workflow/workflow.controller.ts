@@ -24,6 +24,12 @@ export class WorkflowController {
     return this.workflowEngineService.getMyPendingApprovals(user.id);
   }
 
+  @Get('my-approval-history')
+  @ApiOperation({ summary: 'List past approval/rejection decisions recorded by the current user' })
+  getMyApprovalHistory(@CurrentUser() user: SafeUser) {
+    return this.workflowEngineService.getMyApprovalHistory(user.id);
+  }
+
   @Post('instances')
   @RequirePermission('request.create')
   @ApiOperation({

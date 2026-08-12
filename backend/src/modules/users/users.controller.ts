@@ -1,7 +1,8 @@
-import { Body, Controller, Get, Param, ParseUUIDPipe, Post } from '@nestjs/common';
+import { Body, Controller, Get, Param, ParseUUIDPipe, Patch, Post } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { UsersService } from './users.service';
 import { CreateUserDto } from './dto/create-user.dto';
+import { UpdateUserDto } from './dto/update-user.dto';
 
 @ApiTags('users')
 @ApiBearerAuth()
@@ -27,5 +28,11 @@ export class UsersController {
     const user = await this.usersService.findById(id);
     const { passwordHash, ...rest } = user;
     return rest;
+  }
+
+  @Patch(':id')
+  @ApiOperation({ summary: 'Update user details' })
+  update(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateUserDto) {
+    return this.usersService.update(id, dto);
   }
 }

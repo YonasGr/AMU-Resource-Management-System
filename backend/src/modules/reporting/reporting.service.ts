@@ -112,33 +112,26 @@ export class ReportingService {
   }
 
   async lowStock(storeId?: string): Promise<InventoryRow[]> {
-    const rows = await this.prisma.$queryRaw<
-      Array<{
-        item_id: string; item_name: string; unit: string;
-        store_id: string; store_name: string;
-        quantity: number; minimum_stock: number;
-      }>
-    >`
-      SELECT si.item_id, i.name AS item_name, i.unit,
-             si.store_id, s.name AS store_name,
-             si.quantity, si.minimum_stock
-      FROM store_inventory si
-      JOIN items i ON i.id = si.item_id
-      JOIN stores s ON s.id = si.store_id
-      WHERE si.quantity < si.minimum_stock
-        ${storeId ? this.prisma.$queryRaw`AND si.store_id = ${storeId}` : this.prisma.$queryRaw``}
-      ORDER BY s.name, i.name
-    `;
-    return rows.map((r) => ({
-      itemId: r.item_id,
-      itemName: r.item_name,
-      unit: r.unit,
-      storeId: r.store_id,
-      storeName: r.store_name,
-      quantity: r.quantity,
-      minimumStock: r.minimum_stock,
-      belowMinimum: true,
-    }));
+    const rows = await this.prisma.storeInventory.findMany({
+      where: storeId ? { storeId } : undefined,
+      include: {
+        item: { select: { name: true, unit: true } },
+        store: { select: { name: true } },
+      },
+      orderBy: [{ store: { name: 'asc' } }, { item: { name: 'asc' } }],
+    });
+    return rows
+      .filter((r) => r.quantity < r.minimumStock)
+      .map((r) => ({
+        itemId: r.itemId,
+        itemName: r.item.name,
+        unit: r.item.unit,
+        storeId: r.storeId,
+        storeName: r.store.name,
+        quantity: r.quantity,
+        minimumStock: r.minimumStock,
+        belowMinimum: true,
+      }));
   }
 
   async stockMovements(params: {

@@ -1,12 +1,12 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ShieldCheck, KeyRound, UserPlus } from 'lucide-react';
+import { ShieldCheck, KeyRound, UserPlus, Trash2 } from 'lucide-react';
 import { api } from '../../lib/api';
 import { PageHeader } from '../../components/ui/PageHeader';
 import { Card, CardBody, CardHeader } from '../../components/ui/Card';
 import { Badge } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
-import { Input, Select, Label } from '../../components/ui/Input';
+import { Select, Label } from '../../components/ui/Input';
 import { EmptyState } from '../../components/ui/EmptyState';
 
 interface Role {
@@ -21,6 +21,24 @@ interface Permission {
   key: string;
   description?: string;
 }
+interface User {
+  id: string;
+  fullName: string;
+  email: string;
+}
+interface Store {
+  id: string;
+  name: string;
+}
+interface UserRoleAssignment {
+  id: string;
+  userId: string;
+  roleId: string;
+  scopeType: string;
+  scopeId?: string;
+  role: { name: string; code: string };
+  user?: { fullName: string; email: string };
+}
 
 export default function RolesPermissionsPage() {
   const queryClient = useQueryClient();
@@ -34,6 +52,32 @@ export default function RolesPermissionsPage() {
     queryKey: ['permissions'],
     queryFn: async () => (await api.get<{ data: Permission[] }>('/permissions')).data.data,
   });
+  const { data: users } = useQuery({
+    queryKey: ['users'],
+    queryFn: async () => (await api.get<{ data: User[] }>('/users')).data.data,
+  });
+  const { data: orgTree } = useQuery({
+    queryKey: ['org-directory'],
+    queryFn: async () => (await api.get<{ data: any }>('/organization-units/tree')).data.data,
+  });
+  const { data: stores } = useQuery({
+    queryKey: ['stores-directory'],
+    queryFn: async () => (await api.get<{ data: Store[] }>('/stores/directory')).data.data,
+  });
+
+  const flattenOrgs = (nodes: any[], depth = 0): { id: string; name: string; depth: number }[] => {
+    if (!Array.isArray(nodes)) return [];
+    let result: { id: string; name: string; depth: number }[] = [];
+    for (const node of nodes) {
+      result.push({ id: node.id, name: node.name, depth });
+      if (node.children && node.children.length > 0) {
+        result = result.concat(flattenOrgs(node.children, depth + 1));
+      }
+    }
+    return result;
+  };
+
+  const orgs = Array.isArray(orgTree) ? flattenOrgs(orgTree) : orgTree ? flattenOrgs([orgTree]) : [];
 
   const selectedRole = roles?.find((r) => r.id === selectedRoleId) ?? roles?.[0];
 
@@ -53,7 +97,9 @@ export default function RolesPermissionsPage() {
       }),
     onSuccess: () => {
       setUserId('');
+      setRoleId('');
       setScopeId('');
+      queryClient.invalidateQueries({ queryKey: ['users'] });
       queryClient.invalidateQueries({ queryKey: ['user-roles'] });
     },
   });
@@ -77,7 +123,7 @@ export default function RolesPermissionsPage() {
                 key={role.id}
                 onClick={() => setSelectedRoleId(role.id)}
                 className={`flex w-full items-center justify-between rounded-md px-3 py-2 text-left text-sm ${
-                  selectedRole?.id === role.id ? 'bg-primary/10 text-primary' : 'hover:bg-surface-alt'
+                  selectedRole?.id === role.id ? 'bg-primary/10 text-primary font-medium' : 'hover:bg-surface-alt'
                 }`}
               >
                 <span>{role.name}</span>
@@ -98,15 +144,14 @@ export default function RolesPermissionsPage() {
             {!selectedRole && <EmptyState title="No role selected" description="Pick a role on the left to see what it can do." />}
             {selectedRole && (
               <div className="flex flex-wrap gap-2">
-                {permissions
-                  ?.filter((p) =>
-                    selectedRole.rolePermissions?.some((rp) => rp.permission.key === p.key),
-                  )
-                  .map((p) => (
-                    <Badge key={p.id} tone="accent">{p.key}</Badge>
-                  ))}
-                {selectedRole.rolePermissions?.length === 0 && (
-                  <p className="text-sm text-muted">This role has no permissions assigned.</p>
+                {selectedRole.rolePermissions && selectedRole.rolePermissions.length > 0 ? (
+                  selectedRole.rolePermissions.map((rp, idx) => (
+                    <Badge key={idx} tone="accent">
+                      {rp.permission.key}
+                    </Badge>
+                  ))
+                ) : (
+                  <p className="text-sm text-muted">This role has all system permissions (*).</p>
                 )}
               </div>
             )}
@@ -117,39 +162,68 @@ export default function RolesPermissionsPage() {
       <Card className="mt-6">
         <CardHeader className="flex items-center gap-2">
           <UserPlus className="h-4 w-4 text-primary" />
-          <span className="text-sm font-medium">Assign a role</span>
+          <span className="text-sm font-medium">Assign a Role</span>
         </CardHeader>
         <CardBody>
-          <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-4">
             <div>
-              <Label>User id</Label>
-              <Input value={userId} onChange={(e) => setUserId(e.target.value)} placeholder="user uuid" />
-            </div>
-            <div>
-              <Label>Role</Label>
-              <Select value={roleId} onChange={(e) => setRoleId(e.target.value)}>
-                <option value="">Select a role…</option>
-                {roles?.map((r) => (
-                  <option key={r.id} value={r.id}>{r.name}</option>
+              <Label>Select User</Label>
+              <Select value={userId} onChange={(e) => setUserId(e.target.value)}>
+                <option value="">Choose a user…</option>
+                {users?.map((u) => (
+                  <option key={u.id} value={u.id}>
+                    {u.fullName} ({u.email})
+                  </option>
                 ))}
               </Select>
             </div>
             <div>
-              <Label>Scope</Label>
+              <Label>Select Role</Label>
+              <Select value={roleId} onChange={(e) => setRoleId(e.target.value)}>
+                <option value="">Choose a role…</option>
+                {roles?.map((r) => (
+                  <option key={r.id} value={r.id}>
+                    {r.name}
+                  </option>
+                ))}
+              </Select>
+            </div>
+            <div>
+              <Label>Scope Type</Label>
               <Select value={scopeType} onChange={(e) => setScopeType(e.target.value as any)}>
-                <option value="GLOBAL">Global</option>
-                <option value="ORGANIZATION">Organization unit</option>
+                <option value="GLOBAL">Global (System Wide)</option>
+                <option value="ORGANIZATION">Organization Unit</option>
                 <option value="STORE">Store</option>
               </Select>
             </div>
             <div>
-              <Label>Scope id {scopeType === 'GLOBAL' && '(n/a)'}</Label>
-              <Input
-                value={scopeId}
-                onChange={(e) => setScopeId(e.target.value)}
-                disabled={scopeType === 'GLOBAL'}
-                placeholder={scopeType === 'GLOBAL' ? '—' : 'org or store uuid'}
-              />
+              <Label>Scope Target {scopeType === 'GLOBAL' && '(N/A)'}</Label>
+              {scopeType === 'ORGANIZATION' && (
+                <Select value={scopeId} onChange={(e) => setScopeId(e.target.value)}>
+                  <option value="">Choose organization unit…</option>
+                  {orgs.map((o) => (
+                    <option key={o.id} value={o.id}>
+                      {'\u00A0'.repeat(o.depth * 3)}
+                      {o.name}
+                    </option>
+                  ))}
+                </Select>
+              )}
+              {scopeType === 'STORE' && (
+                <Select value={scopeId} onChange={(e) => setScopeId(e.target.value)}>
+                  <option value="">Choose store…</option>
+                  {stores?.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.name}
+                    </option>
+                  ))}
+                </Select>
+              )}
+              {scopeType === 'GLOBAL' && (
+                <Select disabled value="">
+                  <option value="">Global (All Units)</option>
+                </Select>
+              )}
             </div>
           </div>
           <div className="mt-4 flex items-center gap-3">
@@ -158,9 +232,9 @@ export default function RolesPermissionsPage() {
               disabled={!userId || !roleId || (scopeType !== 'GLOBAL' && !scopeId) || assignMutation.isPending}
               onClick={() => assignMutation.mutate()}
             >
-              Assign role
+              Assign Role
             </Button>
-            {assignMutation.isSuccess && <span className="text-sm text-success">Assigned.</span>}
+            {assignMutation.isSuccess && <span className="text-sm text-success">Role assigned successfully!</span>}
             {assignMutation.isError && (
               <span className="text-sm text-danger">
                 {(assignMutation.error as any)?.response?.data?.message ?? 'Could not assign role.'}

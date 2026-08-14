@@ -5,40 +5,34 @@ export interface AuthUser {
   id: string;
   fullName: string;
   email: string;
-  organizationId: string;
+  role: 'ADMINISTRATOR' | 'STORE_MANAGER' | 'STOREKEEPER' | 'AUDITOR' | 'REQUESTER';
+  departmentId?: string | null;
+  departmentName?: string | null;
 }
 
 interface AuthState {
   accessToken: string | null;
-  refreshToken: string | null;
   user: AuthUser | null;
-  setSession: (tokens: { accessToken: string; refreshToken: string }, user?: AuthUser) => void;
+  setSession: (sessionPayload: any) => void;
   setUser: (user: AuthUser) => void;
   clearSession: () => void;
 }
 
-/**
- * Persisted to localStorage so a refresh doesn't log the user out.
- * Trade-off worth knowing: localStorage is readable by any script on the
- * page (XSS risk) — an httpOnly cookie would be more secure but needs
- * backend cookie support we haven't built. Fine for now; revisit in the
- * Phase 9 hardening pass if this goes to real production use.
- */
 export const useAuthStore = create<AuthState>()(
   persist(
     (set) => ({
       accessToken: null,
-      refreshToken: null,
       user: null,
-      setSession: (tokens, user) =>
-        set((state) => ({
-          accessToken: tokens.accessToken,
-          refreshToken: tokens.refreshToken,
-          user: user ?? state.user,
-        })),
+      setSession: (sessionPayload) => {
+        const data = sessionPayload?.data || sessionPayload;
+        set({
+          accessToken: data?.accessToken || null,
+          user: data?.user || null,
+        });
+      },
       setUser: (user) => set({ user }),
-      clearSession: () => set({ accessToken: null, refreshToken: null, user: null }),
+      clearSession: () => set({ accessToken: null, user: null }),
     }),
-    { name: 'uerp-auth' },
+    { name: 'store-mgmt-auth' },
   ),
 );

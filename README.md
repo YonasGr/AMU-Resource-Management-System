@@ -1,131 +1,79 @@
-# Arba Minch University (AMU) Resource Management System
-## Enterprise Inventory, Store, Fixed Asset & Multi-Step Workflow ERP Platform
+# Store Management System
 
-![Build Status](https://img.shields.io/badge/status-production_ready-brightgreen?style=for-the-badge)
+A web-based inventory management application designed to automate the registration, tracking, and management of materials stored in an organization.
+
 ![NestJS](https://img.shields.io/badge/backend-NestJS_10-red.svg?style=for-the-badge&logo=nestjs)
 ![React](https://img.shields.io/badge/frontend-React_18-blue.svg?style=for-the-badge&logo=react)
-![Prisma](https://img.shields.io/badge/ORM-Prisma_5-indigo.svg?style=for-the-badge&logo=prisma)
 ![PostgreSQL](https://img.shields.io/badge/DB-PostgreSQL_16-blue.svg?style=for-the-badge&logo=postgresql)
 ![Docker](https://img.shields.io/badge/container-Docker_Compose-2496ED.svg?style=for-the-badge&logo=docker)
 
 ---
 
-## 1. System Overview
+## ⚡ Quick Start (Containerized — 1 Command Execution)
 
-The **AMU Resource Management System** is a unified, web-based Enterprise Resource Planning (ERP) platform custom-engineered for **Arba Minch University (AMU)** to govern resource requisitions, inventory movements, fixed asset custody, multi-step approval workflows, and audit reporting across all colleges, departments, offices, and central directorates.
-
-### Key Highlights
-- **Strict Request-Driven Execution**: Stock quantities cannot be directly edited. Every inventory movement originates from a Request governed by a dynamic multi-step approval workflow.
-- **Atomic Inventory Ledger**: `StoreInventory.quantity` updates occur strictly inside isolated database transactions (`MovementService`) paired with immutable `InventoryMovement` audit logs.
-- **3-Tier RBAC & Data Scoping Engine**: Access requires both a permission key (e.g., `inventory.issue`) and a matching scope (`GLOBAL`, `ORGANIZATION`, or `STORE`).
-- **Fixed Asset & Custody Lifecycle**: Registry, loan borrowing, return inspections, maintenance workflows (`AVAILABLE` → `UNDER_MAINTENANCE`), and disposal certificates.
-- **Automated Audit & Reporting**: Unified audit timeline with before/after JSON diffs, in-app notification alerts, and 8 exportable reports (PDF & CSV).
-
----
-
-## 2. Technology Stack
-
-### Backend Tier (`/backend`)
-- **Framework**: NestJS + TypeScript
-- **Database & ORM**: PostgreSQL 16 + Prisma ORM
-- **Authentication**: JWT (Access + Refresh Rotation) with Argon2 password hashing
-- **Email Delivery**: Nodemailer SMTP module with HTML templates (Dev logger fallback)
-- **API Documentation**: OpenAPI / Swagger UI at `/api/docs`
-
-### Frontend Tier (`/frontend`)
-- **Framework**: React 18 + Vite + TypeScript
-- **Styling**: Tailwind CSS + Custom UI Component Library
-- **State & Data Fetching**: TanStack React Query + Zustand Auth Store
-- **Navigation**: React Router v6
-
-### Infrastructure & Operations (`/infra`)
-- **Containerization**: Multi-stage Dockerfiles (`Dockerfile.prod`)
-- **Orchestration**: Docker Compose (`docker-compose.yml` for Dev, `docker-compose.prod.yml` for Production)
-- **Edge Reverse Proxy**: Alpine Nginx with rate-limiting (`/auth/` 5 req/s) & security headers
-- **E2E Testing**: Supertest & Jest Integration Suite (`backend/test/app.e2e-spec.ts`)
-
----
-
-## 3. Quick Start Guide
-
-### Prerequisites
-- Node.js 20+
-- pnpm 9+ (`npm install -g pnpm`)
-- Docker & Docker Compose
-
-### Development Mode Setup
+You do **not** need to install dependencies or run frontend and backend manually. Simply run:
 
 ```bash
-# 1. Clone the repository
-git clone https://github.com/YonasGr/AMU-Resource-Management-System.git
-cd AMU-Resource-Management-System
-
-# 2. Launch Development Containers (Postgres, Redis, Backend, Frontend, Nginx Proxy)
 docker compose up -d --build
-
-# 3. Apply Prisma Database Migrations
-docker compose exec backend pnpm prisma:generate
-docker compose exec backend pnpm prisma migrate dev
-
-# 4. Seed Database with Org Hierarchy, Categories, Items, Stores & Test Users
-docker compose exec backend pnpm prisma:seed
 ```
 
-#### Access Points (Dev Mode):
-- **Web Application**: `http://localhost:5173`
-- **Nginx Reverse Proxy Entry**: `http://localhost:8080`
-- **Swagger API Docs**: `http://localhost:3000/api/docs`
-- **Backend API Direct**: `http://localhost:3000`
+This single command automatically:
+1. Starts the **PostgreSQL** database container.
+2. Runs **Prisma database migrations** & automatically seeds the database with materials, suppliers, departments, employees, and 5 demo user accounts.
+3. Builds and launches the **NestJS Backend API**.
+4. Builds and launches the **React Frontend Console**.
+5. Starts **Nginx Proxy**.
+
+### Access Links
+- **Web Application Portal**: [http://localhost:5173](http://localhost:5173) or [http://localhost:8080](http://localhost:8080)
+- **API Swagger Documentation**: [http://localhost:3000/api/docs](http://localhost:3000/api/docs)
+- **Backend API Direct**: [http://localhost:3000](http://localhost:3000)
 
 ---
 
-### Production Deployment Mode Setup
+## 🔐 Pre-Seeded Demo Accounts
 
-To build and run the optimized multi-stage production environment:
+The login page features a **Quick Demo Switcher** box allowing 1-click login into any of the 5 roles:
+
+| Role | Email | Password | Scope & Primary Use Case |
+| :--- | :--- | :--- | :--- |
+| **Requester** | `requester@store.com` | `password123` | Submit material requests & track status in real-time |
+| **Store Manager** | `manager@store.com` | `password123` | Review & Approve/Reject pending requests, manage catalog |
+| **Storekeeper** | `keeper@store.com` | `password123` | Fulfill approved requests (Stock Out), Stock In, Returns, Adjustments |
+| **Auditor** | `auditor@store.com` | `password123` | View all 8 inventory reports & system audit logs |
+| **Administrator** | `admin@store.com` | `password123` | System user creation & role assignment |
+
+---
+
+## 📦 System Modules & Features
+
+1. **Material Management**: Register materials with unique codes, categories, units of measure, minimum stock alerts, shelf location, and barcode/QR metadata. Real-time balance calculations (`Total Received`, `Issued`, `Remaining Stock`).
+2. **Inventory Operations**:
+   - **Stock In**: Receive materials from suppliers.
+   - **Stock Out**: Direct issue or approved request release.
+   - **Material Returns**: Record returned items back into store.
+   - **Stock Adjustments**: Audit inventory count adjustments.
+   - **Transaction Ledger**: Search and filter all stock movements.
+3. **Request & Approval Workflow**:
+   - `Requester` submits material request ➔ `Store Manager` approves/rejects with comments ➔ `Storekeeper` issues materials (Stock Out).
+4. **Employee & Department Management**: Directory and complete issue history per department/employee.
+5. **Supplier Management**: Supplier profiles and supplied material tracking.
+6. **Reporting Hub**: Generate all **8 requested reports** with **1-click Export to Excel/CSV** and **PDF Print** functions:
+   - Current Stock Report
+   - Stock In Report
+   - Stock Out Report
+   - Material Balance Report
+   - Low Stock Alert Report
+   - Employee Material Issue Report
+   - Supplier Report
+   - Full Transaction History Report
+
+---
+
+## 🛑 Stopping the Containerized Application
+
+To stop all services:
 
 ```bash
-# Launch Production Services (Production NestJS Runner & Production Static Nginx SPA Proxy)
-docker compose -f docker-compose.prod.yml up -d --build
+docker compose down
 ```
-- **Production UI**: `http://localhost:8080`
-
----
-
-### Running Automated E2E Integration Tests
-
-To run the Supertest integration test suite covering login, org hierarchy, stores, notifications, and reports:
-
-```bash
-docker compose exec backend pnpm test:e2e
-```
-
-*Expected Result*: **100% Pass (6/6 Integration Tests Passing)**
-
----
-
-## 4. Test Accounts Credentials
-
-All seeded test accounts use the default password: **`ChangeMe123!`**
-
-| Email Address | Role | Scope | Purpose |
-|---|---|---|---|
-| `admin@amu.edu.et` | `SYSTEM_ADMINISTRATOR` | `GLOBAL` | Full System Admin, Org Tree, Asset Setup, Audit Log, Reports |
-| `wftest.requester@amu.edu.et` | `REQUESTER` | `ORGANIZATION` (CS Dept) | Submitting Item, Transfer, Borrow, and Purchase requests |
-| `wftest.depthead@amu.edu.et` | `DEPARTMENT_HEAD` | `ORGANIZATION` (CS Dept) | Step 1 Approver for CS Department requests |
-| `wftest.sourcemanager@amu.edu.et` | `STORE_MANAGER` | `STORE` (Source Store) | Step 2 Approver for Source Store issues & transfers |
-| `wftest.destmanager@amu.edu.et` | `STORE_MANAGER` | `STORE` (Destination Store) | Step 3 Approver for Destination Store receipt confirmations |
-
----
-
-## 5. Master Documentation Index
-
-- 📘 **[Master System Documentation](file:///home/jonah/Github/AMU-Resource-Management-System/SYSTEM_DOCUMENTATION.md)** (`SYSTEM_DOCUMENTATION.md`): Architectural specifications, database schemas, RBAC scope matrix, business invariants, and verification protocols.
-- 🎓 **[Instructor Presentation & Demo Guide](file:///home/jonah/Github/AMU-Resource-Management-System/PROJECT_PRESENTATION_GUIDE.md)** (`PROJECT_PRESENTATION_GUIDE.md`): Defense script, UI demo walkthroughs, and technical evaluation Q&A.
-- 🛠️ **[Developer Handoff Guide](file:///home/jonah/Github/AMU-Resource-Management-System/HANDOFF.md)** (`HANDOFF.md`): Developer rules, un-obvious design choices, and workspace structure.
-- 📋 **[Master Build Plan & Checklist](file:///home/jonah/Github/AMU-Resource-Management-System/build-plan.md)** (`build-plan.md`): Complete checklist of all 9 implemented phases.
-
----
-
-## 6. License & Institutional Credits
-
-Developed for **Arba Minch University (AMU)**, Ethiopia. All rights reserved.

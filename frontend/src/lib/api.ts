@@ -14,52 +14,15 @@ api.interceptors.request.use((config: InternalAxiosRequestConfig) => {
   return config;
 });
 
-// Shared in-flight refresh promise so concurrent 401s trigger only one
-// refresh call instead of a stampede of parallel refresh requests.
-let refreshPromise: Promise<string | null> | null = null;
-
-async function refreshAccessToken(): Promise<string | null> {
-  const { refreshToken, setSession, clearSession } = useAuthStore.getState();
-  if (!refreshToken) return null;
-
-  try {
-    const response = await axios.post('/api/auth/refresh', { refreshToken });
-    const { accessToken, refreshToken: newRefreshToken } = response.data.data;
-    setSession({ accessToken, refreshToken: newRefreshToken });
-    return accessToken;
-  } catch {
-    clearSession();
-    return null;
-  }
-}
-
 api.interceptors.response.use(
   (response) => response,
-  async (error: AxiosError) => {
-    const originalRequest = error.config as InternalAxiosRequestConfig & { _retry?: boolean };
-
-    const isAuthEndpoint = originalRequest?.url?.includes('/auth/login')
-      || originalRequest?.url?.includes('/auth/refresh');
-
-    if (error.response?.status === 401 && !originalRequest._retry && !isAuthEndpoint) {
-      originalRequest._retry = true;
-
-      if (!refreshPromise) {
-        refreshPromise = refreshAccessToken().finally(() => {
-          refreshPromise = null;
-        });
+  (error: AxiosError) => {
+    if (error.response?.status === 401) {
+      useAuthStore.getState().clearSession();
+      if (!window.location.pathname.includes('/login')) {
+        window.location.href = '/login';
       }
-
-      const newAccessToken = await refreshPromise;
-      if (newAccessToken) {
-        originalRequest.headers.Authorization = `Bearer ${newAccessToken}`;
-        return api(originalRequest);
-      }
-
-      // Refresh failed — force back to login.
-      window.location.href = '/login';
     }
-
     return Promise.reject(error);
   },
 );

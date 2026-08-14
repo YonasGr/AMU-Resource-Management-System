@@ -1,79 +1,46 @@
-import { ChevronRight, LogOut, Bell } from 'lucide-react';
+import { LogOut, Store } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { api } from '../../lib/api';
+import { useQueryClient } from '@tanstack/react-query';
 import { useAuthStore } from '../../store/auth.store';
-import { useMyOrgPath } from '../../hooks/useMyOrgPath';
 
 export function TopBar() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const user = useAuthStore((s) => s.user);
-  const refreshToken = useAuthStore((s) => s.refreshToken);
   const clearSession = useAuthStore((s) => s.clearSession);
-  const { data: orgPath } = useMyOrgPath();
 
-  const { data: unreadData } = useQuery({
-    queryKey: ['notifications', 'unread-count'],
-    queryFn: async () => {
-      const res = await api.get<{ count: number }>('/notifications/unread-count');
-      return res.data;
-    },
-    refetchInterval: 15000,
-  });
-
-  const handleLogout = async () => {
-    if (refreshToken) {
-      await api.post('/auth/logout', { refreshToken }).catch(() => undefined);
-    }
+  const handleLogout = () => {
     clearSession();
     queryClient.clear();
     navigate('/login');
   };
 
   return (
-    <header className="flex h-16 shrink-0 items-center justify-between border-b border-border bg-white px-6">
-      <div className="flex items-center gap-1.5 text-sm text-muted">
-        {orgPath?.map((unit, i) => (
-          <span key={unit.id} className="flex items-center gap-1.5">
-            {i > 0 && <ChevronRight className="h-3.5 w-3.5 text-border" />}
-            <span
-              className={
-                i === orgPath.length - 1
-                  ? 'rounded-full bg-accent/10 px-2.5 py-1 font-medium text-accent'
-                  : ''
-              }
-            >
-              {unit.name}
-            </span>
+    <header className="flex h-16 shrink-0 items-center justify-between border-b border-slate-200 bg-white px-8 shadow-sm">
+      <div className="flex items-center gap-3">
+        <Store className="h-5 w-5 text-indigo-600" />
+        <span className="font-semibold text-slate-800 text-sm">
+          Store Management System
+        </span>
+        {user?.departmentName && (
+          <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600 border border-slate-200">
+            {user.departmentName}
           </span>
-        ))}
+        )}
       </div>
 
-      <div className="flex items-center gap-4">
-        <button
-          onClick={() => navigate('/notifications')}
-          className="relative rounded-full p-2 text-muted hover:bg-surface-alt hover:text-ink transition-colors"
-          title="Notifications"
-        >
-          <Bell className="h-5 w-5" />
-          {(unreadData?.count ?? 0) > 0 && (
-            <span className="absolute top-1 right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white">
-              {unreadData?.count}
-            </span>
-          )}
-        </button>
-
+      <div className="flex items-center gap-5">
         <div className="text-right">
-          <p className="text-sm font-medium leading-tight text-ink">{user?.fullName}</p>
-          <p className="text-xs text-muted">{user?.email}</p>
+          <p className="text-sm font-semibold leading-tight text-slate-900">{user?.fullName}</p>
+          <p className="text-xs text-slate-500">{user?.email}</p>
         </div>
+
         <button
           onClick={handleLogout}
-          className="flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm text-muted hover:bg-surface-alt hover:text-ink"
+          className="flex items-center gap-2 rounded-lg bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-200 transition-colors"
         >
           <LogOut className="h-4 w-4" />
-          Log out
+          Logout
         </button>
       </div>
     </header>

@@ -1,131 +1,264 @@
-import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
-import { Prisma, StoreInventory } from '@prisma/client';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
-import { AccessControlService } from '../rbac/access-control.service';
-import { SafeUser } from '../auth/decorators/current-user.decorator';
-import { SetMinimumStockDto } from './dto/set-minimum-stock.dto';
+import { TransactionType } from '@prisma/client';
+
+export interface StockInDto {
+  materialId: string;
+  quantity: number;
+  unitPrice?: number;
+  supplierId?: string;
+  purpose?: string;
+  remarks?: string;
+}
+
+export interface StockOutDto {
+  materialId: string;
+  quantity: number;
+  employeeId?: string;
+  departmentId?: string;
+  purpose?: string;
+  remarks?: string;
+}
+
+export interface ReturnDto {
+  materialId: string;
+  quantity: number;
+  employeeId?: string;
+  departmentId?: string;
+  remarks?: string;
+}
+
+export interface AdjustmentDto {
+  materialId: string;
+  newQuantity: number;
+  reason: string;
+}
 
 @Injectable()
 export class InventoryService {
-  constructor(
-    private readonly prisma: PrismaService,
-    private readonly accessControlService: AccessControlService,
-  ) {}
+  constructor(private readonly prisma: PrismaService) {}
 
-  async getByStore(storeId: string, currentUser: SafeUser): Promise<StoreInventory[]> {
-    const store = await this.prisma.store.findUnique({ where: { id: storeId } });
-    if (!store) {
-      throw new NotFoundException(`Store ${storeId} not found`);
+  /** Stock In (Receive materials from supplier or internal source) */
+  async stockIn(storekeeperId: string, dto: StockInDto) {
+    const material = await this.prisma.material.findUnique({
+      where: { id: dto.materialId },
+      include: { stockSummary: true },
+    });
+    if (!material) {
+      throw new NotFoundException(`Material ${dto.materialId} not found`);
     }
-    await this.assertStoreAccess(currentUser, store.id, store.organizationId);
 
-    return this.prisma.storeInventory.findMany({
-      where: { storeId },
-      include: { item: true },
-      orderBy: { item: { name: 'asc' } },
+    const count = await this.prisma.inventoryTransaction.count();
+    const txnCode = `TXN-IN-${String(count + 1).padStart(4, '0')}`;
+
+    return this.prisma.$transaction(async (tx) => {
+      const transaction = await tx.inventoryTransaction.create({
+        data: {
+          transactionCode: txnCode,
+          type: TransactionType.STOCK_IN,
+          materialId: dto.materialId,
+          quantity: dto.quantity,
+          unitPrice: dto.unitPrice,
+          supplierId: dto.supplierId || null,
+          issuedById: storekeeperId,
+          purpose: dto.purpose || 'Stock Received',
+          remarks: dto.remarks,
+        },
+        include: {
+          material: true,
+          supplier: true,
+          issuedBy: { select: { fullName: true } },
+        },
+      });
+
+      await tx.stockSummary.upsert({
+        where: { materialId: dto.materialId },
+        update: {
+          quantityReceived: { increment: dto.quantity },
+          remainingQuantity: { increment: dto.quantity },
+        },
+        create: {
+          materialId: dto.materialId,
+          quantityReceived: dto.quantity,
+          quantityIssued: 0,
+          remainingQuantity: dto.quantity,
+        },
+      });
+
+      return transaction;
     });
   }
 
-  /** Cross-store view of one item's quantities, scoped to stores the user can see. */
-  async getByItem(itemId: string, currentUser: SafeUser): Promise<StoreInventory[]> {
-    const item = await this.prisma.item.findUnique({ where: { id: itemId } });
-    if (!item) {
-      throw new NotFoundException(`Item ${itemId} not found`);
+  /** Direct Stock Out (Issue materials directly to employee / department) */
+  async stockOut(storekeeperId: string, dto: StockOutDto) {
+    const material = await this.prisma.material.findUnique({
+      where: { id: dto.materialId },
+      include: { stockSummary: true },
+    });
+    if (!material) {
+      throw new NotFoundException(`Material ${dto.materialId} not found`);
     }
 
-    const accessibleOrgIds = await this.accessControlService.getAccessibleOrganizationIds(
-      currentUser.id,
-    );
-    const accessibleStoreIds = await this.accessControlService.getAccessibleStoreIds(
-      currentUser.id,
-    );
-
-    const where: Prisma.StoreInventoryWhereInput = { itemId };
-    if (accessibleOrgIds !== 'ALL') {
-      where.store = {
-        OR: [
-          { organizationId: { in: Array.from(accessibleOrgIds) } },
-          { id: { in: Array.from(accessibleStoreIds) } },
-        ],
-      };
+    const available = material.stockSummary?.remainingQuantity ?? 0;
+    if (available < dto.quantity) {
+      throw new BadRequestException(
+        `Cannot issue ${dto.quantity} ${material.unit}(s). Only ${available} available in stock.`,
+      );
     }
 
-    return this.prisma.storeInventory.findMany({
+    const count = await this.prisma.inventoryTransaction.count();
+    const txnCode = `TXN-OUT-${String(count + 1).padStart(4, '0')}`;
+
+    return this.prisma.$transaction(async (tx) => {
+      const transaction = await tx.inventoryTransaction.create({
+        data: {
+          transactionCode: txnCode,
+          type: TransactionType.STOCK_OUT,
+          materialId: dto.materialId,
+          quantity: dto.quantity,
+          employeeId: dto.employeeId || null,
+          departmentId: dto.departmentId || null,
+          issuedById: storekeeperId,
+          purpose: dto.purpose || 'Direct Issue',
+          remarks: dto.remarks,
+        },
+        include: {
+          material: true,
+          employee: true,
+          department: true,
+          issuedBy: { select: { fullName: true } },
+        },
+      });
+
+      await tx.stockSummary.update({
+        where: { materialId: dto.materialId },
+        data: {
+          quantityIssued: { increment: dto.quantity },
+          remainingQuantity: { decrement: dto.quantity },
+        },
+      });
+
+      return transaction;
+    });
+  }
+
+  /** Material Return (Record returned materials back into inventory) */
+  async returnMaterial(storekeeperId: string, dto: ReturnDto) {
+    const material = await this.prisma.material.findUnique({
+      where: { id: dto.materialId },
+      include: { stockSummary: true },
+    });
+    if (!material) {
+      throw new NotFoundException(`Material ${dto.materialId} not found`);
+    }
+
+    const count = await this.prisma.inventoryTransaction.count();
+    const txnCode = `TXN-RET-${String(count + 1).padStart(4, '0')}`;
+
+    return this.prisma.$transaction(async (tx) => {
+      const transaction = await tx.inventoryTransaction.create({
+        data: {
+          transactionCode: txnCode,
+          type: TransactionType.RETURN,
+          materialId: dto.materialId,
+          quantity: dto.quantity,
+          employeeId: dto.employeeId || null,
+          departmentId: dto.departmentId || null,
+          issuedById: storekeeperId,
+          purpose: 'Material Return',
+          remarks: dto.remarks || 'Returned to store',
+        },
+        include: {
+          material: true,
+          employee: true,
+          department: true,
+          issuedBy: { select: { fullName: true } },
+        },
+      });
+
+      await tx.stockSummary.update({
+        where: { materialId: dto.materialId },
+        data: {
+          quantityIssued: { decrement: dto.quantity },
+          remainingQuantity: { increment: dto.quantity },
+        },
+      });
+
+      return transaction;
+    });
+  }
+
+  /** Stock Adjustment (Manual stock audit count adjustment) */
+  async adjustStock(storekeeperId: string, dto: AdjustmentDto) {
+    const material = await this.prisma.material.findUnique({
+      where: { id: dto.materialId },
+      include: { stockSummary: true },
+    });
+    if (!material) {
+      throw new NotFoundException(`Material ${dto.materialId} not found`);
+    }
+
+    const currentRemaining = material.stockSummary?.remainingQuantity ?? 0;
+    const diff = dto.newQuantity - currentRemaining;
+
+    const count = await this.prisma.inventoryTransaction.count();
+    const txnCode = `TXN-ADJ-${String(count + 1).padStart(4, '0')}`;
+
+    return this.prisma.$transaction(async (tx) => {
+      const transaction = await tx.inventoryTransaction.create({
+        data: {
+          transactionCode: txnCode,
+          type: TransactionType.ADJUSTMENT,
+          materialId: dto.materialId,
+          quantity: Math.abs(diff),
+          issuedById: storekeeperId,
+          purpose: 'Stock Audit Adjustment',
+          remarks: `Adjusted from ${currentRemaining} to ${dto.newQuantity}. Reason: ${dto.reason}`,
+        },
+        include: {
+          material: true,
+          issuedBy: { select: { fullName: true } },
+        },
+      });
+
+      await tx.stockSummary.update({
+        where: { materialId: dto.materialId },
+        data: {
+          remainingQuantity: dto.newQuantity,
+        },
+      });
+
+      return transaction;
+    });
+  }
+
+  /** Get all inventory transactions with filter */
+  async findAllTransactions(query?: {
+    type?: TransactionType;
+    materialId?: string;
+    departmentId?: string;
+    employeeId?: string;
+    supplierId?: string;
+  }) {
+    const where: any = {};
+    if (query?.type) where.type = query.type;
+    if (query?.materialId) where.materialId = query.materialId;
+    if (query?.departmentId) where.departmentId = query.departmentId;
+    if (query?.employeeId) where.employeeId = query.employeeId;
+    if (query?.supplierId) where.supplierId = query.supplierId;
+
+    return this.prisma.inventoryTransaction.findMany({
       where,
-      include: { store: true },
-      orderBy: { store: { name: 'asc' } },
+      include: {
+        material: { include: { category: true } },
+        supplier: true,
+        employee: true,
+        department: true,
+        request: true,
+        issuedBy: { select: { id: true, fullName: true } },
+        approvedBy: { select: { id: true, fullName: true } },
+      },
+      orderBy: { createdAt: 'desc' },
     });
-  }
-
-  /** Rows where quantity has fallen to or below minimumStock, scoped to visible stores. */
-  async getLowStock(currentUser: SafeUser, storeId?: string): Promise<StoreInventory[]> {
-    const accessibleOrgIds = await this.accessControlService.getAccessibleOrganizationIds(
-      currentUser.id,
-    );
-    const accessibleStoreIds = await this.accessControlService.getAccessibleStoreIds(
-      currentUser.id,
-    );
-
-    const where: Prisma.StoreInventoryWhereInput = {
-      storeId,
-    };
-
-    if (accessibleOrgIds !== 'ALL') {
-      where.store = {
-        OR: [
-          { organizationId: { in: Array.from(accessibleOrgIds) } },
-          { id: { in: Array.from(accessibleStoreIds) } },
-        ],
-      };
-    }
-
-    // Prisma can't compare two columns of the same row in a `where` filter
-    // directly, so fetch candidates and filter in application code. Store
-    // inventory tables are small enough per-store that this is fine; revisit
-    // with a raw query if this ever needs to scale to huge catalogs.
-    const rows = await this.prisma.storeInventory.findMany({
-      where,
-      include: { item: true, store: true },
-    });
-    return rows.filter((row) => row.quantity <= row.minimumStock);
-  }
-
-  async setMinimumStock(
-    storeId: string,
-    itemId: string,
-    dto: SetMinimumStockDto,
-    currentUser: SafeUser,
-  ): Promise<StoreInventory> {
-    const store = await this.prisma.store.findUnique({ where: { id: storeId } });
-    if (!store) {
-      throw new NotFoundException(`Store ${storeId} not found`);
-    }
-    await this.assertStoreAccess(currentUser, store.id, store.organizationId);
-
-    const item = await this.prisma.item.findUnique({ where: { id: itemId } });
-    if (!item) {
-      throw new NotFoundException(`Item ${itemId} not found`);
-    }
-
-    return this.prisma.storeInventory.upsert({
-      where: { storeId_itemId: { storeId, itemId } },
-      update: { minimumStock: dto.minimumStock },
-      create: { storeId, itemId, quantity: 0, minimumStock: dto.minimumStock },
-    });
-  }
-
-  private async assertStoreAccess(
-    currentUser: SafeUser,
-    storeId: string,
-    storeOrganizationId: string,
-  ): Promise<void> {
-    const allowed = await this.accessControlService.hasScopeAccess(currentUser.id, {
-      type: 'STORE',
-      storeId,
-      storeOrganizationId,
-    });
-    if (!allowed) {
-      throw new ForbiddenException('You do not have access to this store');
-    }
   }
 }

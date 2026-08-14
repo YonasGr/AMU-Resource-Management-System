@@ -1,7 +1,7 @@
 services:
   postgres:
     image: postgres:16-alpine
-    container_name: uerp-postgres
+    container_name: store-postgres
     restart: unless-stopped
     environment:
       POSTGRES_USER: uerp
@@ -19,7 +19,7 @@ services:
 
   redis:
     image: redis:7-alpine
-    container_name: uerp-redis
+    container_name: store-redis
     restart: unless-stopped
     ports:
       - "6379:6379"
@@ -33,10 +33,23 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    container_name: uerp-backend
+    container_name: store-backend
     restart: unless-stopped
-    env_file:
-      - ./backend/.env
+    environment:
+      NODE_ENV: development
+      PORT: 3000
+      DATABASE_URL: "postgresql://uerp:uerp_dev_password@postgres:5432/university_erp?schema=public"
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      JWT_ACCESS_SECRET: store_mgmt_access_secret_key_2026
+      JWT_ACCESS_EXPIRES_IN: 1d
+      JWT_REFRESH_SECRET: store_mgmt_refresh_secret_key_2026
+      JWT_REFRESH_EXPIRES_IN: 7d
+    command: >
+      sh -c "pnpm prisma:generate &&
+            npx prisma db push --accept-data-loss &&
+            pnpm prisma:seed &&
+            pnpm start:dev"
     ports:
       - "3000:3000"
     depends_on:
@@ -52,7 +65,7 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
-    container_name: uerp-frontend
+    container_name: store-frontend
     restart: unless-stopped
     ports:
       - "5173:5173"
@@ -64,7 +77,7 @@ services:
 
   nginx:
     image: nginx:alpine
-    container_name: uerp-nginx
+    container_name: store-nginx
     restart: unless-stopped
     ports:
       - "8080:80"

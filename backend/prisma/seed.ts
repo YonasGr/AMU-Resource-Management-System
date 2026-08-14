@@ -1,692 +1,479 @@
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, Role, TransactionType, RequestStatus, MaterialStatus, SupplierStatus } from '@prisma/client';
 import * as argon2 from 'argon2';
 
 const prisma = new PrismaClient();
 
-interface OrgIds {
-  ictId: string;
-  csDeptId: string;
-  itDeptId: string;
-}
-
-async function seedOrganizationTree(): Promise<OrgIds> {
-  const existing = await prisma.organizationUnit.findFirst({
-    where: { type: 'UNIVERSITY' },
-  });
-  if (existing) {
-    console.log('Organization tree already seeded — skipping.');
-    const ict = await prisma.organizationUnit.findFirst({ where: { name: 'ICT Directorate' } });
-    const csDept = await prisma.organizationUnit.findFirst({
-      where: { name: 'Computer Science Department' },
-    });
-    const itDept = await prisma.organizationUnit.findFirst({
-      where: { name: 'Information Technology Department' },
-    });
-    return { ictId: ict!.id, csDeptId: csDept!.id, itDeptId: itDept!.id };
-  }
-
-  const university = await prisma.organizationUnit.create({
-    data: { name: 'Arba Minch University', type: 'UNIVERSITY' },
-  });
-
-  const engineering = await prisma.organizationUnit.create({
-    data: { name: 'College of Engineering', type: 'COLLEGE', parentId: university.id },
-  });
-
-  const csDept = await prisma.organizationUnit.create({
-    data: { name: 'Computer Science Department', type: 'DEPARTMENT', parentId: engineering.id },
-  });
-
-  const itDept = await prisma.organizationUnit.create({
-    data: {
-      name: 'Information Technology Department',
-      type: 'DEPARTMENT',
-      parentId: engineering.id,
-    },
-  });
-
-  await prisma.organizationUnit.create({
-    data: { name: 'College of Medicine', type: 'COLLEGE', parentId: university.id },
-  });
-
-  await prisma.organizationUnit.create({
-    data: { name: 'Finance Office', type: 'OFFICE', parentId: university.id },
-  });
-
-  await prisma.organizationUnit.create({
-    data: { name: 'Library', type: 'OFFICE', parentId: university.id },
-  });
-
-  const ict = await prisma.organizationUnit.create({
-    data: { name: 'ICT Directorate', type: 'DIRECTORATE', parentId: university.id },
-  });
-
-  await prisma.organizationUnit.create({
-    data: { name: 'Administration Office', type: 'OFFICE', parentId: university.id },
-  });
-
-  console.log('Seeded organization tree for Arba Minch University.');
-  return { ictId: ict.id, csDeptId: csDept.id, itDeptId: itDept.id };
-}
-
-async function seedAdminUser(organizationId: string): Promise<string> {
-  const existing = await prisma.user.findUnique({ where: { email: 'admin@amu.edu.et' } });
-  if (existing) {
-    console.log('Admin user already seeded — skipping.');
-    return existing.id;
-  }
-
-  // Dev-only seed admin — change this password immediately in any shared/staging
-  // environment.
-  const adminPasswordHash = await argon2.hash('ChangeMe123!');
-  const admin = await prisma.user.create({
-    data: {
-      fullName: 'System Administrator',
-      email: 'admin@amu.edu.et',
-      passwordHash: adminPasswordHash,
-      organizationId,
-    },
-  });
-
-  console.log(`Seeded admin user: ${admin.email} / ChangeMe123! (change this password)`);
-  return admin.id;
-}
-
-// Namespaced permission keys. New modules should add their own keys here
-// following the same "<module>.<action>" convention rather than inventing
-// a different scheme.
-const PERMISSION_KEYS = [
-  'organization.view',
-  'organization.manage',
-  'user.view',
-  'user.manage',
-  'role.view',
-  'role.manage',
-  'store.view',
-  'store.manage',
-  'inventory.view',
-  'inventory.issue',
-  'inventory.receive',
-  'inventory.adjust',
-  'transfer.request',
-  'transfer.approve',
-  'request.create',
-  'request.approve',
-  'purchase.create',
-  'purchase.view',
-  'purchase.approve',
-  'purchase.manage',
-  'purchase.receive',
-  'supplier.manage',
-  'distribution.view',
-  'distribution.manage',
-  'distribution.confirm',
-  'asset.view',
-  'asset.manage',
-  'borrow.request',
-  'borrow.view',
-  'borrow.manage',
-  'borrow.return',
-  'borrow.inspect',
-  'disposal.request',
-  'disposal.approve',
-  'disposal.view',
-  'item.view',
-  'item.manage',
-  'audit.view',
-  'report.view',
-];
-
-// code -> { name, permissions }. "*" grants every permission in
-// PERMISSION_KEYS, resolved at seed time so new permissions automatically
-// flow to System Administrator without editing this list.
-const ROLE_DEFINITIONS: Record<string, { name: string; permissions: string[] | '*' }> = {
-  SYSTEM_ADMINISTRATOR: { name: 'System Administrator', permissions: '*' },
-  UNIVERSITY_ADMINISTRATOR: {
-    name: 'University Administrator',
-    permissions: [
-      'organization.view',
-      'organization.manage',
-      'user.view',
-      'item.view',
-      'item.manage',
-      'report.view',
-      'audit.view',
-      'request.approve',
-      'asset.view',
-      'disposal.approve',
-      'disposal.view',
-    ],
-  },
-  COLLEGE_ADMINISTRATOR: {
-    name: 'College Administrator',
-    permissions: ['organization.view', 'user.view', 'item.view', 'report.view'],
-  },
-  DEPARTMENT_HEAD: {
-    name: 'Department Head',
-    permissions: ['request.approve', 'transfer.approve', 'item.view', 'report.view'],
-  },
-  STORE_MANAGER: {
-    name: 'Store Manager',
-    permissions: [
-      'inventory.view',
-      'inventory.issue',
-      'inventory.receive',
-      'inventory.adjust',
-      'transfer.approve',
-      'request.approve',
-      'request.create',
-      'purchase.view',
-      'purchase.receive',
-      'distribution.view',
-      'distribution.confirm',
-      'asset.view',
-      'asset.manage',
-      'borrow.view',
-      'borrow.manage',
-      'borrow.return',
-      'borrow.inspect',
-      'disposal.request',
-      'disposal.view',
-      'item.view',
-    ],
-  },
-  STORE_KEEPER: {
-    name: 'Store Keeper',
-    permissions: ['inventory.view', 'inventory.issue', 'inventory.receive', 'item.view'],
-  },
-  FINANCE_OFFICER: {
-    name: 'Finance Officer',
-    permissions: ['purchase.view', 'purchase.approve', 'request.approve', 'item.view', 'report.view'],
-  },
-  PROCUREMENT_OFFICER: {
-    name: 'Procurement Officer',
-    permissions: ['purchase.create', 'purchase.view', 'purchase.approve', 'request.approve', 'purchase.manage', 'purchase.receive', 'supplier.manage', 'distribution.view', 'distribution.manage', 'item.view', 'item.manage'],
-  },
-  REQUESTER: {
-    name: 'Requester',
-    permissions: ['request.create', 'transfer.request', 'purchase.create', 'borrow.request', 'borrow.view', 'borrow.return', 'asset.view', 'item.view'],
-  },
-  AUDITOR: {
-    name: 'Auditor',
-    permissions: ['audit.view', 'report.view'],
-  },
-  EXTERNAL_USER: {
-    name: 'External User',
-    permissions: ['request.create'],
-  },
-};
-
-async function seedPermissions(): Promise<Map<string, string>> {
-  const keyToId = new Map<string, string>();
-  for (const key of PERMISSION_KEYS) {
-    const permission = await prisma.permission.upsert({
-      where: { key },
-      update: {},
-      create: { key },
-    });
-    keyToId.set(key, permission.id);
-  }
-  console.log(`Seeded ${PERMISSION_KEYS.length} permissions.`);
-  return keyToId;
-}
-
-async function seedRoles(permissionKeyToId: Map<string, string>): Promise<Map<string, string>> {
-  const codeToId = new Map<string, string>();
-
-  for (const [code, def] of Object.entries(ROLE_DEFINITIONS)) {
-    const role = await prisma.role.upsert({
-      where: { code },
-      update: {},
-      create: { code, name: def.name, isSystem: true },
-    });
-    codeToId.set(code, role.id);
-
-    const permissionKeys = def.permissions === '*' ? PERMISSION_KEYS : def.permissions;
-    const permissionIds = permissionKeys
-      .map((k) => permissionKeyToId.get(k))
-      .filter((id): id is string => Boolean(id));
-
-    await prisma.$transaction([
-      prisma.rolePermission.deleteMany({ where: { roleId: role.id } }),
-      prisma.rolePermission.createMany({
-        data: permissionIds.map((permissionId) => ({ roleId: role.id, permissionId })),
-      }),
-    ]);
-  }
-
-  console.log(`Seeded ${Object.keys(ROLE_DEFINITIONS).length} roles.`);
-  return codeToId;
-}
-
-async function seedAdminRoleAssignment(userId: string, roleId: string): Promise<void> {
-  const existing = await prisma.userRole.findFirst({
-    where: { userId, roleId, scopeType: 'GLOBAL' },
-  });
-  if (existing) {
-    console.log('Admin role assignment already seeded — skipping.');
-    return;
-  }
-
-  await prisma.userRole.create({
-    data: { userId, roleId, scopeType: 'GLOBAL', scopeId: null },
-  });
-  console.log('Assigned System Administrator (GLOBAL scope) to the admin user.');
-}
-
-async function seedSampleStore(organizationId: string, managerId: string): Promise<string> {
-  const existing = await prisma.store.findUnique({ where: { code: 'ICT-STORE-01' } });
-  if (existing) {
-    console.log('Sample store already seeded — skipping.');
-    return existing.id;
-  }
-
-  const store = await prisma.store.create({
-    data: {
-      name: 'ICT Store',
-      code: 'ICT-STORE-01',
-      location: 'ICT Directorate Building, Ground Floor',
-      organizationId,
-      managerId,
-    },
-  });
-  console.log('Seeded sample store: ICT Store (ICT-STORE-01).');
-  return store.id;
-}
-
-async function seedItemCatalog(): Promise<void> {
-  const categoryNames = [
-    'IT Equipment',
-    'Furniture',
-    'Stationery',
-    'Laboratory Equipment',
-    'Vehicles',
-    'Consumables',
-  ];
-
-  const categoryIds = new Map<string, string>();
-  for (const name of categoryNames) {
-    const category = await prisma.itemCategory.upsert({
-      where: { name },
-      update: {},
-      create: { name },
-    });
-    categoryIds.set(name, category.id);
-  }
-  console.log(`Seeded ${categoryNames.length} item categories.`);
-
-  const sampleItems: {
-    name: string;
-    category: string;
-    unit: string;
-    serialRequired?: boolean;
-    assetType?: 'CONSUMABLE' | 'FIXED_ASSET';
-  }[] = [
-    { name: 'Laptop Dell Latitude', category: 'IT Equipment', unit: 'piece', serialRequired: true, assetType: 'FIXED_ASSET' },
-    { name: 'Printer HP LaserJet', category: 'IT Equipment', unit: 'piece', serialRequired: true, assetType: 'FIXED_ASSET' },
-    { name: 'A4 Paper', category: 'Stationery', unit: 'ream', assetType: 'CONSUMABLE' },
-    { name: 'Projector', category: 'IT Equipment', unit: 'piece', serialRequired: true, assetType: 'FIXED_ASSET' },
-    { name: 'Office Chair', category: 'Furniture', unit: 'piece', assetType: 'FIXED_ASSET' },
-  ];
-
-  let createdCount = 0;
-  for (const item of sampleItems) {
-    const existing = await prisma.item.findFirst({ where: { name: item.name } });
-    if (existing) continue;
-
-    await prisma.item.create({
-      data: {
-        name: item.name,
-        unit: item.unit,
-        serialRequired: item.serialRequired ?? false,
-        assetType: item.assetType ?? 'CONSUMABLE',
-        categoryId: categoryIds.get(item.category)!,
-      },
-    });
-    createdCount += 1;
-  }
-  console.log(`Seeded ${createdCount} sample catalog item(s) (skipped any already present).`);
-}
-
-async function seedSampleInventory(storeId: string, createdById: string): Promise<void> {
-  const laptop = await prisma.item.findFirst({ where: { name: 'Laptop Dell Latitude' } });
-  if (!laptop) {
-    console.log('Laptop item not found — skipping sample inventory seed.');
-    return;
-  }
-
-  const existing = await prisma.storeInventory.findUnique({
-    where: { storeId_itemId: { storeId, itemId: laptop.id } },
-  });
-  if (existing) {
-    console.log('Sample inventory already seeded — skipping.');
-    return;
-  }
-
-  // Bootstraps initial stock the same way the app would: a movement row
-  // justifies the quantity, even here in the seed script — there's no
-  // "just set the number" path anywhere in this system, including seeding.
-  await prisma.$transaction([
-    prisma.storeInventory.create({
-      data: { storeId, itemId: laptop.id, quantity: 20, minimumStock: 5 },
-    }),
-    prisma.inventoryMovement.create({
-      data: {
-        itemId: laptop.id,
-        toStoreId: storeId,
-        quantity: 20,
-        movementType: 'PURCHASE_RECEIVE',
-        referenceId: 'seed-initial-stock',
-        createdById,
-      },
-    }),
-  ]);
-  console.log('Seeded initial inventory: 20x Laptop Dell Latitude at ICT Store.');
-}
-
-interface WorkflowStepDef {
-  order: number;
-  name: string;
-  approverResolutionType:
-    | 'FIXED_ROLE'
-    | 'ORG_ROLE_AT_CONTEXT_ORG'
-    | 'STORE_ROLE_AT_CONTEXT_STORE'
-    | 'ORG_ROLE_AT_NEXT_LEVEL_UP';
-  roleCode: string;
-  contextOrgKey?: string;
-  contextStoreKey?: string;
-}
-
-// Matches the chains described in the spec (sections 13-15, 20).
-const WORKFLOW_TEMPLATES: Record<string, { name: string; steps: WorkflowStepDef[] }> = {
-  ITEM_REQUEST: {
-    name: 'Item Request',
-    steps: [
-      {
-        order: 1,
-        name: 'Department Head Approval',
-        approverResolutionType: 'ORG_ROLE_AT_CONTEXT_ORG',
-        roleCode: 'DEPARTMENT_HEAD',
-        contextOrgKey: 'requesterOrganizationId',
-      },
-      {
-        order: 2,
-        name: 'Store Manager Approval',
-        approverResolutionType: 'STORE_ROLE_AT_CONTEXT_STORE',
-        roleCode: 'STORE_MANAGER',
-        contextStoreKey: 'targetStoreId',
-      },
-    ],
-  },
-  TRANSFER_REQUEST: {
-    name: 'Department-to-Department Transfer',
-    steps: [
-      {
-        order: 1,
-        name: 'Requester Department Head Approval',
-        approverResolutionType: 'ORG_ROLE_AT_CONTEXT_ORG',
-        roleCode: 'DEPARTMENT_HEAD',
-        contextOrgKey: 'requesterOrganizationId',
-      },
-      {
-        order: 2,
-        name: 'Source Store Manager Approval',
-        approverResolutionType: 'STORE_ROLE_AT_CONTEXT_STORE',
-        roleCode: 'STORE_MANAGER',
-        contextStoreKey: 'sourceStoreId',
-      },
-      {
-        order: 3,
-        name: 'Receiving Store Manager Approval',
-        approverResolutionType: 'STORE_ROLE_AT_CONTEXT_STORE',
-        roleCode: 'STORE_MANAGER',
-        contextStoreKey: 'destinationStoreId',
-      },
-    ],
-  },
-  PURCHASE_REQUEST: {
-    name: 'University Purchase',
-    steps: [
-      {
-        order: 1,
-        name: 'Department Head Approval',
-        approverResolutionType: 'ORG_ROLE_AT_CONTEXT_ORG',
-        roleCode: 'DEPARTMENT_HEAD',
-        contextOrgKey: 'requesterOrganizationId',
-      },
-      {
-        order: 2,
-        name: 'Finance Approval',
-        approverResolutionType: 'FIXED_ROLE',
-        roleCode: 'FINANCE_OFFICER',
-      },
-      {
-        order: 3,
-        name: 'Procurement Approval',
-        approverResolutionType: 'FIXED_ROLE',
-        roleCode: 'PROCUREMENT_OFFICER',
-      },
-    ],
-  },
-  DISPOSAL_REQUEST: {
-    name: 'Asset Disposal',
-    steps: [
-      {
-        order: 1,
-        name: 'Store Manager Inspection',
-        approverResolutionType: 'STORE_ROLE_AT_CONTEXT_STORE',
-        roleCode: 'STORE_MANAGER',
-        contextStoreKey: 'targetStoreId',
-      },
-      {
-        order: 2,
-        name: 'University Administrator Approval',
-        approverResolutionType: 'FIXED_ROLE',
-        roleCode: 'UNIVERSITY_ADMINISTRATOR',
-      },
-    ],
-  },
-  BORROW_REQUEST: {
-    name: 'Item Borrowing',
-    steps: [
-      {
-        order: 1,
-        name: 'Store Manager Approval',
-        approverResolutionType: 'STORE_ROLE_AT_CONTEXT_STORE',
-        roleCode: 'STORE_MANAGER',
-        contextStoreKey: 'targetStoreId',
-      },
-    ],
-  },
-};
-
-async function seedWorkflowTemplates(): Promise<void> {
-  for (const [code, def] of Object.entries(WORKFLOW_TEMPLATES)) {
-    const template = await prisma.workflowTemplate.upsert({
-      where: { code },
-      update: { name: def.name },
-      create: { code, name: def.name },
-    });
-
-    await prisma.$transaction([
-      prisma.workflowStepTemplate.deleteMany({ where: { workflowTemplateId: template.id } }),
-      prisma.workflowStepTemplate.createMany({
-        data: def.steps.map((s) => ({
-          workflowTemplateId: template.id,
-          order: s.order,
-          name: s.name,
-          approverResolutionType: s.approverResolutionType,
-          roleCode: s.roleCode,
-          contextOrgKey: s.contextOrgKey,
-          contextStoreKey: s.contextStoreKey,
-        })),
-      }),
-    ]);
-  }
-  console.log(`Seeded ${Object.keys(WORKFLOW_TEMPLATES).length} workflow templates.`);
-}
-
-/**
- * Dev-only test accounts so the Transfer Request workflow (3 approval steps,
- * 3 different resolution strategies) can be exercised end-to-end without
- * manually creating users/stores/role-assignments through Swagger first.
- * Password for all three: "ChangeMe123!" (same as the seed admin).
- */
-async function seedWorkflowTestData(
-  csDeptId: string,
-  itDeptId: string,
-  roleCodeToId: Map<string, string>,
-): Promise<{ sourceStoreId: string; destStoreId: string }> {
-  const passwordHash = await argon2.hash('ChangeMe123!');
-
-  async function ensureUser(email: string, fullName: string, organizationId: string): Promise<string> {
-    const existing = await prisma.user.findUnique({ where: { email } });
-    if (existing) return existing.id;
-    const user = await prisma.user.create({
-      data: { fullName, email, passwordHash, organizationId },
-    });
-    return user.id;
-  }
-
-  async function ensureStore(code: string, name: string, organizationId: string, managerId: string): Promise<string> {
-    const existing = await prisma.store.findUnique({ where: { code } });
-    if (existing) return existing.id;
-    const store = await prisma.store.create({
-      data: { code, name, organizationId, managerId },
-    });
-    return store.id;
-  }
-
-  async function ensureRoleAssignment(
-    userId: string,
-    roleId: string,
-    scopeType: 'ORGANIZATION' | 'STORE',
-    scopeId: string,
-  ): Promise<void> {
-    const existing = await prisma.userRole.findFirst({ where: { userId, roleId, scopeType, scopeId } });
-    if (existing) return;
-    await prisma.userRole.create({ data: { userId, roleId, scopeType, scopeId } });
-  }
-
-  const deptHeadRoleId = roleCodeToId.get('DEPARTMENT_HEAD')!;
-  const storeManagerRoleId = roleCodeToId.get('STORE_MANAGER')!;
-
-  const deptHeadUserId = await ensureUser(
-    'wftest.depthead@amu.edu.et',
-    'Workflow Test — CS Dept Head',
-    csDeptId,
-  );
-  await ensureRoleAssignment(deptHeadUserId, deptHeadRoleId, 'ORGANIZATION', csDeptId);
-
-  const sourceManagerUserId = await ensureUser(
-    'wftest.sourcemanager@amu.edu.et',
-    'Workflow Test — Source Store Manager',
-    csDeptId,
-  );
-  const sourceStoreId = await ensureStore(
-    'WF-TEST-SOURCE-01',
-    'Workflow Test Source Store',
-    csDeptId,
-    sourceManagerUserId,
-  );
-  await ensureRoleAssignment(sourceManagerUserId, storeManagerRoleId, 'STORE', sourceStoreId);
-
-  const destManagerUserId = await ensureUser(
-    'wftest.destmanager@amu.edu.et',
-    'Workflow Test — Destination Store Manager',
-    itDeptId,
-  );
-  const destStoreId = await ensureStore(
-    'WF-TEST-DEST-01',
-    'Workflow Test Destination Store',
-    itDeptId,
-    destManagerUserId,
-  );
-  await ensureRoleAssignment(destManagerUserId, storeManagerRoleId, 'STORE', destStoreId);
-
-  // A requester who actually belongs to CS Department — request.organizationId
-  // comes from the REQUESTER's own org, not whoever happens to submit it, so
-  // submitting as admin (home org: ICT Directorate) would route to the wrong
-  // department head. This user exists specifically so the "CS needs 10
-  // chairs" scenario resolves to wftest.depthead correctly.
-  const requesterRoleId = roleCodeToId.get('REQUESTER')!;
-  const requesterUserId = await ensureUser(
-    'wftest.requester@amu.edu.et',
-    'Workflow Test — CS Dept Requester',
-    csDeptId,
-  );
-  await ensureRoleAssignment(requesterUserId, requesterRoleId, 'ORGANIZATION', csDeptId);
-
-  console.log('Seeded workflow test users/stores (password for all: ChangeMe123!):');
-  console.log('  wftest.requester@amu.edu.et      — Requester, in CS Department (use this to submit test requests)');
-  console.log('  wftest.depthead@amu.edu.et       — Department Head, scoped to CS Department');
-  console.log(`  wftest.sourcemanager@amu.edu.et  — Store Manager of WF-TEST-SOURCE-01 (${sourceStoreId})`);
-  console.log(`  wftest.destmanager@amu.edu.et    — Store Manager of WF-TEST-DEST-01 (${destStoreId})`);
-  console.log(`  CS Department id: ${csDeptId}`);
-
-  return { sourceStoreId, destStoreId };
-}
-
-/**
- * Stocks the workflow test source store with Office Chairs — matches the
- * spec's own "CS needs 10 chairs" example (section 14) exactly, so the
- * Transfer Request end-to-end test has real stock to move.
- */
-async function seedTransferScenarioStock(sourceStoreId: string, createdById: string): Promise<void> {
-  const chair = await prisma.item.findFirst({ where: { name: 'Office Chair' } });
-  if (!chair) {
-    console.log('Office Chair item not found — skipping transfer scenario stock seed.');
-    return;
-  }
-
-  const existing = await prisma.storeInventory.findUnique({
-    where: { storeId_itemId: { storeId: sourceStoreId, itemId: chair.id } },
-  });
-  if (existing) {
-    console.log('Transfer scenario stock already seeded — skipping.');
-    return;
-  }
-
-  await prisma.$transaction([
-    prisma.storeInventory.create({
-      data: { storeId: sourceStoreId, itemId: chair.id, quantity: 20, minimumStock: 5 },
-    }),
-    prisma.inventoryMovement.create({
-      data: {
-        itemId: chair.id,
-        toStoreId: sourceStoreId,
-        quantity: 20,
-        movementType: 'PURCHASE_RECEIVE',
-        referenceId: 'seed-transfer-scenario-stock',
-        createdById,
-      },
-    }),
-  ]);
-  console.log('Seeded 20x Office Chair at the workflow test source store.');
-}
-
 async function main() {
-  const { ictId, csDeptId, itDeptId } = await seedOrganizationTree();
-  const adminUserId = await seedAdminUser(ictId);
+  console.log('🌱 Seeding Store Management System Database...');
 
-  const permissionKeyToId = await seedPermissions();
-  const roleCodeToId = await seedRoles(permissionKeyToId);
+  // 1. Departments
+  const csDept = await prisma.department.upsert({
+    where: { code: 'CS' },
+    update: {},
+    create: {
+      code: 'CS',
+      name: 'Computer Science Department',
+      description: 'Department of Computer Science & IT',
+    },
+  });
 
-  const systemAdminRoleId = roleCodeToId.get('SYSTEM_ADMINISTRATOR')!;
-  await seedAdminRoleAssignment(adminUserId, systemAdminRoleId);
+  const eeDept = await prisma.department.upsert({
+    where: { code: 'EE' },
+    update: {},
+    create: {
+      code: 'EE',
+      name: 'Electrical Engineering Department',
+      description: 'Department of Electrical & Computer Engineering',
+    },
+  });
 
-  const storeId = await seedSampleStore(ictId, adminUserId);
-  await seedItemCatalog();
-  await seedSampleInventory(storeId, adminUserId);
+  const adminDept = await prisma.department.upsert({
+    where: { code: 'ADMIN' },
+    update: {},
+    create: {
+      code: 'ADMIN',
+      name: 'General Administration',
+      description: 'Central Store & General Administration',
+    },
+  });
 
-  await seedWorkflowTemplates();
-  const { sourceStoreId } = await seedWorkflowTestData(csDeptId, itDeptId, roleCodeToId);
-  await seedTransferScenarioStock(sourceStoreId, adminUserId);
+  const finDept = await prisma.department.upsert({
+    where: { code: 'FIN' },
+    update: {},
+    create: {
+      code: 'FIN',
+      name: 'Finance & Procurement',
+      description: 'Finance and Budgeting Directorate',
+    },
+  });
+
+  console.log('✅ Departments seeded');
+
+  // 2. Users (5 Roles)
+  const passwordHash = await argon2.hash('password123');
+
+  const admin = await prisma.user.upsert({
+    where: { email: 'admin@store.com' },
+    update: {},
+    create: {
+      fullName: 'System Administrator',
+      email: 'admin@store.com',
+      phone: '+251911001122',
+      passwordHash,
+      role: Role.ADMINISTRATOR,
+      departmentId: adminDept.id,
+    },
+  });
+
+  const manager = await prisma.user.upsert({
+    where: { email: 'manager@store.com' },
+    update: {},
+    create: {
+      fullName: 'Abebe Kebede (Store Manager)',
+      email: 'manager@store.com',
+      phone: '+251911223344',
+      passwordHash,
+      role: Role.STORE_MANAGER,
+      departmentId: adminDept.id,
+    },
+  });
+
+  const keeper = await prisma.user.upsert({
+    where: { email: 'keeper@store.com' },
+    update: {},
+    create: {
+      fullName: 'Tigist Haile (Storekeeper)',
+      email: 'keeper@store.com',
+      phone: '+251911334455',
+      passwordHash,
+      role: Role.STOREKEEPER,
+      departmentId: adminDept.id,
+    },
+  });
+
+  const auditor = await prisma.user.upsert({
+    where: { email: 'auditor@store.com' },
+    update: {},
+    create: {
+      fullName: 'Dawit Solomon (Internal Auditor)',
+      email: 'auditor@store.com',
+      phone: '+251911445566',
+      passwordHash,
+      role: Role.AUDITOR,
+      departmentId: finDept.id,
+    },
+  });
+
+  const requester = await prisma.user.upsert({
+    where: { email: 'requester@store.com' },
+    update: {},
+    create: {
+      fullName: 'Dr. Chala Bekele (Requester / CS Lecturer)',
+      email: 'requester@store.com',
+      phone: '+251911556677',
+      passwordHash,
+      role: Role.REQUESTER,
+      departmentId: csDept.id,
+    },
+  });
+
+  console.log('✅ 5 System Users Seeded:');
+  console.log('   - Administrator: admin@store.com / password123');
+  console.log('   - Store Manager: manager@store.com / password123');
+  console.log('   - Storekeeper: keeper@store.com / password123');
+  console.log('   - Auditor: auditor@store.com / password123');
+  console.log('   - Requester: requester@store.com / password123');
+
+  // 3. Employees
+  const emp1 = await prisma.employee.upsert({
+    where: { employeeCode: 'EMP-101' },
+    update: {},
+    create: {
+      employeeCode: 'EMP-101',
+      fullName: 'Dr. Chala Bekele',
+      email: 'chala.bekele@university.edu',
+      phone: '+251911556677',
+      position: 'Assistant Professor',
+      departmentId: csDept.id,
+    },
+  });
+
+  const emp2 = await prisma.employee.upsert({
+    where: { employeeCode: 'EMP-102' },
+    update: {},
+    create: {
+      employeeCode: 'EMP-102',
+      fullName: 'Sara Tadesse',
+      email: 'sara.tadesse@university.edu',
+      phone: '+251911889900',
+      position: 'Lab Technologist',
+      departmentId: eeDept.id,
+    },
+  });
+
+  console.log('✅ Employees seeded');
+
+  // 4. Suppliers
+  const supp1 = await prisma.supplier.upsert({
+    where: { supplierCode: 'SUP-001' },
+    update: {},
+    create: {
+      supplierCode: 'SUP-001',
+      name: 'Ethio Stationery Supplies PLC',
+      contactPerson: 'Mulugeta Alemu',
+      email: 'info@ethiostationery.com',
+      phone: '+251111552233',
+      address: 'Arada Sub-City, Addis Ababa',
+      status: SupplierStatus.ACTIVE,
+    },
+  });
+
+  const supp2 = await prisma.supplier.upsert({
+    where: { supplierCode: 'SUP-002' },
+    update: {},
+    create: {
+      supplierCode: 'SUP-002',
+      name: 'Global IT Hardware Distributors',
+      contactPerson: 'Kethan Patel',
+      email: 'sales@globalithardware.com',
+      phone: '+251116633444',
+      address: 'Bole Sub-City, Addis Ababa',
+      status: SupplierStatus.ACTIVE,
+    },
+  });
+
+  console.log('✅ Suppliers seeded');
+
+  // 5. Material Categories
+  const catOffice = await prisma.materialCategory.upsert({
+    where: { name: 'Office & Paper Supplies' },
+    update: {},
+    create: {
+      name: 'Office & Paper Supplies',
+      description: 'A4 Paper, Markers, Folders, Pens, Staples',
+    },
+  });
+
+  const catIT = await prisma.materialCategory.upsert({
+    where: { name: 'IT & Electronics' },
+    update: {},
+    create: {
+      name: 'IT & Electronics',
+      description: 'Computers, Keyboards, Ethernet Cables, Toners',
+    },
+  });
+
+  const catFurniture = await prisma.materialCategory.upsert({
+    where: { name: 'Furniture & Fixtures' },
+    update: {},
+    create: {
+      name: 'Furniture & Fixtures',
+      description: 'Office Chairs, Desks, Storage Cabinets',
+    },
+  });
+
+  console.log('✅ Material Categories seeded');
+
+  // 6. Materials
+  const matPaper = await prisma.material.upsert({
+    where: { materialCode: 'MAT-1001' },
+    update: {},
+    create: {
+      materialCode: 'MAT-1001',
+      name: 'A4 Printing Paper (80gsm)',
+      unit: 'Ream',
+      minimumStock: 20,
+      location: 'Shelf A-01',
+      barcode: '8901234567890',
+      description: 'Standard 80gsm white A4 printing reams (500 sheets/ream)',
+      categoryId: catOffice.id,
+      status: MaterialStatus.ACTIVE,
+    },
+  });
+
+  const matPen = await prisma.material.upsert({
+    where: { materialCode: 'MAT-1002' },
+    update: {},
+    create: {
+      materialCode: 'MAT-1002',
+      name: 'Blue Ballpoint Pens (Box of 50)',
+      unit: 'Box',
+      minimumStock: 10,
+      location: 'Shelf A-02',
+      barcode: '8901234567891',
+      description: 'Smooth writing medium ballpoint pens',
+      categoryId: catOffice.id,
+      status: MaterialStatus.ACTIVE,
+    },
+  });
+
+  const matCable = await prisma.material.upsert({
+    where: { materialCode: 'MAT-2001' },
+    update: {},
+    create: {
+      materialCode: 'MAT-2001',
+      name: 'CAT6 Ethernet Cable (305m Roll)',
+      unit: 'Roll',
+      minimumStock: 3,
+      location: 'Rack B-05',
+      barcode: '8901234567892',
+      description: 'High speed gigabit UTP network cable roll',
+      categoryId: catIT.id,
+      status: MaterialStatus.ACTIVE,
+    },
+  });
+
+  const matToner = await prisma.material.upsert({
+    where: { materialCode: 'MAT-2002' },
+    update: {},
+    create: {
+      materialCode: 'MAT-2002',
+      name: 'HP LaserJet Toner Cartridge 85A',
+      unit: 'Piece',
+      minimumStock: 5,
+      location: 'Rack B-08',
+      barcode: '8901234567893',
+      description: 'Black LaserJet printer toner cartridge',
+      categoryId: catIT.id,
+      status: MaterialStatus.ACTIVE,
+    },
+  });
+
+  const matChair = await prisma.material.upsert({
+    where: { materialCode: 'MAT-3001' },
+    update: {},
+    create: {
+      materialCode: 'MAT-3001',
+      name: 'Ergonomic Mesh Office Chair',
+      unit: 'Piece',
+      minimumStock: 4,
+      location: 'Warehouse Floor Bay 3',
+      barcode: '8901234567894',
+      description: 'Adjustable height mesh back office swivel chair',
+      categoryId: catFurniture.id,
+      status: MaterialStatus.ACTIVE,
+    },
+  });
+
+  console.log('✅ Materials seeded');
+
+  // 7. Stock Summaries (Initial Stock In)
+  await prisma.stockSummary.upsert({
+    where: { materialId: matPaper.id },
+    update: { quantityReceived: 100, quantityIssued: 15, remainingQuantity: 85 },
+    create: {
+      materialId: matPaper.id,
+      quantityReceived: 100,
+      quantityIssued: 15,
+      remainingQuantity: 85,
+    },
+  });
+
+  await prisma.stockSummary.upsert({
+    where: { materialId: matPen.id },
+    update: { quantityReceived: 50, quantityIssued: 10, remainingQuantity: 40 },
+    create: {
+      materialId: matPen.id,
+      quantityReceived: 50,
+      quantityIssued: 10,
+      remainingQuantity: 40,
+    },
+  });
+
+  await prisma.stockSummary.upsert({
+    where: { materialId: matCable.id },
+    update: { quantityReceived: 10, quantityIssued: 8, remainingQuantity: 2 }, // Low stock! (Min is 3)
+    create: {
+      materialId: matCable.id,
+      quantityReceived: 10,
+      quantityIssued: 8,
+      remainingQuantity: 2,
+    },
+  });
+
+  await prisma.stockSummary.upsert({
+    where: { materialId: matToner.id },
+    update: { quantityReceived: 25, quantityIssued: 5, remainingQuantity: 20 },
+    create: {
+      materialId: matToner.id,
+      quantityReceived: 25,
+      quantityIssued: 5,
+      remainingQuantity: 20,
+    },
+  });
+
+  await prisma.stockSummary.upsert({
+    where: { materialId: matChair.id },
+    update: { quantityReceived: 15, quantityIssued: 12, remainingQuantity: 3 }, // Low stock! (Min is 4)
+    create: {
+      materialId: matChair.id,
+      quantityReceived: 15,
+      quantityIssued: 12,
+      remainingQuantity: 3,
+    },
+  });
+
+  console.log('✅ Stock Summaries seeded');
+
+  // 8. Sample Stock In Transactions
+  await prisma.inventoryTransaction.createMany({
+    data: [
+      {
+        transactionCode: 'TXN-IN-001',
+        type: TransactionType.STOCK_IN,
+        materialId: matPaper.id,
+        quantity: 100,
+        unitPrice: 450.00,
+        supplierId: supp1.id,
+        issuedById: keeper.id,
+        approvedById: manager.id,
+        purpose: 'Initial Store Procurement',
+        remarks: 'Received in good condition',
+      },
+      {
+        transactionCode: 'TXN-IN-002',
+        type: TransactionType.STOCK_IN,
+        materialId: matCable.id,
+        quantity: 10,
+        unitPrice: 2800.00,
+        supplierId: supp2.id,
+        issuedById: keeper.id,
+        approvedById: manager.id,
+        purpose: 'Network Lab Upgrade Stocking',
+        remarks: 'Delivered by Global IT',
+      },
+    ],
+    skipDuplicates: true,
+  });
+
+  // 9. Sample Material Requests
+  // Pending request
+  const req1 = await prisma.materialRequest.upsert({
+    where: { requestNumber: 'REQ-2026-001' },
+    update: {},
+    create: {
+      requestNumber: 'REQ-2026-001',
+      purpose: 'End of Semester Examinations Printing',
+      status: RequestStatus.PENDING,
+      requesterId: requester.id,
+      departmentId: csDept.id,
+      items: {
+        create: [
+          { materialId: matPaper.id, quantityRequested: 10, quantityIssued: 0 },
+          { materialId: matPen.id, quantityRequested: 2, quantityIssued: 0 },
+        ],
+      },
+    },
+  });
+
+  // Approved request ready for Storekeeper to issue
+  const req2 = await prisma.materialRequest.upsert({
+    where: { requestNumber: 'REQ-2026-002' },
+    update: {},
+    create: {
+      requestNumber: 'REQ-2026-002',
+      purpose: 'Lab Setup & Printer Maintenance',
+      status: RequestStatus.APPROVED,
+      managerRemarks: 'Approved for CS Department Computer Lab 2',
+      requesterId: requester.id,
+      departmentId: csDept.id,
+      approvedById: manager.id,
+      approvedAt: new Date(),
+      items: {
+        create: [
+          { materialId: matToner.id, quantityRequested: 2, quantityIssued: 0 },
+        ],
+      },
+    },
+  });
+
+  // Issued request
+  const req3 = await prisma.materialRequest.upsert({
+    where: { requestNumber: 'REQ-2026-003' },
+    update: {},
+    create: {
+      requestNumber: 'REQ-2026-003',
+      purpose: 'Faculty Office Setup',
+      status: RequestStatus.ISSUED,
+      managerRemarks: 'Approved as requested',
+      requesterId: requester.id,
+      departmentId: csDept.id,
+      approvedById: manager.id,
+      approvedAt: new Date(Date.now() - 86400000),
+      items: {
+        create: [
+          { materialId: matChair.id, quantityRequested: 2, quantityIssued: 2 },
+        ],
+      },
+    },
+  });
+
+  // Stock Out transaction for Issued Request
+  await prisma.inventoryTransaction.upsert({
+    where: { transactionCode: 'TXN-OUT-001' },
+    update: {},
+    create: {
+      transactionCode: 'TXN-OUT-001',
+      type: TransactionType.STOCK_OUT,
+      materialId: matChair.id,
+      quantity: 2,
+      requestId: req3.id,
+      employeeId: emp1.id,
+      departmentId: csDept.id,
+      issuedById: keeper.id,
+      approvedById: manager.id,
+      purpose: 'Faculty Office Setup',
+      remarks: 'Issued 2 mesh chairs to Dr. Chala Bekele',
+    },
+  });
+
+  console.log('✅ Sample Material Requests & Transactions seeded');
+  console.log('🎉 Seed completed successfully!');
 }
 
 main()
   .catch((e) => {
-    console.error(e);
+    console.error('❌ Seeding failed:', e);
     process.exit(1);
   })
   .finally(async () => {

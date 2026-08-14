@@ -1,7 +1,3 @@
-// Prisma schema for the University ERP system.
-// Phase 1.1 adds the first real model: OrganizationUnit — the dynamic org
-// tree every other module (Store, User, Request routing) hangs off of.
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -11,46 +7,33 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-enum OrganizationUnitType {
-  UNIVERSITY
-  COLLEGE
-  DEPARTMENT
-  OFFICE
-  BUREAU
-  DIRECTORATE
-  UNIT
-}
-
-enum OrganizationUnitStatus {
-  ACTIVE
-  INACTIVE
-}
-
-model OrganizationUnit {
-  id     String                 @id @default(uuid())
-  name   String
-  type   OrganizationUnitType
-  status OrganizationUnitStatus @default(ACTIVE)
-
-  parentId String?            @map("parent_id")
-  parent   OrganizationUnit?  @relation("OrganizationHierarchy", fields: [parentId], references: [id])
-  children OrganizationUnit[] @relation("OrganizationHierarchy")
-
-  users          User[]
-  stores         Store[]
-  requests       Request[]
-  assignedAssets Asset[]
-
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
-
-  @@index([parentId])
-  @@map("organization_units")
+enum Role {
+  ADMINISTRATOR
+  STORE_MANAGER
+  STOREKEEPER
+  AUDITOR
+  REQUESTER
 }
 
 enum UserStatus {
   ACTIVE
   INACTIVE
+}
+
+model Department {
+  id          String   @id @default(uuid())
+  code        String   @unique
+  name        String
+  description String?
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  users            User[]
+  employees        Employee[]
+  materialRequests MaterialRequest[]
+  transactions     InventoryTransaction[]
+
+  @@map("departments")
 }
 
 model User {
@@ -59,235 +42,41 @@ model User {
   email        String     @unique
   phone        String?
   passwordHash String     @map("password_hash")
+  role         Role       @default(REQUESTER)
   status       UserStatus @default(ACTIVE)
 
-  organizationId String           @map("organization_id")
-  organization   OrganizationUnit @relation(fields: [organizationId], references: [id])
+  departmentId String?     @map("department_id")
+  department   Department? @relation(fields: [departmentId], references: [id])
 
-  refreshTokens               RefreshToken[]
-  passwordResetTokens         PasswordResetToken[]
-  userRoles                   UserRole[]
-  managedStores               Store[]
-  createdMovements            InventoryMovement[]
-  createdWorkflowInstances    WorkflowInstance[]
-  approvalActions             ApprovalHistory[]
-  requests                    Request[]
-  createdPurchaseOrders       PurchaseOrder[]          @relation("PurchaseOrderCreatedBy")
-  goodsReceipts               GoodsReceipt[]
-  createdDistributionPlans    DistributionPlan[]       @relation("DistributionPlanCreatedBy")
-  confirmedAllocations        DistributionAllocation[] @relation("DistributionConfirmedBy")
-  registeredAssets            Asset[]                  @relation("AssetRegisteredBy")
-  assetHistoryEntries         AssetHistory[]
-  borrowedTransactions        BorrowTransaction[]      @relation("Borrower")
-  issuedBorrowTransactions    BorrowTransaction[]      @relation("BorrowIssuedBy")
-  returnedBorrowTransactions  BorrowTransaction[]      @relation("BorrowReturnedBy")
-  inspectedBorrowTransactions BorrowTransaction[]      @relation("BorrowInspectedBy")
-  disposedAssets              DisposalRecord[]         @relation("AssetDisposedBy")
-  auditLogs                   AuditLog[]
-  notifications               Notification[]
+  submittedRequests MaterialRequest[]      @relation("Requester")
+  approvedRequests  MaterialRequest[]      @relation("ApprovedBy")
+  issuedTransactions InventoryTransaction[] @relation("IssuedBy")
+  approvedTransactions InventoryTransaction[] @relation("ApprovedBy")
+  auditLogs         AuditLog[]
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  @@index([organizationId])
   @@map("users")
 }
 
-// One row per issued refresh token so any single session/device can be
-// revoked (logout) without invalidating every other session, and so token
-// rotation can detect reuse of an already-rotated token.
-model RefreshToken {
-  id        String    @id @default(uuid())
-  tokenHash String    @unique @map("token_hash")
-  userId    String    @map("user_id")
-  user      User      @relation(fields: [userId], references: [id])
-  expiresAt DateTime  @map("expires_at")
-  revokedAt DateTime? @map("revoked_at")
-  createdAt DateTime  @default(now()) @map("created_at")
-
-  @@index([userId])
-  @@map("refresh_tokens")
-}
-
-model PasswordResetToken {
-  id        String    @id @default(uuid())
-  tokenHash String    @unique @map("token_hash")
-  userId    String    @map("user_id")
-  user      User      @relation(fields: [userId], references: [id])
-  expiresAt DateTime  @map("expires_at")
-  usedAt    DateTime? @map("used_at")
-  createdAt DateTime  @default(now()) @map("created_at")
-
-  @@index([userId])
-  @@map("password_reset_tokens")
-}
-
-enum ScopeType {
-  GLOBAL
-  ORGANIZATION
-  STORE
-}
-
-model Role {
-  id          String  @id @default(uuid())
-  code        String  @unique
-  name        String
-  description String?
-  // Seeded system roles (System Administrator, Store Manager, ...) can't be
-  // deleted — only custom roles created later can be.
-  isSystem    Boolean @default(false) @map("is_system")
-
-  rolePermissions RolePermission[]
-  userRoles       UserRole[]
-
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
-
-  @@map("roles")
-}
-
-model Permission {
-  id          String  @id @default(uuid())
-  // Namespaced key, e.g. "inventory.view", "transfer.approve"
-  key         String  @unique
-  description String?
-
-  rolePermissions RolePermission[]
-
-  createdAt DateTime @default(now()) @map("created_at")
-
-  @@map("permissions")
-}
-
-model RolePermission {
+model Employee {
   id           String     @id @default(uuid())
-  roleId       String     @map("role_id")
-  role         Role       @relation(fields: [roleId], references: [id])
-  permissionId String     @map("permission_id")
-  permission   Permission @relation(fields: [permissionId], references: [id])
+  employeeCode String     @unique @map("employee_code")
+  fullName     String     @map("full_name")
+  email        String?
+  phone        String?
+  position     String?
 
-  createdAt DateTime @default(now()) @map("created_at")
+  departmentId String     @map("department_id")
+  department   Department @relation(fields: [departmentId], references: [id])
 
-  @@unique([roleId, permissionId])
-  @@map("role_permissions")
-}
-
-// Assigns a role to a user, scoped to either everything (GLOBAL), a specific
-// organization unit and everything under it (ORGANIZATION), or a specific
-// store only (STORE). scopeId is intentionally a plain string, not a foreign
-// key: it points at OrganizationUnit.id when scopeType=ORGANIZATION, or at a
-// future Store.id when scopeType=STORE (the Store module lands in Phase 2.1),
-// and is null when scopeType=GLOBAL.
-model UserRole {
-  id        String    @id @default(uuid())
-  userId    String    @map("user_id")
-  user      User      @relation(fields: [userId], references: [id])
-  roleId    String    @map("role_id")
-  role      Role      @relation(fields: [roleId], references: [id])
-  scopeType ScopeType @map("scope_type")
-  scopeId   String?   @map("scope_id")
-
-  createdAt DateTime @default(now()) @map("created_at")
-
-  @@unique([userId, roleId, scopeType, scopeId])
-  @@index([userId])
-  @@map("user_roles")
-}
-
-enum StoreStatus {
-  ACTIVE
-  INACTIVE
-}
-
-model Store {
-  id       String      @id @default(uuid())
-  name     String
-  code     String      @unique
-  location String?
-  status   StoreStatus @default(ACTIVE)
-
-  organizationId String           @map("organization_id")
-  organization   OrganizationUnit @relation(fields: [organizationId], references: [id])
-
-  managerId String? @map("manager_id")
-  manager   User?   @relation(fields: [managerId], references: [id])
-
-  inventory               StoreInventory[]
-  movementsOut            InventoryMovement[]      @relation("MovementFromStore")
-  movementsIn             InventoryMovement[]      @relation("MovementToStore")
-  purchaseOrders          PurchaseOrder[]
-  goodsReceipts           GoodsReceipt[]
-  distributionPlansSource DistributionPlan[]
-  distributionAllocations DistributionAllocation[]
-  assets                  Asset[]
-  borrowTransactions      BorrowTransaction[]
-  disposalRecords         DisposalRecord[]
+  transactions InventoryTransaction[]
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  @@index([organizationId])
-  @@index([managerId])
-  @@map("stores")
-}
-
-enum ItemAssetType {
-  // Consumed/used up (paper, cables) — no individual serial tracking, no
-  // linkage to the future Asset module.
-  CONSUMABLE
-  // Tracked as an individual, long-lived asset (laptop, vehicle) — this is
-  // what the Phase 7 Asset module will attach asset_tag/serial tracking to.
-  FIXED_ASSET
-}
-
-enum ItemStatus {
-  ACTIVE
-  INACTIVE
-}
-
-model ItemCategory {
-  id          String  @id @default(uuid())
-  name        String  @unique
-  description String?
-
-  items Item[]
-
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
-
-  @@map("item_categories")
-}
-
-// Items are centralized (spec section 9) — one catalog shared across the
-// whole university, not per-store. Store-level quantities live in the
-// Phase 3 Inventory module (StoreInventory), which references this Item.
-model Item {
-  id             String        @id @default(uuid())
-  name           String
-  description    String?
-  // Free-text unit of measure ("piece", "box", "liter", ...) rather than an
-  // enum — the catalog of possible units is open-ended and store/procurement
-  // staff should be able to use whatever unit fits, not a fixed list.
-  unit           String
-  serialRequired Boolean       @default(false) @map("serial_required")
-  assetType      ItemAssetType @default(CONSUMABLE) @map("asset_type")
-  status         ItemStatus    @default(ACTIVE)
-
-  categoryId String       @map("category_id")
-  category   ItemCategory @relation(fields: [categoryId], references: [id])
-
-  storeInventories        StoreInventory[]
-  movements               InventoryMovement[]
-  purchaseOrderLines      PurchaseOrderLine[]
-  goodsReceiptLines       GoodsReceiptLine[]
-  distributionAllocations DistributionAllocation[]
-  assets                  Asset[]
-
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
-
-  @@index([categoryId])
-  @@map("items")
+  @@map("employees")
 }
 
 enum SupplierStatus {
@@ -296,629 +85,175 @@ enum SupplierStatus {
 }
 
 model Supplier {
-  id             String          @id @default(uuid())
-  name           String
-  contactPerson  String?         @map("contact_person")
-  email          String?
-  phone          String?
-  address        String?
-  tin            String?         @unique
-  status         SupplierStatus  @default(ACTIVE)
-  purchaseOrders PurchaseOrder[]
-  createdAt      DateTime        @default(now()) @map("created_at")
-  updatedAt      DateTime        @updatedAt @map("updated_at")
+  id            String         @id @default(uuid())
+  supplierCode  String         @unique @map("supplier_code")
+  name          String
+  contactPerson String?        @map("contact_person")
+  email         String?
+  phone         String?
+  address       String?
+  status        SupplierStatus @default(ACTIVE)
 
-  @@index([name])
+  transactions InventoryTransaction[]
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
   @@map("suppliers")
 }
 
-enum PurchaseOrderStatus {
-  DRAFT
-  ISSUED
-  PARTIALLY_RECEIVED
-  RECEIVED
-  CANCELLED
-}
-
-model PurchaseOrder {
-  id                   String              @id @default(uuid())
-  poNumber             String              @unique @map("po_number")
-  status               PurchaseOrderStatus @default(DRAFT)
-  currency             String              @default("ETB")
-  notes                String?
-  issuedAt             DateTime?           @map("issued_at")
-  expectedDeliveryDate DateTime?           @map("expected_delivery_date")
-
-  supplierId         String   @map("supplier_id")
-  supplier           Supplier @relation(fields: [supplierId], references: [id])
-  requestId          String   @map("request_id")
-  request            Request  @relation(fields: [requestId], references: [id])
-  destinationStoreId String   @map("destination_store_id")
-  destinationStore   Store    @relation(fields: [destinationStoreId], references: [id])
-  createdById        String   @map("created_by")
-  createdBy          User     @relation("PurchaseOrderCreatedBy", fields: [createdById], references: [id])
-
-  lines     PurchaseOrderLine[]
-  receipts  GoodsReceipt[]
-  createdAt DateTime            @default(now()) @map("created_at")
-  updatedAt DateTime            @updatedAt @map("updated_at")
-
-  @@index([requestId])
-  @@index([supplierId])
-  @@index([destinationStoreId])
-  @@map("purchase_orders")
-}
-
-model PurchaseOrderLine {
-  id               String  @id @default(uuid())
-  orderedQuantity  Int     @map("ordered_quantity")
-  receivedQuantity Int     @default(0) @map("received_quantity")
-  unitPrice        Decimal @map("unit_price") @db.Decimal(18, 2)
-
-  purchaseOrderId String             @map("purchase_order_id")
-  purchaseOrder   PurchaseOrder      @relation(fields: [purchaseOrderId], references: [id])
-  itemId          String             @map("item_id")
-  item            Item               @relation(fields: [itemId], references: [id])
-  receiptLines    GoodsReceiptLine[]
-
-  @@unique([purchaseOrderId, itemId])
-  @@index([itemId])
-  @@map("purchase_order_lines")
-}
-
-model GoodsReceipt {
-  id            String   @id @default(uuid())
-  receiptNumber String   @unique @map("receipt_number")
-  notes         String?
-  receivedAt    DateTime @default(now()) @map("received_at")
-
-  purchaseOrderId String             @map("purchase_order_id")
-  purchaseOrder   PurchaseOrder      @relation(fields: [purchaseOrderId], references: [id])
-  storeId         String             @map("store_id")
-  store           Store              @relation(fields: [storeId], references: [id])
-  receivedById    String             @map("received_by")
-  receivedBy      User               @relation(fields: [receivedById], references: [id])
-  lines           GoodsReceiptLine[]
-  createdAt       DateTime           @default(now()) @map("created_at")
-
-  @@index([purchaseOrderId])
-  @@index([storeId])
-  @@map("goods_receipts")
-}
-
-model GoodsReceiptLine {
-  id               String  @id @default(uuid())
-  acceptedQuantity Int     @map("accepted_quantity")
-  damagedQuantity  Int     @default(0) @map("damaged_quantity")
-  rejectedQuantity Int     @default(0) @map("rejected_quantity")
-  notes            String?
-
-  goodsReceiptId      String            @map("goods_receipt_id")
-  goodsReceipt        GoodsReceipt      @relation(fields: [goodsReceiptId], references: [id])
-  purchaseOrderLineId String            @map("purchase_order_line_id")
-  purchaseOrderLine   PurchaseOrderLine @relation(fields: [purchaseOrderLineId], references: [id])
-  itemId              String            @map("item_id")
-  item                Item              @relation(fields: [itemId], references: [id])
-  assets              Asset[]
-
-  @@unique([goodsReceiptId, purchaseOrderLineId])
-  @@index([purchaseOrderLineId])
-  @@map("goods_receipt_lines")
-}
-
-enum AssetCondition {
-  NEW
-  GOOD
-  FAIR
-  POOR
-  DAMAGED
-}
-
-enum AssetStatus {
-  AVAILABLE
-  ASSIGNED
-  BORROWED
-  UNDER_INSPECTION
-  UNDER_MAINTENANCE
-  DISPOSED
-}
-
-model Asset {
-  id           String         @id @default(uuid())
-  assetTag     String         @unique @map("asset_tag")
-  serialNumber String?        @unique @map("serial_number")
-  purchaseDate DateTime?      @map("purchase_date") @db.Date
-  condition    AssetCondition @default(GOOD)
-  status       AssetStatus    @default(AVAILABLE)
-  notes        String?
-
-  itemId                 String            @map("item_id")
-  item                   Item              @relation(fields: [itemId], references: [id])
-  storeId                String            @map("store_id")
-  store                  Store             @relation(fields: [storeId], references: [id])
-  assignedOrganizationId String?           @map("assigned_organization_id")
-  assignedOrganization   OrganizationUnit? @relation(fields: [assignedOrganizationId], references: [id])
-  goodsReceiptLineId     String?           @map("goods_receipt_line_id")
-  goodsReceiptLine       GoodsReceiptLine? @relation(fields: [goodsReceiptLineId], references: [id])
-  registeredById         String            @map("registered_by")
-  registeredBy           User              @relation("AssetRegisteredBy", fields: [registeredById], references: [id])
-
-  history            AssetHistory[]
-  borrowTransactions BorrowTransaction[]
-  disposalRecord     DisposalRecord?
-  createdAt          DateTime            @default(now()) @map("created_at")
-  updatedAt          DateTime            @updatedAt @map("updated_at")
-
-  @@index([itemId])
-  @@index([storeId])
-  @@index([assignedOrganizationId])
-  @@index([goodsReceiptLineId])
-  @@index([status])
-  @@map("assets")
-}
-
-enum AssetEventType {
-  REGISTERED
-  ASSIGNED
-  UNASSIGNED
-  BORROW_APPROVED
-  BORROW_ISSUED
-  BORROW_RETURNED
-  BORROW_INSPECTED
-  DISPOSED
-  UPDATED
-}
-
-model AssetHistory {
-  id        String         @id @default(uuid())
-  eventType AssetEventType @map("event_type")
-  details   Json?
-  assetId   String         @map("asset_id")
-  asset     Asset          @relation(fields: [assetId], references: [id])
-  actedById String         @map("acted_by")
-  actedBy   User           @relation(fields: [actedById], references: [id])
-  createdAt DateTime       @default(now()) @map("created_at")
-
-  @@index([assetId, createdAt])
-  @@map("asset_history")
-}
-
-enum BorrowStatus {
-  APPROVED
-  ISSUED
-  RETURNED_PENDING_INSPECTION
-  COMPLETED
-}
-
-model BorrowTransaction {
-  id                 String          @id @default(uuid())
-  status             BorrowStatus    @default(APPROVED)
-  purpose            String
-  expectedReturnDate DateTime        @map("expected_return_date") @db.Date
-  issuedAt           DateTime?       @map("issued_at")
-  returnedAt         DateTime?       @map("returned_at")
-  inspectedAt        DateTime?       @map("inspected_at")
-  issueNotes         String?         @map("issue_notes")
-  returnNotes        String?         @map("return_notes")
-  inspectionNotes    String?         @map("inspection_notes")
-  returnCondition    AssetCondition? @map("return_condition")
-
-  requestId     String   @unique @map("request_id")
-  request       Request  @relation(fields: [requestId], references: [id])
-  assetId       String   @map("asset_id")
-  asset         Asset    @relation(fields: [assetId], references: [id])
-  storeId       String   @map("store_id")
-  store         Store    @relation(fields: [storeId], references: [id])
-  borrowerId    String   @map("borrower_id")
-  borrower      User     @relation("Borrower", fields: [borrowerId], references: [id])
-  issuedById    String?  @map("issued_by")
-  issuedBy      User?    @relation("BorrowIssuedBy", fields: [issuedById], references: [id])
-  returnedById  String?  @map("returned_by")
-  returnedBy    User?    @relation("BorrowReturnedBy", fields: [returnedById], references: [id])
-  inspectedById String?  @map("inspected_by")
-  inspectedBy   User?    @relation("BorrowInspectedBy", fields: [inspectedById], references: [id])
-  createdAt     DateTime @default(now()) @map("created_at")
-  updatedAt     DateTime @updatedAt @map("updated_at")
-
-  @@index([assetId])
-  @@index([borrowerId])
-  @@index([storeId])
-  @@index([status])
-  @@map("borrow_transactions")
-}
-
-model DisposalRecord {
-  id                String   @id @default(uuid())
-  certificateNumber String   @unique @map("certificate_number")
-  reason            String
-  method            String
-  inspectionNotes   String?  @map("inspection_notes")
-  disposedAt        DateTime @default(now()) @map("disposed_at")
-
-  requestId    String   @unique @map("request_id")
-  request      Request  @relation(fields: [requestId], references: [id])
-  assetId      String   @unique @map("asset_id")
-  asset        Asset    @relation(fields: [assetId], references: [id])
-  storeId      String   @map("store_id")
-  store        Store    @relation(fields: [storeId], references: [id])
-  disposedById String   @map("disposed_by")
-  disposedBy   User     @relation("AssetDisposedBy", fields: [disposedById], references: [id])
-  createdAt    DateTime @default(now()) @map("created_at")
-
-  @@index([storeId])
-  @@map("disposal_records")
-}
-
-enum DistributionPlanStatus {
-  DRAFT
-  ACTIVE
-  COMPLETED
-  CANCELLED
-}
-
-enum DistributionAllocationStatus {
-  PENDING
-  CONFIRMED
-}
-
-model DistributionPlan {
-  id         String                 @id @default(uuid())
-  planNumber String                 @unique @map("plan_number")
-  status     DistributionPlanStatus @default(DRAFT)
-  notes      String?
-
-  sourceStoreId String                   @map("source_store_id")
-  sourceStore   Store                    @relation(fields: [sourceStoreId], references: [id])
-  createdById   String                   @map("created_by")
-  createdBy     User                     @relation("DistributionPlanCreatedBy", fields: [createdById], references: [id])
-  allocations   DistributionAllocation[]
-  createdAt     DateTime                 @default(now()) @map("created_at")
-  updatedAt     DateTime                 @updatedAt @map("updated_at")
-
-  @@index([sourceStoreId])
-  @@map("distribution_plans")
-}
-
-model DistributionAllocation {
-  id          String                       @id @default(uuid())
-  quantity    Int
-  status      DistributionAllocationStatus @default(PENDING)
-  confirmedAt DateTime?                    @map("confirmed_at")
-
-  distributionPlanId String           @map("distribution_plan_id")
-  distributionPlan   DistributionPlan @relation(fields: [distributionPlanId], references: [id])
-  itemId             String           @map("item_id")
-  item               Item             @relation(fields: [itemId], references: [id])
-  destinationStoreId String           @map("destination_store_id")
-  destinationStore   Store            @relation(fields: [destinationStoreId], references: [id])
-  confirmedById      String?          @map("confirmed_by")
-  confirmedBy        User?            @relation("DistributionConfirmedBy", fields: [confirmedById], references: [id])
-
-  @@unique([distributionPlanId, itemId, destinationStoreId])
-  @@index([destinationStoreId])
-  @@map("distribution_allocations")
-}
-
-// Per-store quantity for a given item. NEVER written to directly by any
-// endpoint — only MovementService touches this table, always inside the
-// same transaction as the InventoryMovement row that justifies the change.
-model StoreInventory {
-  id           String  @id @default(uuid())
-  quantity     Int     @default(0)
-  minimumStock Int     @default(0) @map("minimum_stock")
-  location     String?
-
-  storeId String @map("store_id")
-  store   Store  @relation(fields: [storeId], references: [id])
-  itemId  String @map("item_id")
-  item    Item   @relation(fields: [itemId], references: [id])
-
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
-
-  @@unique([storeId, itemId])
-  @@index([storeId])
-  @@index([itemId])
-  @@map("store_inventory")
-}
-
-enum MovementType {
-  PURCHASE_RECEIVE
-  TRANSFER_OUT
-  TRANSFER_IN
-  ISSUE
-  RETURN
-  DISPOSAL
-  ADJUSTMENT
-}
-
-// The append-only ledger. Every StoreInventory change must be accompanied by
-// exactly one row here (or two, for a transfer's OUT+IN pair) written in the
-// same DB transaction — this table is the "why" behind every quantity.
-// referenceId is a free string, not a foreign key: it'll point at a Request,
-// Transfer, Purchase, or Disposal record once those modules exist (Phase 5+),
-// and is left blank for movements triggered directly (e.g. manual adjustment).
-model InventoryMovement {
-  id           String       @id @default(uuid())
-  quantity     Int
-  movementType MovementType @map("movement_type")
-  referenceId  String?      @map("reference_id")
-  // Set for workflow-driven execution so retries cannot apply the same
-  // business action twice. Direct/manual movements leave this null.
-  executionKey String?      @unique @map("execution_key")
-
-  itemId String @map("item_id")
-  item   Item   @relation(fields: [itemId], references: [id])
-
-  fromStoreId String? @map("from_store_id")
-  fromStore   Store?  @relation("MovementFromStore", fields: [fromStoreId], references: [id])
-  toStoreId   String? @map("to_store_id")
-  toStore     Store?  @relation("MovementToStore", fields: [toStoreId], references: [id])
-
-  createdById String   @map("created_by")
-  createdBy   User     @relation(fields: [createdById], references: [id])
+model MaterialCategory {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  description String?
   createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
 
-  @@index([itemId])
-  @@index([fromStoreId])
-  @@index([toStoreId])
-  @@map("inventory_movements")
+  materials Material[]
+
+  @@map("material_categories")
 }
 
-// How a step's eligible approver(s) get resolved at runtime, using data from
-// the instance's contextData JSON. All four reuse the existing RBAC scope
-// model (Phase 1.3) rather than inventing a parallel authorization system:
-enum ApproverResolutionType {
-  // Any user holding roleCode, at any scope (e.g. Finance Officer, Procurement Officer).
-  FIXED_ROLE
-  // Any user holding roleCode scoped (ORGANIZATION or GLOBAL) to the org unit
-  // found at contextData[contextOrgKey] — e.g. "requester's department head".
-  ORG_ROLE_AT_CONTEXT_ORG
-  // Any user holding roleCode scoped (STORE, ORGANIZATION, or GLOBAL) to the
-  // store found at contextData[contextStoreKey] — e.g. "store manager of the
-  // source/destination store".
-  STORE_ROLE_AT_CONTEXT_STORE
-  // Any user holding roleCode scoped to the PARENT of the org unit found at
-  // contextData[contextOrgKey] — e.g. "next org level up".
-  ORG_ROLE_AT_NEXT_LEVEL_UP
+enum MaterialStatus {
+  ACTIVE
+  INACTIVE
 }
 
-model WorkflowTemplate {
-  id       String  @id @default(uuid())
-  // e.g. "TRANSFER_REQUEST", "PURCHASE_REQUEST" — what Phase 5+ modules
-  // reference when starting an instance.
-  code     String  @unique
-  name     String
-  isActive Boolean @default(true) @map("is_active")
+model Material {
+  id           String         @id @default(uuid())
+  materialCode String         @unique @map("material_code")
+  name         String
+  unit         String         // e.g. Box, Piece, Pack, Ream, Roll
+  minimumStock Int            @default(5) @map("minimum_stock")
+  location     String?        // Shelf / Rack location e.g. "Shelf A-12"
+  barcode      String?        @unique
+  description  String?
+  status       MaterialStatus @default(ACTIVE)
 
-  steps     WorkflowStepTemplate[]
-  instances WorkflowInstance[]
+  categoryId String           @map("category_id")
+  category   MaterialCategory @relation(fields: [categoryId], references: [id])
+
+  stockSummary StockSummary?
+  requestItems MaterialRequestItem[]
+  transactions InventoryTransaction[]
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  @@map("workflow_templates")
+  @@map("materials")
 }
 
-model WorkflowStepTemplate {
-  id    String @id @default(uuid())
-  order Int
-  name  String
+// Stores calculated stock levels for real-time tracking
+model StockSummary {
+  id                String   @id @default(uuid())
+  materialId        String   @unique @map("material_id")
+  material          Material @relation(fields: [materialId], references: [id], onDelete: Cascade)
+  quantityReceived  Int      @default(0) @map("quantity_received")
+  quantityIssued    Int      @default(0) @map("quantity_issued")
+  remainingQuantity Int      @default(0) @map("remaining_quantity")
+  updatedAt         DateTime @updatedAt @map("updated_at")
 
-  approverResolutionType ApproverResolutionType @map("approver_resolution_type")
-  // Required for FIXED_ROLE, ORG_ROLE_AT_CONTEXT_ORG, STORE_ROLE_AT_CONTEXT_STORE,
-  // ORG_ROLE_AT_NEXT_LEVEL_UP — the Role.code to check for.
-  roleCode               String?                @map("role_code")
-  // Required for ORG_ROLE_AT_CONTEXT_ORG / ORG_ROLE_AT_NEXT_LEVEL_UP — which
-  // key in the instance's contextData JSON holds the relevant org unit id.
-  contextOrgKey          String?                @map("context_org_key")
-  // Required for STORE_ROLE_AT_CONTEXT_STORE — which key in contextData
-  // holds the relevant store id.
-  contextStoreKey        String?                @map("context_store_key")
-
-  workflowTemplateId String           @map("workflow_template_id")
-  workflowTemplate   WorkflowTemplate @relation(fields: [workflowTemplateId], references: [id])
-
-  createdAt DateTime @default(now()) @map("created_at")
-
-  @@unique([workflowTemplateId, order])
-  @@map("workflow_step_templates")
-}
-
-enum WorkflowInstanceStatus {
-  PENDING
-  APPROVED
-  REJECTED
-  CANCELLED
-}
-
-// One running approval chain, attached to some entity elsewhere in the
-// system. entityType/entityId are deliberately free strings, not a foreign
-// key, since Phase 4 has no entities of its own yet — Phase 5+ modules
-// (Request, Transfer, Purchase, Disposal, Borrow) will each pass their own
-// entityType ("TRANSFER_REQUEST") and their record's id here.
-model WorkflowInstance {
-  id               String                 @id @default(uuid())
-  entityType       String                 @map("entity_type")
-  entityId         String                 @map("entity_id")
-  status           WorkflowInstanceStatus @default(PENDING)
-  currentStepOrder Int                    @map("current_step_order")
-  // Arbitrary key-value data steps' approver resolution reads from —
-  // e.g. { "requesterOrganizationId": "...", "sourceStoreId": "...",
-  // "destinationStoreId": "..." }.
-  contextData      Json                   @map("context_data")
-
-  workflowTemplateId String           @map("workflow_template_id")
-  workflowTemplate   WorkflowTemplate @relation(fields: [workflowTemplateId], references: [id])
-
-  createdById String @map("created_by")
-  createdBy   User   @relation(fields: [createdById], references: [id])
-
-  history ApprovalHistory[]
-  request Request?
-
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
-
-  @@index([entityType, entityId])
-  @@map("workflow_instances")
-}
-
-enum ApprovalAction {
-  APPROVED
-  REJECTED
-  CANCELLED
-}
-
-model ApprovalHistory {
-  id        String         @id @default(uuid())
-  stepOrder Int            @map("step_order")
-  action    ApprovalAction
-  comment   String?
-
-  workflowInstanceId String           @map("workflow_instance_id")
-  workflowInstance   WorkflowInstance @relation(fields: [workflowInstanceId], references: [id])
-
-  actedById String @map("acted_by")
-  actedBy   User   @relation(fields: [actedById], references: [id])
-
-  createdAt DateTime @default(now()) @map("created_at")
-
-  @@index([workflowInstanceId])
-  @@map("approval_history")
-}
-
-enum RequestType {
-  ITEM_REQUEST
-  TRANSFER_REQUEST
-  PURCHASE_REQUEST
-  DISTRIBUTION_REQUEST
-  BORROW_REQUEST
-  DISPOSAL_REQUEST
-  EXTERNAL_REQUEST
+  @@map("stock_summaries")
 }
 
 enum RequestStatus {
-  DRAFT
-  SUBMITTED
-  PENDING_APPROVAL
+  PENDING
   APPROVED
-  EXECUTED
-  COMPLETED
   REJECTED
+  ISSUED
   CANCELLED
 }
 
-// The generic core every request type (spec section 12) builds on. `details`
-// is a JSON blob rather than one table per type — Phase 5 only fully
-// implements ITEM_REQUEST and TRANSFER_REQUEST end-to-end; Purchase,
-// Distribution, Borrow, and Disposal (Phase 6/7) can create Requests of
-// their own type immediately, using this same lifecycle and workflow
-// plumbing, without a schema change — RequestService just needs its own
-// details-shape validation and execute-on-approval logic added for each.
-model Request {
-  id      String        @id @default(uuid())
-  type    RequestType
-  status  RequestStatus @default(DRAFT)
-  // Shape depends on `type` — see RequestService for what each type expects.
-  // e.g. ITEM_REQUEST: { itemId, targetStoreId, quantity, notes? }
-  //      TRANSFER_REQUEST: { itemId, sourceStoreId, destinationStoreId, quantity, notes? }
-  details Json
+model MaterialRequest {
+  id            String        @id @default(uuid())
+  requestNumber String        @unique @map("request_number")
+  purpose       String
+  status        RequestStatus @default(PENDING)
+  managerRemarks String?      @map("manager_remarks")
 
   requesterId String @map("requester_id")
-  requester   User   @relation(fields: [requesterId], references: [id])
+  requester   User   @relation("Requester", fields: [requesterId], references: [id])
 
-  // The requester's org unit at time of request — this is what workflow
-  // steps like "requester's department head" resolve against.
-  organizationId String           @map("organization_id")
-  organization   OrganizationUnit @relation(fields: [organizationId], references: [id])
+  departmentId String     @map("department_id")
+  department   Department @relation(fields: [departmentId], references: [id])
 
-  workflowInstanceId String?            @unique @map("workflow_instance_id")
-  workflowInstance   WorkflowInstance?  @relation(fields: [workflowInstanceId], references: [id])
-  purchaseOrders     PurchaseOrder[]
-  borrowTransaction  BorrowTransaction?
-  disposalRecord     DisposalRecord?
+  approvedById String?   @map("approved_by_id")
+  approvedBy   User?     @relation("ApprovedBy", fields: [approvedById], references: [id])
+  approvedAt   DateTime? @map("approved_at")
+
+  items        MaterialRequestItem[]
+  transactions InventoryTransaction[]
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  @@index([requesterId])
-  @@index([status])
-  @@map("requests")
+  @@map("material_requests")
 }
 
-// ---------------------------------------------------------------------------
-// Phase 8 — Audit
-// ---------------------------------------------------------------------------
+model MaterialRequestItem {
+  id                String          @id @default(uuid())
+  requestId         String          @map("request_id")
+  request           MaterialRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  materialId        String          @map("material_id")
+  material          Material        @relation(fields: [materialId], references: [id])
+  quantityRequested Int             @map("quantity_requested")
+  quantityIssued    Int             @default(0) @map("quantity_issued")
 
-enum AuditAction {
-  CREATE
-  UPDATE
-  DELETE
-  DEACTIVATE
-  LOGIN
-  LOGOUT
-  PASSWORD_RESET
-  ROLE_ASSIGNED
-  ROLE_REVOKED
+  @@map("material_request_items")
 }
 
-// Tracks administrative/config-level events (user created, role assigned, store
-// deactivated, login, etc.) — events that don't have a more specific home in
-// InventoryMovement, AssetHistory, or ApprovalHistory.
+enum TransactionType {
+  STOCK_IN
+  STOCK_OUT
+  RETURN
+  ADJUSTMENT
+  TRANSFER
+}
+
+model InventoryTransaction {
+  id              String          @id @default(uuid())
+  transactionCode String          @unique @map("transaction_code")
+  type            TransactionType
+  quantity        Int
+  unitPrice       Decimal?        @map("unit_price") @db.Decimal(12, 2)
+  purpose         String?
+  remarks         String?
+
+  materialId String   @map("material_id")
+  material   Material @relation(fields: [materialId], references: [id])
+
+  requestId String?          @map("request_id")
+  request   MaterialRequest? @relation(fields: [requestId], references: [id])
+
+  supplierId String?   @map("supplier_id")
+  supplier   Supplier? @relation(fields: [supplierId], references: [id])
+
+  employeeId String?   @map("employee_id")
+  employee   Employee? @relation(fields: [employeeId], references: [id])
+
+  departmentId String?     @map("department_id")
+  department   Department? @relation(fields: [departmentId], references: [id])
+
+  issuedById String? @map("issued_by_id")
+  issuedBy   User?   @relation("IssuedBy", fields: [issuedById], references: [id])
+
+  approvedById String? @map("approved_by_id")
+  approvedBy   User?   @relation("ApprovedBy", fields: [approvedById], references: [id])
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("inventory_transactions")
+}
+
 model AuditLog {
-  id         String      @id @default(uuid())
-  entityType String      @map("entity_type")
-  entityId   String      @map("entity_id")
-  action     AuditAction
-  before     Json?       // snapshot of relevant fields before the change
-  after      Json?       // snapshot of relevant fields after the change
-
-  actedById String   @map("acted_by")
-  actedBy   User     @relation(fields: [actedById], references: [id])
+  id        String   @id @default(uuid())
+  userId    String?  @map("user_id")
+  user      User?    @relation(fields: [userId], references: [id])
+  action    String
+  module    String
+  details   String?
+  ipAddress String?  @map("ip_address")
   createdAt DateTime @default(now()) @map("created_at")
 
-  @@index([entityType, entityId])
-  @@index([actedById])
-  @@index([createdAt])
   @@map("audit_logs")
-}
-
-// ---------------------------------------------------------------------------
-// Phase 8 — Notifications
-// ---------------------------------------------------------------------------
-
-enum NotificationType {
-  REQUEST_SUBMITTED
-  APPROVAL_REQUIRED
-  REQUEST_APPROVED
-  REQUEST_REJECTED
-  REQUEST_COMPLETED
-  REQUEST_CANCELLED
-  STOCK_LOW
-  GOODS_RECEIVED
-  TRANSFER_COMPLETED
-  BORROW_ISSUED
-  BORROW_RETURNED
-  DISPOSAL_COMPLETED
-  DISTRIBUTION_CONFIRMED
-}
-
-model Notification {
-  id         String           @id @default(uuid())
-  type       NotificationType
-  title      String
-  body       String
-  isRead     Boolean          @default(false) @map("is_read")
-  // Optional link back to the triggering entity so the frontend can navigate
-  entityType String?          @map("entity_type")
-  entityId   String?          @map("entity_id")
-
-  userId    String   @map("user_id")
-  user      User     @relation(fields: [userId], references: [id])
-  createdAt DateTime @default(now()) @map("created_at")
-
-  @@index([userId, isRead])
-  @@index([userId, createdAt])
-  @@map("notifications")
 }

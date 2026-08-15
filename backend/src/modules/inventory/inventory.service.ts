@@ -34,6 +34,14 @@ export interface AdjustmentDto {
   reason: string;
 }
 
+export interface TransferDto {
+  materialId: string;
+  quantity: number;
+  toDepartmentId: string;
+  purpose?: string;
+  remarks?: string;
+}
+
 @Injectable()
 export class InventoryService {
   constructor(private readonly prisma: PrismaService) {}
@@ -48,8 +56,9 @@ export class InventoryService {
       throw new NotFoundException(`Material ${dto.materialId} not found`);
     }
 
-    const count = await this.prisma.inventoryTransaction.count();
-    const txnCode = `TXN-IN-${String(count + 1).padStart(4, '0')}`;
+    const timeStamp = Date.now().toString().slice(-6);
+    const rand = Math.floor(100 + Math.random() * 900);
+    const txnCode = `TXN-IN-${timeStamp}-${rand}`;
 
     return this.prisma.$transaction(async (tx) => {
       const transaction = await tx.inventoryTransaction.create({
@@ -106,8 +115,9 @@ export class InventoryService {
       );
     }
 
-    const count = await this.prisma.inventoryTransaction.count();
-    const txnCode = `TXN-OUT-${String(count + 1).padStart(4, '0')}`;
+    const timeStamp = Date.now().toString().slice(-6);
+    const rand = Math.floor(100 + Math.random() * 900);
+    const txnCode = `TXN-OUT-${timeStamp}-${rand}`;
 
     return this.prisma.$transaction(async (tx) => {
       const transaction = await tx.inventoryTransaction.create({
@@ -152,8 +162,9 @@ export class InventoryService {
       throw new NotFoundException(`Material ${dto.materialId} not found`);
     }
 
-    const count = await this.prisma.inventoryTransaction.count();
-    const txnCode = `TXN-RET-${String(count + 1).padStart(4, '0')}`;
+    const timeStamp = Date.now().toString().slice(-6);
+    const rand = Math.floor(100 + Math.random() * 900);
+    const txnCode = `TXN-RET-${timeStamp}-${rand}`;
 
     return this.prisma.$transaction(async (tx) => {
       const transaction = await tx.inventoryTransaction.create({
@@ -201,8 +212,9 @@ export class InventoryService {
     const currentRemaining = material.stockSummary?.remainingQuantity ?? 0;
     const diff = dto.newQuantity - currentRemaining;
 
-    const count = await this.prisma.inventoryTransaction.count();
-    const txnCode = `TXN-ADJ-${String(count + 1).padStart(4, '0')}`;
+    const timeStamp = Date.now().toString().slice(-6);
+    const rand = Math.floor(100 + Math.random() * 900);
+    const txnCode = `TXN-ADJ-${timeStamp}-${rand}`;
 
     return this.prisma.$transaction(async (tx) => {
       const transaction = await tx.inventoryTransaction.create({
@@ -225,6 +237,50 @@ export class InventoryService {
         where: { materialId: dto.materialId },
         data: {
           remainingQuantity: dto.newQuantity,
+        },
+      });
+
+      return transaction;
+    });
+  }
+
+  /** Material Transfer (Transfer materials between stores or departments) */
+  async transferMaterial(storekeeperId: string, dto: TransferDto) {
+    const material = await this.prisma.material.findUnique({
+      where: { id: dto.materialId },
+      include: { stockSummary: true },
+    });
+    if (!material) {
+      throw new NotFoundException(`Material ${dto.materialId} not found`);
+    }
+
+    const available = material.stockSummary?.remainingQuantity ?? 0;
+    if (available < dto.quantity) {
+      throw new BadRequestException(
+        `Cannot transfer ${dto.quantity} ${material.unit}(s). Only ${available} available in stock.`,
+      );
+    }
+
+    const timeStamp = Date.now().toString().slice(-6);
+    const rand = Math.floor(100 + Math.random() * 900);
+    const txnCode = `TXN-TRF-${timeStamp}-${rand}`;
+
+    return this.prisma.$transaction(async (tx) => {
+      const transaction = await tx.inventoryTransaction.create({
+        data: {
+          transactionCode: txnCode,
+          type: TransactionType.TRANSFER,
+          materialId: dto.materialId,
+          quantity: dto.quantity,
+          departmentId: dto.toDepartmentId,
+          issuedById: storekeeperId,
+          purpose: dto.purpose || 'Inter-Department Material Transfer',
+          remarks: dto.remarks || `Transferred to department`,
+        },
+        include: {
+          material: true,
+          department: true,
+          issuedBy: { select: { fullName: true } },
         },
       });
 

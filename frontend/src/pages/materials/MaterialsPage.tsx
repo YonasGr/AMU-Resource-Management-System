@@ -103,7 +103,7 @@ export default function MaterialsPage() {
     createCategoryMutation.mutate({ name: newCatName, description: newCatDesc });
   };
 
-  const canManage = user?.role === 'ADMINISTRATOR' || user?.role === 'STORE_MANAGER' || user?.role === 'STOREKEEPER';
+  const canManage = user?.role === 'ADMINISTRATOR';
 
   return (
     <div className="space-y-6">

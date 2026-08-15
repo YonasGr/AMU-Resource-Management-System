@@ -1,11 +1,17 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../lib/api';
-import { Repeat, ArrowDownLeft, ArrowUpRight, RotateCcw, Sliders, History } from 'lucide-react';
+import { Repeat, ArrowDownLeft, ArrowUpRight, RotateCcw, Sliders, History, ArrowRightLeft } from 'lucide-react';
+import { useAuthStore } from '../../store/auth.store';
 
 export default function InventoryPage() {
   const queryClient = useQueryClient();
-  const [activeTab, setActiveTab] = useState<'in' | 'out' | 'return' | 'adjust' | 'history'>('in');
+  const user = useAuthStore((s) => s.user);
+  const isKeeper = user?.role === 'STOREKEEPER';
+
+  const [activeTab, setActiveTab] = useState<'in' | 'out' | 'return' | 'transfer' | 'adjust' | 'history'>(
+    isKeeper ? 'in' : 'history',
+  );
 
   // Common Form States
   const [materialId, setMaterialId] = useState('');
@@ -117,6 +123,19 @@ export default function InventoryPage() {
     },
   });
 
+  const transferMutation = useMutation({
+    mutationFn: async (data: any) => {
+      const res = await api.post('/inventory/transfer', data);
+      return res.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['materials'] });
+      queryClient.invalidateQueries({ queryKey: ['inventory-transactions'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] });
+      resetForm();
+    },
+  });
+
   const resetForm = () => {
     setMaterialId('');
     setQuantity(1);
@@ -165,6 +184,17 @@ export default function InventoryPage() {
     });
   };
 
+  const handleTransferSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    transferMutation.mutate({
+      materialId,
+      quantity: Number(quantity),
+      toDepartmentId: departmentId,
+      purpose,
+      remarks,
+    });
+  };
+
   const handleAdjustSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     adjustMutation.mutate({
@@ -188,49 +218,64 @@ export default function InventoryPage() {
 
       {/* Action Tabs */}
       <div className="flex border-b border-slate-200 gap-4 text-sm font-semibold overflow-x-auto">
-        <button
-          onClick={() => setActiveTab('in')}
-          className={`pb-3 flex items-center gap-2 transition-colors ${
-            activeTab === 'in'
-              ? 'border-b-2 border-emerald-600 text-emerald-600'
-              : 'text-slate-500 hover:text-slate-800'
-          }`}
-        >
-          <ArrowDownLeft className="h-4 w-4" /> Stock In (Receive Materials)
-        </button>
+        {isKeeper && (
+          <>
+            <button
+              onClick={() => setActiveTab('in')}
+              className={`pb-3 flex items-center gap-2 transition-colors ${
+                activeTab === 'in'
+                  ? 'border-b-2 border-emerald-600 text-emerald-600'
+                  : 'text-slate-500 hover:text-slate-800'
+              }`}
+            >
+              <ArrowDownLeft className="h-4 w-4" /> Stock In (Receive Materials)
+            </button>
 
-        <button
-          onClick={() => setActiveTab('out')}
-          className={`pb-3 flex items-center gap-2 transition-colors ${
-            activeTab === 'out'
-              ? 'border-b-2 border-blue-600 text-blue-600'
-              : 'text-slate-500 hover:text-slate-800'
-          }`}
-        >
-          <ArrowUpRight className="h-4 w-4" /> Stock Out (Direct Issue)
-        </button>
+            <button
+              onClick={() => setActiveTab('out')}
+              className={`pb-3 flex items-center gap-2 transition-colors ${
+                activeTab === 'out'
+                  ? 'border-b-2 border-blue-600 text-blue-600'
+                  : 'text-slate-500 hover:text-slate-800'
+              }`}
+            >
+              <ArrowUpRight className="h-4 w-4" /> Stock Out (Direct Issue)
+            </button>
 
-        <button
-          onClick={() => setActiveTab('return')}
-          className={`pb-3 flex items-center gap-2 transition-colors ${
-            activeTab === 'return'
-              ? 'border-b-2 border-amber-600 text-amber-600'
-              : 'text-slate-500 hover:text-slate-800'
-          }`}
-        >
-          <RotateCcw className="h-4 w-4" /> Material Returns
-        </button>
+            <button
+              onClick={() => setActiveTab('return')}
+              className={`pb-3 flex items-center gap-2 transition-colors ${
+                activeTab === 'return'
+                  ? 'border-b-2 border-amber-600 text-amber-600'
+                  : 'text-slate-500 hover:text-slate-800'
+              }`}
+            >
+              <RotateCcw className="h-4 w-4" /> Material Returns
+            </button>
 
-        <button
-          onClick={() => setActiveTab('adjust')}
-          className={`pb-3 flex items-center gap-2 transition-colors ${
-            activeTab === 'adjust'
-              ? 'border-b-2 border-purple-600 text-purple-600'
-              : 'text-slate-500 hover:text-slate-800'
-          }`}
-        >
-          <Sliders className="h-4 w-4" /> Stock Adjustments
-        </button>
+            <button
+              onClick={() => setActiveTab('adjust')}
+              className={`pb-3 flex items-center gap-2 transition-colors ${
+                activeTab === 'adjust'
+                  ? 'border-b-2 border-purple-600 text-purple-600'
+                  : 'text-slate-500 hover:text-slate-800'
+              }`}
+            >
+              <Sliders className="h-4 w-4" /> Stock Adjustments
+            </button>
+
+            <button
+              onClick={() => setActiveTab('transfer')}
+              className={`pb-3 flex items-center gap-2 transition-colors ${
+                activeTab === 'transfer'
+                  ? 'border-b-2 border-cyan-600 text-cyan-600'
+                  : 'text-slate-500 hover:text-slate-800'
+              }`}
+            >
+              <ArrowRightLeft className="h-4 w-4" /> Material Transfer
+            </button>
+          </>
+        )}
 
         <button
           onClick={() => setActiveTab('history')}
@@ -587,6 +632,92 @@ export default function InventoryPage() {
               className="w-full rounded-xl bg-purple-600 py-3 text-sm font-semibold text-white shadow-lg shadow-purple-600/30 hover:bg-purple-500 transition-colors"
             >
               {adjustMutation.isPending ? 'Adjusting Stock...' : 'Confirm Audit Adjustment'}
+            </button>
+          </form>
+        )}
+
+        {activeTab === 'transfer' && (
+          <form onSubmit={handleTransferSubmit} className="max-w-xl space-y-4">
+            <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+              <ArrowRightLeft className="h-5 w-5 text-cyan-600" /> Material Transfer (Store / Dept Transfer)
+            </h2>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">Select Material *</label>
+              <select
+                required
+                value={materialId}
+                onChange={(e) => setMaterialId(e.target.value)}
+                className="w-full rounded-lg border border-slate-300 p-2.5 text-sm focus:border-cyan-500 focus:outline-none"
+              >
+                <option value="">Select Material...</option>
+                {materials?.map((m: any) => (
+                  <option key={m.id} value={m.id}>
+                    {m.name} ({m.materialCode}) — Avail: {m.stockSummary?.remainingQuantity ?? 0} {m.unit}s
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Quantity to Transfer *</label>
+                <input
+                  type="number"
+                  required
+                  min={1}
+                  value={quantity}
+                  onChange={(e) => setQuantity(Number(e.target.value))}
+                  className="w-full rounded-lg border border-slate-300 p-2.5 text-sm focus:border-cyan-500 focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Destination Department *</label>
+                <select
+                  required
+                  value={departmentId}
+                  onChange={(e) => setDepartmentId(e.target.value)}
+                  className="w-full rounded-lg border border-slate-300 p-2.5 text-sm focus:border-cyan-500 focus:outline-none"
+                >
+                  <option value="">Select Destination Department...</option>
+                  {departments?.map((d: any) => (
+                    <option key={d.id} value={d.id}>
+                      {d.name} ({d.code})
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">Purpose / Transfer Reason</label>
+              <input
+                type="text"
+                placeholder="e.g. Relocating equipment to Computer Lab 3"
+                value={purpose}
+                onChange={(e) => setPurpose(e.target.value)}
+                className="w-full rounded-lg border border-slate-300 p-2.5 text-sm focus:border-cyan-500 focus:outline-none"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">Remarks</label>
+              <textarea
+                rows={2}
+                placeholder="Optional transfer remarks..."
+                value={remarks}
+                onChange={(e) => setRemarks(e.target.value)}
+                className="w-full rounded-lg border border-slate-300 p-2.5 text-sm focus:border-cyan-500 focus:outline-none"
+              />
+            </div>
+
+            <button
+              type="submit"
+              disabled={transferMutation.isPending}
+              className="w-full rounded-xl bg-cyan-600 py-3 text-sm font-semibold text-white shadow-lg shadow-cyan-600/30 hover:bg-cyan-500 transition-colors"
+            >
+              {transferMutation.isPending ? 'Processing Transfer...' : 'Record Material Transfer'}
             </button>
           </form>
         )}

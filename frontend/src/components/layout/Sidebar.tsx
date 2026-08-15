@@ -15,16 +15,57 @@ import { useAuthStore } from "../../store/auth.store";
 export function Sidebar() {
   const user = useAuthStore((state) => state.user);
 
-  // Role-based navigation items
+  // Strict Role-based navigation items strictly matching the UML Use Case Diagram
   const navItems = [
-    { to: "/", label: "Dashboard", icon: LayoutDashboard, end: true, roles: ["ADMINISTRATOR", "STORE_MANAGER", "STOREKEEPER", "AUDITOR", "REQUESTER"] },
-    { to: "/materials", label: "Material Catalog", icon: Package, roles: ["ADMINISTRATOR", "STORE_MANAGER", "STOREKEEPER", "AUDITOR", "REQUESTER"] },
-    { to: "/requests", label: "Material Requests", icon: FileText, roles: ["ADMINISTRATOR", "STORE_MANAGER", "STOREKEEPER", "AUDITOR", "REQUESTER"] },
-    { to: "/inventory", label: "Inventory Operations", icon: Repeat, roles: ["ADMINISTRATOR", "STORE_MANAGER", "STOREKEEPER", "AUDITOR"] },
-    { to: "/employees", label: "Employees & Depts", icon: Users, roles: ["ADMINISTRATOR", "STORE_MANAGER", "STOREKEEPER", "AUDITOR"] },
-    { to: "/suppliers", label: "Suppliers", icon: Building, roles: ["ADMINISTRATOR", "STORE_MANAGER", "STOREKEEPER", "AUDITOR"] },
-    { to: "/reports", label: "Reports & Analytics", icon: BarChart3, roles: ["ADMINISTRATOR", "STORE_MANAGER", "STOREKEEPER", "AUDITOR"] },
-    { to: "/users", label: "User Management & Audit", icon: ShieldAlert, roles: ["ADMINISTRATOR", "AUDITOR"] },
+    {
+      to: "/",
+      label: "Dashboard",
+      icon: LayoutDashboard,
+      end: true,
+      roles: ["ADMINISTRATOR", "STORE_MANAGER", "STOREKEEPER", "AUDITOR", "REQUESTER"],
+    },
+    {
+      to: "/materials",
+      label: "Material Catalog",
+      icon: Package,
+      roles: ["ADMINISTRATOR", "STORE_MANAGER", "STOREKEEPER", "AUDITOR", "REQUESTER"],
+    },
+    {
+      to: "/requests",
+      label: "Material Requests",
+      icon: FileText,
+      roles: ["ADMINISTRATOR", "STORE_MANAGER", "STOREKEEPER", "AUDITOR", "REQUESTER"],
+    },
+    {
+      to: "/inventory",
+      label: "Inventory Operations",
+      icon: Repeat,
+      roles: ["STOREKEEPER", "STORE_MANAGER", "AUDITOR"],
+    },
+    {
+      to: "/employees",
+      label: "Employees & Depts",
+      icon: Users,
+      roles: ["ADMINISTRATOR", "STORE_MANAGER", "STOREKEEPER", "AUDITOR"],
+    },
+    {
+      to: "/suppliers",
+      label: "Suppliers",
+      icon: Building,
+      roles: ["ADMINISTRATOR", "STORE_MANAGER"],
+    },
+    {
+      to: "/reports",
+      label: "Reports & Analytics",
+      icon: BarChart3,
+      roles: ["ADMINISTRATOR", "STORE_MANAGER", "STOREKEEPER", "AUDITOR"],
+    },
+    {
+      to: "/users",
+      label: "Admin Controls & Backup",
+      icon: ShieldAlert,
+      roles: ["ADMINISTRATOR"],
+    },
   ];
 
   const allowedItems = navItems.filter(
@@ -57,7 +98,7 @@ export function Sidebar() {
           <div className="text-sm font-medium text-slate-200 truncate">
             {user.fullName}
           </div>
-          <div className="mt-1 inline-flex items-center rounded-full bg-indigo-500/20 px-2 py-0.5 text-xs font-semibold text-indigo-300">
+          <div className="mt-1 inline-flex items-center rounded-full bg-indigo-500/20 px-2.5 py-0.5 text-xs font-semibold text-indigo-300">
             {user.role.replace('_', ' ')}
           </div>
         </div>

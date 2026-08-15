@@ -1,0 +1,114 @@
+{
+  "timestamp": "2026-08-14T11:51:31.541Z",
+  "system": "Arba Minch University Store Management System",
+  "users": [
+    {
+      "id": "a2b11822-6965-40c5-ae9d-9d64e69877a1",
+      "fullName": "Abebe Kebede (Store Manager)",
+      "email": "manager@store.com",
+      "phone": "+251911223344",
+      "role": "ADMINISTRATOR",
+      "status": "ACTIVE",
+      "departmentId": "69edbf0d-05e3-4e94-af19-cdd0c725c17b",
+      "createdAt": "2026-08-14T08:59:09.164Z",
+      "updatedAt": "2026-08-14T09:39:14.347Z",
+      "department": {
+        "id": "69edbf0d-05e3-4e94-af19-cdd0c725c17b",
+        "code": "ADMIN",
+        "name": "General Administration",
+        "description": "Central Store & General Administration",
+        "createdAt": "2026-08-14T08:59:08.806Z",
+        "updatedAt": "2026-08-14T08:59:08.806Z"
+      }
+    },
+    {
+      "id": "123a74e2-2a56-463f-a545-1fe221af24b8",
+      "fullName": "Dawit Solomon (Internal Auditor)",
+      "email": "auditor@store.com",
+      "phone": "+251911445566",
+      "role": "AUDITOR",
+      "status": "ACTIVE",
+      "departmentId": "5a6c814b-dd57-4da9-8a64-13de33ad4b14",
+      "createdAt": "2026-08-14T08:59:09.178Z",
+      "updatedAt": "2026-08-14T08:59:09.178Z",
+      "department": {
+        "id": "5a6c814b-dd57-4da9-8a64-13de33ad4b14",
+        "code": "FIN",
+        "name": "Finance & Procurement",
+        "description": "Finance and Budgeting Directorate",
+        "createdAt": "2026-08-14T08:59:08.814Z",
+        "updatedAt": "2026-08-14T08:59:08.814Z"
+      }
+    },
+    {
+      "id": "d8426221-76ef-4d95-a602-fd9673aaa9ee",
+      "fullName": "Dr. Chala Bekele (Requester / CS Lecturer)",
+      "email": "requester@store.com",
+      "phone": "+251911556677",
+      "role": "REQUESTER",
+      "status": "ACTIVE",
+      "departmentId": "9a491b89-7711-4927-adf8-0684deff1337",
+      "createdAt": "2026-08-14T08:59:09.189Z",
+      "updatedAt": "2026-08-14T08:59:09.189Z",
+      "department": {
+        "id": "9a491b89-7711-4927-adf8-0684deff1337",
+        "code": "CS",
+        "name": "Computer Science Department",
+        "description": "Department of Computer Science & IT",
+        "createdAt": "2026-08-14T08:59:08.783Z",
+        "updatedAt": "2026-08-14T08:59:08.783Z"
+      }
+    },
+    {
+      "id": "26a36408-ab5d-470d-9557-7d7f720f71bf",
+      "fullName": "System Administrator",
+      "email": "admin@store.com",
+      "phone": "+251911001122",
+      "role": "ADMINISTRATOR",
+      "status": "ACTIVE",
+      "departmentId": "69edbf0d-05e3-4e94-af19-cdd0c725c17b",
+      "createdAt": "2026-08-14T08:59:09.148Z",
+      "updatedAt": "2026-08-14T08:59:09.148Z",
+      "department": {
+        "id": "69edbf0d-05e3-4e94-af19-cdd0c725c17b",
+        "code": "ADMIN",
+        "name": "General Administration",
+        "description": "Central Store & General Administration",
+        "createdAt": "2026-08-14T08:59:08.806Z",
+        "updatedAt": "2026-08-14T08:59:08.806Z"
+      }
+    },
+    {
+      "id": "93acae32-08cf-4a22-9068-d9988fb5d7b2",
+      "fullName": "Tigist Haile (Storekeeper)",
+      "email": "keeper@store.com",
+      "phone": "+251911334455",
+      "role": "STOREKEEPER",
+      "status": "ACTIVE",
+      "departmentId": "69edbf0d-05e3-4e94-af19-cdd0c725c17b",
+      "createdAt": "2026-08-14T08:59:09.170Z",
+      "updatedAt": "2026-08-14T08:59:09.170Z",
+      "department": {
+        "id": "69edbf0d-05e3-4e94-af19-cdd0c725c17b",
+        "code": "ADMIN",
+        "name": "General Administration",
+        "description": "Central Store & General Administration",
+        "createdAt": "2026-08-14T08:59:08.806Z",
+        "updatedAt": "2026-08-14T08:59:08.806Z"
+      }
+    },
+    {
+      "id": "8169c22e-e51e-4adc-8df8-da60a43de014",
+      "fullName": "Yonas Girma",
+      "email": "yonasgirma222@gmail.com",
+      "phone": null,
+      "role": "REQUESTER",
+      "status": "ACTIVE",
+      "departmentId": null,
+      "createdAt": "2026-08-14T11:43:38.106Z",
+      "updatedAt": "2026-08-14T11:43:38.106Z",
+      "department": null
+    }
+  ],
+  "auditLogsCount": 0
+}

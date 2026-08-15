@@ -1,8 +1,9 @@
 import { Body, Controller, Get, Param, ParseUUIDPipe, Post, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { RequestStatus, Role } from '@prisma/client';
 import { RequestsService, CreateRequestDto } from './requests.service';
 import { CurrentUser, SafeUser } from '../auth/decorators/current-user.decorator';
-import { RequestStatus } from '@prisma/client';
+import { Roles } from '../auth/decorators/roles.decorator';
 
 @ApiTags('requests')
 @ApiBearerAuth()
@@ -11,13 +12,13 @@ export class RequestsController {
   constructor(private readonly requestsService: RequestsService) {}
 
   @Post()
-  @ApiOperation({ summary: 'Submit a new material request (Requester)' })
+  @ApiOperation({ summary: 'Submit a new material request' })
   create(@CurrentUser() user: SafeUser, @Body() dto: CreateRequestDto) {
     return this.requestsService.create(user.id, dto);
   }
 
   @Get()
-  @ApiOperation({ summary: 'List all material requests (Filter by status, requester, department)' })
+  @ApiOperation({ summary: 'List all material requests' })
   findAll(
     @Query('status') status?: RequestStatus,
     @Query('requesterId') requesterId?: string,
@@ -33,7 +34,8 @@ export class RequestsController {
   }
 
   @Post(':id/approve-reject')
-  @ApiOperation({ summary: 'Approve or reject a material request (Store Manager)' })
+  @Roles(Role.STORE_MANAGER)
+  @ApiOperation({ summary: 'Approve or reject a material request (Store Manager only - UC13)' })
   approveOrReject(
     @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser() user: SafeUser,
@@ -43,7 +45,8 @@ export class RequestsController {
   }
 
   @Post(':id/issue')
-  @ApiOperation({ summary: 'Fulfill/Issue an approved request (Storekeeper)' })
+  @Roles(Role.STOREKEEPER)
+  @ApiOperation({ summary: 'Fulfill/Issue an approved request (Storekeeper only - UC9)' })
   issueItems(
     @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser() user: SafeUser,

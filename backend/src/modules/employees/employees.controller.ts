@@ -1,6 +1,8 @@
 import { Body, Controller, Get, Param, ParseUUIDPipe, Post, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { Role } from '@prisma/client';
 import { EmployeesService, CreateDepartmentDto, CreateEmployeeDto } from './employees.service';
+import { Roles } from '../auth/decorators/roles.decorator';
 
 @ApiTags('employees')
 @ApiBearerAuth()
@@ -15,7 +17,8 @@ export class EmployeesController {
   }
 
   @Post('departments')
-  @ApiOperation({ summary: 'Register a new department' })
+  @Roles(Role.ADMINISTRATOR)
+  @ApiOperation({ summary: 'Register a new department (Administrator only)' })
   createDepartment(@Body() dto: CreateDepartmentDto) {
     return this.employeesService.createDepartment(dto);
   }
@@ -27,7 +30,8 @@ export class EmployeesController {
   }
 
   @Post()
-  @ApiOperation({ summary: 'Register a new employee' })
+  @Roles(Role.ADMINISTRATOR)
+  @ApiOperation({ summary: 'Register a new employee (Administrator only)' })
   createEmployee(@Body() dto: CreateEmployeeDto) {
     return this.employeesService.createEmployee(dto);
   }

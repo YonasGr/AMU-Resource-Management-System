@@ -27,13 +27,23 @@ async function main() {
     },
   });
 
+  const storeDept = await prisma.department.upsert({
+    where: { code: 'STORE' },
+    update: {},
+    create: {
+      code: 'STORE',
+      name: 'Store & Inventory Management',
+      description: 'Central Store & Warehouse Directorate',
+    },
+  });
+
   const adminDept = await prisma.department.upsert({
     where: { code: 'ADMIN' },
     update: {},
     create: {
       code: 'ADMIN',
       name: 'General Administration',
-      description: 'Central Store & General Administration',
+      description: 'Central General Administration',
     },
   });
 
@@ -74,7 +84,7 @@ async function main() {
       phone: '+251911223344',
       passwordHash,
       role: Role.STORE_MANAGER,
-      departmentId: adminDept.id,
+      departmentId: storeDept.id,
     },
   });
 
@@ -87,7 +97,7 @@ async function main() {
       phone: '+251911334455',
       passwordHash,
       role: Role.STOREKEEPER,
-      departmentId: adminDept.id,
+      departmentId: storeDept.id,
     },
   });
 

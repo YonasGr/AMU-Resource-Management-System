@@ -11,13 +11,18 @@ import {
   Clock,
   User,
   Building,
+  Layers,
 } from 'lucide-react';
 
 export default function RequestsPage() {
   const queryClient = useQueryClient();
   const user = useAuthStore((s) => s.user);
 
-  const [activeTab, setActiveTab] = useState<'my' | 'approvals' | 'issue'>('my');
+  const isManager = user?.role === 'STORE_MANAGER' || user?.role === 'ADMINISTRATOR';
+  const isKeeper = user?.role === 'STOREKEEPER' || user?.role === 'STORE_MANAGER' || user?.role === 'ADMINISTRATOR';
+
+  // Default tab based on role
+  const [activeTab, setActiveTab] = useState<'all' | 'my' | 'approvals' | 'issue'>('all');
   const [isModalOpen, setIsModalOpen] = useState(false);
 
   // Form State
@@ -125,12 +130,19 @@ export default function RequestsPage() {
     });
   };
 
-  const isManager = user?.role === 'STORE_MANAGER' || user?.role === 'ADMINISTRATOR';
-  const isKeeper = user?.role === 'STOREKEEPER' || user?.role === 'STORE_MANAGER' || user?.role === 'ADMINISTRATOR';
-
+  const allRequests = requests || [];
   const pendingRequests = requests?.filter((r: any) => r.status === 'PENDING') || [];
   const approvedRequests = requests?.filter((r: any) => r.status === 'APPROVED') || [];
-  const myRequests = requests?.filter((r: any) => r.requesterId === user?.id) || requests || [];
+  const myRequests = requests?.filter((r: any) => r.requesterId === user?.id) || [];
+
+  const displayedRequests =
+    activeTab === 'approvals'
+      ? pendingRequests
+      : activeTab === 'issue'
+      ? approvedRequests
+      : activeTab === 'my'
+      ? myRequests
+      : allRequests;
 
   return (
     <div className="space-y-6">
@@ -156,15 +168,33 @@ export default function RequestsPage() {
       {/* Tabs */}
       <div className="flex border-b border-slate-200 gap-6 text-sm font-semibold">
         <button
-          onClick={() => setActiveTab('my')}
-          className={`pb-3 transition-colors ${
-            activeTab === 'my'
+          onClick={() => setActiveTab('all')}
+          className={`pb-3 flex items-center gap-2 transition-colors ${
+            activeTab === 'all'
               ? 'border-b-2 border-indigo-600 text-indigo-600'
               : 'text-slate-500 hover:text-slate-800'
           }`}
         >
-          All Requests ({requests?.length ?? 0})
+          <Layers className="h-4 w-4" /> All Requests ({allRequests.length})
         </button>
+
+        {isKeeper && (
+          <button
+            onClick={() => setActiveTab('issue')}
+            className={`pb-3 flex items-center gap-2 transition-colors ${
+              activeTab === 'issue'
+                ? 'border-b-2 border-indigo-600 text-indigo-600'
+                : 'text-slate-500 hover:text-slate-800'
+            }`}
+          >
+            Storekeeper Fulfill (Stock Out)
+            {approvedRequests.length > 0 && (
+              <span className="rounded-full bg-emerald-600 px-2 py-0.5 text-xs text-white">
+                {approvedRequests.length}
+              </span>
+            )}
+          </button>
+        )}
 
         {isManager && (
           <button
@@ -184,36 +214,38 @@ export default function RequestsPage() {
           </button>
         )}
 
-        {isKeeper && (
-          <button
-            onClick={() => setActiveTab('issue')}
-            className={`pb-3 flex items-center gap-2 transition-colors ${
-              activeTab === 'issue'
-                ? 'border-b-2 border-indigo-600 text-indigo-600'
-                : 'text-slate-500 hover:text-slate-800'
-            }`}
-          >
-            Storekeeper Fulfill (Stock Out)
-            {approvedRequests.length > 0 && (
-              <span className="rounded-full bg-emerald-600 px-2 py-0.5 text-xs text-white">
-                {approvedRequests.length}
-              </span>
-            )}
-          </button>
-        )}
+        <button
+          onClick={() => setActiveTab('my')}
+          className={`pb-3 flex items-center gap-2 transition-colors ${
+            activeTab === 'my'
+              ? 'border-b-2 border-indigo-600 text-indigo-600'
+              : 'text-slate-500 hover:text-slate-800'
+          }`}
+        >
+          My Requests ({myRequests.length})
+        </button>
       </div>
 
       {/* Requests List */}
       <div className="space-y-4">
         {isLoading ? (
           <div className="py-12 text-center text-sm text-slate-500">Loading requests...</div>
+        ) : displayedRequests.length === 0 ? (
+          <div className="rounded-2xl bg-white p-12 text-center text-slate-500 border border-slate-200">
+            <FileText className="mx-auto h-10 w-10 text-slate-300 mb-2" />
+            <p className="font-semibold text-slate-700">No requests found in this tab</p>
+            <p className="text-xs text-slate-400 mt-1">
+              {activeTab === 'issue'
+                ? 'There are currently no approved requests awaiting stock out release.'
+                : activeTab === 'approvals'
+                ? 'There are currently no pending requests requiring manager approval.'
+                : activeTab === 'my'
+                ? 'You have not submitted any material requests yet.'
+                : 'No material requests found.'}
+            </p>
+          </div>
         ) : (
-          (activeTab === 'approvals'
-            ? pendingRequests
-            : activeTab === 'issue'
-            ? approvedRequests
-            : myRequests
-          ).map((req: any) => (
+          displayedRequests.map((req: any) => (
             <div
               key={req.id}
               className="rounded-2xl bg-white p-6 shadow-sm border border-slate-200 space-y-4"
@@ -276,7 +308,7 @@ export default function RequestsPage() {
               </div>
 
               {/* Action Buttons for Manager & Keeper */}
-              {activeTab === 'approvals' && req.status === 'PENDING' && (
+              {isManager && req.status === 'PENDING' && (
                 <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-2">
                   <input
                     type="text"
@@ -319,7 +351,7 @@ export default function RequestsPage() {
                 </div>
               )}
 
-              {activeTab === 'issue' && req.status === 'APPROVED' && (
+              {isKeeper && req.status === 'APPROVED' && (
                 <div className="flex justify-end pt-2">
                   <button
                     onClick={() => issueMutation.mutate({ id: req.id })}

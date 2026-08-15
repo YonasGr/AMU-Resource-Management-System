@@ -161,7 +161,8 @@ export class RequestsService {
 
     // Execute in DB Transaction
     return this.prisma.$transaction(async (tx) => {
-      const txnCount = await tx.inventoryTransaction.count();
+      const timeStamp = Date.now().toString().slice(-6);
+      let itemSeq = 1;
 
       for (const item of request.items) {
         const remaining = item.material.stockSummary?.remainingQuantity ?? 0;
@@ -171,7 +172,7 @@ export class RequestsService {
           );
         }
 
-        const txnCode = `TXN-OUT-${String(txnCount + 1).padStart(4, '0')}`;
+        const txnCode = `TXN-OUT-${timeStamp}-${String(itemSeq++).padStart(3, '0')}`;
 
         // Create Stock Out Transaction
         await tx.inventoryTransaction.create({

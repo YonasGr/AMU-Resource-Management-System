@@ -2,9 +2,13 @@ import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../lib/api';
 import { Users, Building, Plus, History } from 'lucide-react';
+import { useAuthStore } from '../../store/auth.store';
 
 export default function EmployeesPage() {
   const queryClient = useQueryClient();
+  const user = useAuthStore((s) => s.user);
+  const isAdmin = user?.role === 'ADMINISTRATOR';
+
   const [activeTab, setActiveTab] = useState<'employees' | 'departments' | 'history'>('employees');
 
   const [isEmpModalOpen, setIsEmpModalOpen] = useState(false);
@@ -120,20 +124,22 @@ export default function EmployeesPage() {
           </p>
         </div>
 
-        <div className="flex gap-3">
-          <button
-            onClick={() => setIsDeptModalOpen(true)}
-            className="flex items-center gap-2 rounded-xl bg-slate-100 px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-200 border border-slate-200 transition-colors"
-          >
-            <Building className="h-4 w-4" /> Add Department
-          </button>
-          <button
-            onClick={() => setIsEmpModalOpen(true)}
-            className="flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-indigo-600/30 hover:bg-indigo-500 transition-colors"
-          >
-            <Plus className="h-4 w-4" /> Register Employee
-          </button>
-        </div>
+        {isAdmin && (
+          <div className="flex gap-3">
+            <button
+              onClick={() => setIsDeptModalOpen(true)}
+              className="flex items-center gap-2 rounded-xl bg-slate-100 px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-200 border border-slate-200 transition-colors"
+            >
+              <Building className="h-4 w-4" /> Add Department
+            </button>
+            <button
+              onClick={() => setIsEmpModalOpen(true)}
+              className="flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-indigo-600/30 hover:bg-indigo-500 transition-colors"
+            >
+              <Plus className="h-4 w-4" /> Register Employee
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Tabs */}

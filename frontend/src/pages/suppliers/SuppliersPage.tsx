@@ -2,9 +2,11 @@ import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../lib/api';
 import { Building, Plus, Package } from 'lucide-react';
+import { useAuthStore } from '../../store/auth.store';
 
 export default function SuppliersPage() {
   const queryClient = useQueryClient();
+  const user = useAuthStore((s) => s.user);
   const [isModalOpen, setIsModalOpen] = useState(false);
 
   // Form State
@@ -58,6 +60,8 @@ export default function SuppliersPage() {
     });
   };
 
+  const canManage = user?.role === 'ADMINISTRATOR' || user?.role === 'STORE_MANAGER';
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -71,12 +75,14 @@ export default function SuppliersPage() {
           </p>
         </div>
 
-        <button
-          onClick={() => setIsModalOpen(true)}
-          className="flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-indigo-600/30 hover:bg-indigo-500 transition-colors"
-        >
-          <Plus className="h-4 w-4" /> Register Supplier
-        </button>
+        {canManage && (
+          <button
+            onClick={() => setIsModalOpen(true)}
+            className="flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-indigo-600/30 hover:bg-indigo-500 transition-colors"
+          >
+            <Plus className="h-4 w-4" /> Register Supplier
+          </button>
+        )}
       </div>
 
       {/* Grid */}

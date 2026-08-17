@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { TransactionType } from '@prisma/client';
+import { NotificationsService } from '../notifications/notifications.service';
 
 export interface StockInDto {
   materialId: string;
@@ -44,7 +45,35 @@ export interface TransferDto {
 
 @Injectable()
 export class InventoryService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly notifications: NotificationsService,
+  ) {}
+
+  /** Emit a low-stock alert if stock has fallen below minimum */
+  private async maybeAlertLowStock(materialId: string) {
+    const material = await this.prisma.material.findUnique({
+      where: { id: materialId },
+      include: { stockSummary: true },
+    });
+    if (!material || !material.stockSummary) return;
+
+    const { remainingQuantity } = material.stockSummary;
+    if (remainingQuantity < material.minimumStock) {
+      const recipientIds = await Promise.all([
+        this.notifications.getUserIdsByRole('STORE_MANAGER'),
+        this.notifications.getUserIdsByRole('STOREKEEPER'),
+      ]);
+      const uniqueIds = [...new Set(recipientIds.flat())];
+      await this.notifications.createForUsers(
+        uniqueIds,
+        'LOW_STOCK_ALERT',
+        `⚠️ Low Stock: ${material.name}`,
+        `"${material.name}" (${material.materialCode}) is low: ${remainingQuantity} ${material.unit}(s) remaining, minimum is ${material.minimumStock}.`,
+        { materialId, materialCode: material.materialCode, remainingQuantity, minimumStock: material.minimumStock },
+      );
+    }
+  }
 
   /** Stock In (Receive materials from supplier or internal source) */
   async stockIn(storekeeperId: string, dto: StockInDto) {
@@ -60,8 +89,8 @@ export class InventoryService {
     const rand = Math.floor(100 + Math.random() * 900);
     const txnCode = `TXN-IN-${timeStamp}-${rand}`;
 
-    return this.prisma.$transaction(async (tx) => {
-      const transaction = await tx.inventoryTransaction.create({
+    const transaction = await this.prisma.$transaction(async (tx) => {
+      const txn = await tx.inventoryTransaction.create({
         data: {
           transactionCode: txnCode,
           type: TransactionType.STOCK_IN,
@@ -94,8 +123,24 @@ export class InventoryService {
         },
       });
 
-      return transaction;
+      return txn;
     });
+
+    // Notify managers & storekeepers about stock-in (outside tx, fire-and-forget)
+    const recipientIds = await Promise.all([
+      this.notifications.getUserIdsByRole('STORE_MANAGER'),
+      this.notifications.getUserIdsByRole('STOREKEEPER'),
+    ]);
+    const uniqueIds = [...new Set(recipientIds.flat())];
+    await this.notifications.createForUsers(
+      uniqueIds,
+      'STOCK_IN_RECORDED',
+      `Stock In: ${material.name}`,
+      `${dto.quantity} ${material.unit}(s) of "${material.name}" (${material.materialCode}) received into stock.`,
+      { materialId: dto.materialId, materialCode: material.materialCode, quantity: dto.quantity },
+    );
+
+    return transaction;
   }
 
   /** Direct Stock Out (Issue materials directly to employee / department) */
@@ -119,8 +164,8 @@ export class InventoryService {
     const rand = Math.floor(100 + Math.random() * 900);
     const txnCode = `TXN-OUT-${timeStamp}-${rand}`;
 
-    return this.prisma.$transaction(async (tx) => {
-      const transaction = await tx.inventoryTransaction.create({
+    const transaction = await this.prisma.$transaction(async (tx) => {
+      const txn = await tx.inventoryTransaction.create({
         data: {
           transactionCode: txnCode,
           type: TransactionType.STOCK_OUT,
@@ -148,8 +193,13 @@ export class InventoryService {
         },
       });
 
-      return transaction;
+      return txn;
     });
+
+    // Check if stock fell below minimum after this operation
+    await this.maybeAlertLowStock(dto.materialId);
+
+    return transaction;
   }
 
   /** Material Return (Record returned materials back into inventory) */
@@ -216,8 +266,8 @@ export class InventoryService {
     const rand = Math.floor(100 + Math.random() * 900);
     const txnCode = `TXN-ADJ-${timeStamp}-${rand}`;
 
-    return this.prisma.$transaction(async (tx) => {
-      const transaction = await tx.inventoryTransaction.create({
+    const transaction = await this.prisma.$transaction(async (tx) => {
+      const txn = await tx.inventoryTransaction.create({
         data: {
           transactionCode: txnCode,
           type: TransactionType.ADJUSTMENT,
@@ -240,8 +290,13 @@ export class InventoryService {
         },
       });
 
-      return transaction;
+      return txn;
     });
+
+    // Check low-stock after adjustment too
+    await this.maybeAlertLowStock(dto.materialId);
+
+    return transaction;
   }
 
   /** Material Transfer (Transfer materials between stores or departments) */

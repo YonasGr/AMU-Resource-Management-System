@@ -1,6 +1,6 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import * as argon2 from 'argon2';
-import { User, Role, UserStatus } from '@prisma/client';
+import { User, Role, UserStatus, ScopeType } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 
 export interface CreateUserDto {
@@ -9,7 +9,9 @@ export interface CreateUserDto {
   phone?: string;
   password: string;
   role?: Role;
+  scopeType?: ScopeType;
   departmentId?: string;
+  storeId?: string;
 }
 
 export interface UpdateUserDto {
@@ -18,7 +20,9 @@ export interface UpdateUserDto {
   phone?: string;
   role?: Role;
   status?: UserStatus;
+  scopeType?: ScopeType;
   departmentId?: string;
+  storeId?: string;
   password?: string;
 }
 
@@ -41,10 +45,13 @@ export class UsersService {
         phone: dto.phone,
         passwordHash,
         role: dto.role || Role.REQUESTER,
+        scopeType: dto.scopeType || ScopeType.STORE,
         departmentId: dto.departmentId || null,
+        storeId: dto.storeId || null,
       },
       include: {
         department: true,
+        store: true,
       },
     });
 
@@ -54,14 +61,14 @@ export class UsersService {
   async findByEmail(email: string): Promise<User | null> {
     return this.prisma.user.findUnique({
       where: { email },
-      include: { department: true },
+      include: { department: true, store: true },
     });
   }
 
   async findById(id: string): Promise<any> {
     const user = await this.prisma.user.findUnique({
       where: { id },
-      include: { department: true },
+      include: { department: true, store: true },
     });
     if (!user) {
       throw new NotFoundException(`User ${id} not found`);
@@ -73,6 +80,7 @@ export class UsersService {
     const users = await this.prisma.user.findMany({
       include: {
         department: true,
+        store: true,
       },
       orderBy: { fullName: 'asc' },
     });
@@ -98,11 +106,14 @@ export class UsersService {
         ...(dto.phone !== undefined ? { phone: dto.phone } : {}),
         ...(dto.role ? { role: dto.role } : {}),
         ...(dto.status ? { status: dto.status } : {}),
+        ...(dto.scopeType ? { scopeType: dto.scopeType } : {}),
         ...(dto.departmentId !== undefined ? { departmentId: dto.departmentId } : {}),
+        ...(dto.storeId !== undefined ? { storeId: dto.storeId } : {}),
         ...(passwordHash ? { passwordHash } : {}),
       },
       include: {
         department: true,
+        store: true,
       },
     });
 

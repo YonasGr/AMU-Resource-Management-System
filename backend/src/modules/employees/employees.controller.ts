@@ -30,8 +30,8 @@ export class EmployeesController {
   }
 
   @Post()
-  @Roles(Role.ADMINISTRATOR)
-  @ApiOperation({ summary: 'Register a new employee (Administrator only)' })
+  @Roles(Role.ADMINISTRATOR, Role.STORE_MANAGER)
+  @ApiOperation({ summary: 'Register a new employee (Administrator & Store Manager)' })
   createEmployee(@Body() dto: CreateEmployeeDto) {
     return this.employeesService.createEmployee(dto);
   }

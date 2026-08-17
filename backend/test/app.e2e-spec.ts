@@ -3,10 +3,12 @@ import { INestApplication, ValidationPipe } from '@nestjs/common';
 import * as request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { TransformInterceptor } from '../src/common/interceptors/transform.interceptor';
+import { AllExceptionsFilter } from '../src/common/filters/all-exceptions.filter';
 
-describe('AMU Resource Management System (E2E)', () => {
+describe('AMU Resource Management System (E2E Smoke & Core Endpoints)', () => {
   let app: INestApplication;
   let adminToken: string;
+  let managerToken: string;
   let requesterToken: string;
 
   beforeAll(async () => {
@@ -22,63 +24,141 @@ describe('AMU Resource Management System (E2E)', () => {
         transform: true,
       }),
     );
+    app.useGlobalFilters(new AllExceptionsFilter());
     app.useGlobalInterceptors(new TransformInterceptor());
     await app.init();
-  });
+  }, 30000);
 
   afterAll(async () => {
     await app.close();
   });
 
-  it('1. Authentication — Admin Login (POST /auth/login)', async () => {
+  it('1. Public Health Check (GET /health)', async () => {
+    const response = await request(app.getHttpServer())
+      .get('/health')
+      .expect(200);
+
+    expect(response.body.data).toHaveProperty('status', 'ok');
+    expect(response.body.data).toHaveProperty('time');
+  });
+
+  it('2. Authentication — Admin Login (POST /auth/login)', async () => {
     const response = await request(app.getHttpServer())
       .post('/auth/login')
       .send({
-        email: 'admin@amu.edu.et',
-        password: 'ChangeMe123!',
+        email: 'admin@store.com',
+        password: 'password123',
       })
       .expect(200);
 
     expect(response.body.data).toHaveProperty('accessToken');
-    expect(response.body.data).toHaveProperty('refreshToken');
+    expect(response.body.data).toHaveProperty('user');
+    expect(response.body.data.user.email).toBe('admin@store.com');
+    expect(response.body.data.user.role).toBe('ADMINISTRATOR');
     adminToken = response.body.data.accessToken;
   });
 
-  it('2. Authentication — Requester Login (POST /auth/login)', async () => {
+  it('3. Authentication — Store Manager Login (POST /auth/login)', async () => {
     const response = await request(app.getHttpServer())
       .post('/auth/login')
       .send({
-        email: 'wftest.requester@amu.edu.et',
-        password: 'ChangeMe123!',
+        email: 'manager@store.com',
+        password: 'password123',
       })
       .expect(200);
 
     expect(response.body.data).toHaveProperty('accessToken');
+    expect(response.body.data).toHaveProperty('user');
+    expect(response.body.data.user.email).toBe('manager@store.com');
+    expect(response.body.data.user.role).toBe('STORE_MANAGER');
+    managerToken = response.body.data.accessToken;
+  });
+
+  it('4. Authentication — Requester Login (POST /auth/login)', async () => {
+    const response = await request(app.getHttpServer())
+      .post('/auth/login')
+      .send({
+        email: 'requester@store.com',
+        password: 'password123',
+      })
+      .expect(200);
+
+    expect(response.body.data).toHaveProperty('accessToken');
+    expect(response.body.data).toHaveProperty('user');
+    expect(response.body.data.user.email).toBe('requester@store.com');
+    expect(response.body.data.user.role).toBe('REQUESTER');
     requesterToken = response.body.data.accessToken;
   });
 
-  it('3. Organization Tree (GET /organization-units/tree)', async () => {
+  it('5. Authenticated Session Profile (GET /auth/me)', async () => {
     const response = await request(app.getHttpServer())
-      .get('/organization-units/tree')
+      .get('/auth/me')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .expect(200);
+
+    expect(response.body.data).toHaveProperty('id');
+    expect(response.body.data.email).toBe('admin@store.com');
+    expect(response.body.data.role).toBe('ADMINISTRATOR');
+  });
+
+  it('6. Material Catalog Listing (GET /materials & GET /materials/categories)', async () => {
+    const resMaterials = await request(app.getHttpServer())
+      .get('/materials')
+      .set('Authorization', `Bearer ${managerToken}`)
+      .expect(200);
+
+    expect(Array.isArray(resMaterials.body.data)).toBe(true);
+
+    const resCategories = await request(app.getHttpServer())
+      .get('/materials/categories')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .expect(200);
+
+    expect(Array.isArray(resCategories.body.data)).toBe(true);
+  });
+
+  it('7. Employee Registry & Department Directory (GET /employees & GET /employees/departments)', async () => {
+    const resEmployees = await request(app.getHttpServer())
+      .get('/employees')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .expect(200);
+
+    expect(Array.isArray(resEmployees.body.data)).toBe(true);
+
+    const resDepts = await request(app.getHttpServer())
+      .get('/employees/departments')
+      .set('Authorization', `Bearer ${requesterToken}`)
+      .expect(200);
+
+    expect(Array.isArray(resDepts.body.data)).toBe(true);
+  });
+
+  it('8. Audit Log Protection (GET /audit)', async () => {
+    // Admin access -> 200 OK
+    const resAdmin = await request(app.getHttpServer())
+      .get('/audit')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .expect(200);
+
+    expect(Array.isArray(resAdmin.body.data)).toBe(true);
+
+    // Requester access -> 403 Forbidden
+    await request(app.getHttpServer())
+      .get('/audit')
+      .set('Authorization', `Bearer ${requesterToken}`)
+      .expect(403);
+  });
+
+  it('9. Material Requests Listing (GET /requests)', async () => {
+    const response = await request(app.getHttpServer())
+      .get('/requests')
       .set('Authorization', `Bearer ${adminToken}`)
       .expect(200);
 
     expect(Array.isArray(response.body.data)).toBe(true);
-    expect(response.body.data.length).toBeGreaterThan(0);
-    expect(response.body.data[0]).toHaveProperty('name');
   });
 
-  it('4. Store Directory Unscoped Lookup (GET /stores/directory)', async () => {
-    const response = await request(app.getHttpServer())
-      .get('/stores/directory')
-      .set('Authorization', `Bearer ${requesterToken}`)
-      .expect(200);
-
-    expect(Array.isArray(response.body.data)).toBe(true);
-    expect(response.body.data.length).toBeGreaterThan(0);
-  });
-
-  it('5. User Inbox Notifications (GET /notifications)', async () => {
+  it('10. User Inbox Notifications (GET /notifications)', async () => {
     const response = await request(app.getHttpServer())
       .get('/notifications')
       .set('Authorization', `Bearer ${adminToken}`)
@@ -87,12 +167,12 @@ describe('AMU Resource Management System (E2E)', () => {
     expect(Array.isArray(response.body.data)).toBe(true);
   });
 
-  it('6. Inventory Report Export (GET /reports/inventory)', async () => {
+  it('11. Inventory Current Stock Report (GET /reports/current-stock)', async () => {
     const response = await request(app.getHttpServer())
-      .get('/reports/inventory')
+      .get('/reports/current-stock')
       .set('Authorization', `Bearer ${adminToken}`)
       .expect(200);
 
-    expect(Array.isArray(response.body)).toBe(true);
+    expect(Array.isArray(response.body.data)).toBe(true);
   });
 });

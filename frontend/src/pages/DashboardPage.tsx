@@ -65,12 +65,14 @@ export default function DashboardPage() {
               <Repeat className="h-4 w-4" /> Inventory Ops
             </button>
           )}
-          <button
-            onClick={() => navigate('/reports')}
-            className="flex items-center gap-2 rounded-xl bg-slate-800 px-4 py-2.5 text-sm font-semibold text-slate-200 border border-slate-700 hover:bg-slate-700 transition-all"
-          >
-            <BarChart3 className="h-4 w-4" /> Reports
-          </button>
+          {user?.role !== 'REQUESTER' && (
+            <button
+              onClick={() => navigate('/reports')}
+              className="flex items-center gap-2 rounded-xl bg-slate-800 px-4 py-2.5 text-sm font-semibold text-slate-200 border border-slate-700 hover:bg-slate-700 transition-all"
+            >
+              <BarChart3 className="h-4 w-4" /> Reports
+            </button>
+          )}
         </div>
       </div>
 

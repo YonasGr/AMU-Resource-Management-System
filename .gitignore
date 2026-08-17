@@ -22,3 +22,8 @@ backend/prisma/migrations/*.docker-owned/
 
 backend/.pnpm/*
 **/.pnpm-store/
+
+# Agent working directories
+.agents/
+ORIGINAL_REQUEST.md
+PROJECT.md

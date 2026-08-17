@@ -1,4 +1,4 @@
-import { PrismaClient, Role, TransactionType, RequestStatus, MaterialStatus, SupplierStatus } from '@prisma/client';
+import { PrismaClient, Role, ScopeType, TransactionType, RequestStatus, MaterialStatus, SupplierStatus } from '@prisma/client';
 import * as argon2 from 'argon2';
 
 const prisma = new PrismaClient();
@@ -59,82 +59,199 @@ async function main() {
 
   console.log('✅ Departments seeded');
 
-  // 2. Users (5 Roles)
+  // 2. Stores
+  const storeA = await prisma.store.upsert({
+    where: { code: 'STORE-MAIN' },
+    update: {
+      name: 'Central Warehouse Store',
+      location: 'Main Campus Building A',
+      departmentId: storeDept.id,
+    },
+    create: {
+      code: 'STORE-MAIN',
+      name: 'Central Warehouse Store',
+      location: 'Main Campus Building A',
+      departmentId: storeDept.id,
+    },
+  });
+
+  const storeB = await prisma.store.upsert({
+    where: { code: 'STORE-ENG' },
+    update: {
+      name: 'Engineering Faculty Store',
+      location: 'Technology Campus Block 3',
+      departmentId: eeDept.id,
+    },
+    create: {
+      code: 'STORE-ENG',
+      name: 'Engineering Faculty Store',
+      location: 'Technology Campus Block 3',
+      departmentId: eeDept.id,
+    },
+  });
+
+  console.log('✅ Stores seeded:');
+  console.log('   - Store A (Central Warehouse): STORE-MAIN');
+  console.log('   - Store B (Engineering Faculty): STORE-ENG');
+
+  // 3. Users (7 System Users with Scopes)
   const passwordHash = await argon2.hash('password123');
 
   const admin = await prisma.user.upsert({
     where: { email: 'admin@store.com' },
-    update: {},
+    update: {
+      fullName: 'System Administrator',
+      role: Role.ADMINISTRATOR,
+      scopeType: ScopeType.GLOBAL,
+      departmentId: adminDept.id,
+      storeId: null,
+    },
     create: {
       fullName: 'System Administrator',
       email: 'admin@store.com',
       phone: '+251911001122',
       passwordHash,
       role: Role.ADMINISTRATOR,
+      scopeType: ScopeType.GLOBAL,
       departmentId: adminDept.id,
+      storeId: null,
     },
   });
 
   const manager = await prisma.user.upsert({
     where: { email: 'manager@store.com' },
-    update: {},
+    update: {
+      fullName: 'Abebe Kebede (Central Store Manager)',
+      role: Role.STORE_MANAGER,
+      scopeType: ScopeType.STORE,
+      storeId: storeA.id,
+      departmentId: storeDept.id,
+    },
     create: {
-      fullName: 'Abebe Kebede (Store Manager)',
+      fullName: 'Abebe Kebede (Central Store Manager)',
       email: 'manager@store.com',
       phone: '+251911223344',
       passwordHash,
       role: Role.STORE_MANAGER,
+      scopeType: ScopeType.STORE,
+      storeId: storeA.id,
       departmentId: storeDept.id,
+    },
+  });
+
+  const engManager = await prisma.user.upsert({
+    where: { email: 'engmanager@store.com' },
+    update: {
+      fullName: 'Almaz Tefera (Engineering Store Manager)',
+      role: Role.STORE_MANAGER,
+      scopeType: ScopeType.STORE,
+      storeId: storeB.id,
+      departmentId: eeDept.id,
+    },
+    create: {
+      fullName: 'Almaz Tefera (Engineering Store Manager)',
+      email: 'engmanager@store.com',
+      phone: '+251911223345',
+      passwordHash,
+      role: Role.STORE_MANAGER,
+      scopeType: ScopeType.STORE,
+      storeId: storeB.id,
+      departmentId: eeDept.id,
+    },
+  });
+
+  const globalManager = await prisma.user.upsert({
+    where: { email: 'globalmanager@store.com' },
+    update: {
+      fullName: 'Kassahun Belay (Global Store Manager)',
+      role: Role.STORE_MANAGER,
+      scopeType: ScopeType.GLOBAL,
+      storeId: null,
+      departmentId: adminDept.id,
+    },
+    create: {
+      fullName: 'Kassahun Belay (Global Store Manager)',
+      email: 'globalmanager@store.com',
+      phone: '+251911223346',
+      passwordHash,
+      role: Role.STORE_MANAGER,
+      scopeType: ScopeType.GLOBAL,
+      storeId: null,
+      departmentId: adminDept.id,
     },
   });
 
   const keeper = await prisma.user.upsert({
     where: { email: 'keeper@store.com' },
-    update: {},
+    update: {
+      fullName: 'Tigist Haile (Storekeeper)',
+      role: Role.STOREKEEPER,
+      scopeType: ScopeType.STORE,
+      storeId: storeA.id,
+      departmentId: storeDept.id,
+    },
     create: {
       fullName: 'Tigist Haile (Storekeeper)',
       email: 'keeper@store.com',
       phone: '+251911334455',
       passwordHash,
       role: Role.STOREKEEPER,
+      scopeType: ScopeType.STORE,
+      storeId: storeA.id,
       departmentId: storeDept.id,
     },
   });
 
   const auditor = await prisma.user.upsert({
     where: { email: 'auditor@store.com' },
-    update: {},
+    update: {
+      fullName: 'Dawit Solomon (Internal Auditor)',
+      role: Role.AUDITOR,
+      scopeType: ScopeType.GLOBAL,
+      storeId: null,
+      departmentId: finDept.id,
+    },
     create: {
       fullName: 'Dawit Solomon (Internal Auditor)',
       email: 'auditor@store.com',
       phone: '+251911445566',
       passwordHash,
       role: Role.AUDITOR,
+      scopeType: ScopeType.GLOBAL,
+      storeId: null,
       departmentId: finDept.id,
     },
   });
 
   const requester = await prisma.user.upsert({
     where: { email: 'requester@store.com' },
-    update: {},
+    update: {
+      fullName: 'Dr. Chala Bekele (Requester / CS Lecturer)',
+      role: Role.REQUESTER,
+      scopeType: ScopeType.STORE,
+      departmentId: csDept.id,
+    },
     create: {
       fullName: 'Dr. Chala Bekele (Requester / CS Lecturer)',
       email: 'requester@store.com',
       phone: '+251911556677',
       passwordHash,
       role: Role.REQUESTER,
+      scopeType: ScopeType.STORE,
       departmentId: csDept.id,
     },
   });
 
-  console.log('✅ 5 System Users Seeded:');
-  console.log('   - Administrator: admin@store.com / password123');
-  console.log('   - Store Manager: manager@store.com / password123');
-  console.log('   - Storekeeper: keeper@store.com / password123');
-  console.log('   - Auditor: auditor@store.com / password123');
-  console.log('   - Requester: requester@store.com / password123');
+  console.log('✅ 7 System Users Seeded:');
+  console.log('   - Administrator: admin@store.com (GLOBAL)');
+  console.log('   - Store Manager (Store A): manager@store.com (STORE: STORE-MAIN)');
+  console.log('   - Store Manager (Store B): engmanager@store.com (STORE: STORE-ENG)');
+  console.log('   - Global Store Manager: globalmanager@store.com (GLOBAL)');
+  console.log('   - Storekeeper: keeper@store.com (STORE: STORE-MAIN)');
+  console.log('   - Auditor: auditor@store.com (GLOBAL)');
+  console.log('   - Requester: requester@store.com (STORE: CS)');
 
-  // 3. Employees
+  // 4. Employees
   const emp1 = await prisma.employee.upsert({
     where: { employeeCode: 'EMP-101' },
     update: {},
@@ -163,7 +280,7 @@ async function main() {
 
   console.log('✅ Employees seeded');
 
-  // 4. Suppliers
+  // 5. Suppliers
   const supp1 = await prisma.supplier.upsert({
     where: { supplierCode: 'SUP-001' },
     update: {},
@@ -194,7 +311,7 @@ async function main() {
 
   console.log('✅ Suppliers seeded');
 
-  // 5. Material Categories
+  // 6. Material Categories
   const catOffice = await prisma.materialCategory.upsert({
     where: { name: 'Office & Paper Supplies' },
     update: {},
@@ -224,7 +341,7 @@ async function main() {
 
   console.log('✅ Material Categories seeded');
 
-  // 6. Materials
+  // 7. Materials
   const matPaper = await prisma.material.upsert({
     where: { materialCode: 'MAT-1001' },
     update: {},
@@ -307,7 +424,7 @@ async function main() {
 
   console.log('✅ Materials seeded');
 
-  // 7. Stock Summaries (Initial Stock In)
+  // 8. Stock Summaries (Initial Stock In)
   await prisma.stockSummary.upsert({
     where: { materialId: matPaper.id },
     update: { quantityReceived: 100, quantityIssued: 15, remainingQuantity: 85 },
@@ -365,7 +482,7 @@ async function main() {
 
   console.log('✅ Stock Summaries seeded');
 
-  // 8. Sample Stock In Transactions
+  // 9. Sample Stock In Transactions
   await prisma.inventoryTransaction.createMany({
     data: [
       {
@@ -396,17 +513,23 @@ async function main() {
     skipDuplicates: true,
   });
 
-  // 9. Sample Material Requests
-  // Pending request
+  // 10. Sample Material Requests with Store Scoping
+  // REQ-2026-001: Pending request targeting Store A
   const req1 = await prisma.materialRequest.upsert({
     where: { requestNumber: 'REQ-2026-001' },
-    update: {},
+    update: {
+      storeId: storeA.id,
+      status: RequestStatus.PENDING,
+      departmentId: csDept.id,
+      requesterId: requester.id,
+    },
     create: {
       requestNumber: 'REQ-2026-001',
       purpose: 'End of Semester Examinations Printing',
       status: RequestStatus.PENDING,
       requesterId: requester.id,
       departmentId: csDept.id,
+      storeId: storeA.id,
       items: {
         create: [
           { materialId: matPaper.id, quantityRequested: 10, quantityIssued: 0 },
@@ -416,19 +539,22 @@ async function main() {
     },
   });
 
-  // Approved request ready for Storekeeper to issue
+  // REQ-2026-002: Pending request targeting Store B
   const req2 = await prisma.materialRequest.upsert({
     where: { requestNumber: 'REQ-2026-002' },
-    update: {},
+    update: {
+      storeId: storeB.id,
+      status: RequestStatus.PENDING,
+      departmentId: csDept.id,
+      requesterId: requester.id,
+    },
     create: {
       requestNumber: 'REQ-2026-002',
       purpose: 'Lab Setup & Printer Maintenance',
-      status: RequestStatus.APPROVED,
-      managerRemarks: 'Approved for CS Department Computer Lab 2',
+      status: RequestStatus.PENDING,
       requesterId: requester.id,
       departmentId: csDept.id,
-      approvedById: manager.id,
-      approvedAt: new Date(),
+      storeId: storeB.id,
       items: {
         create: [
           { materialId: matToner.id, quantityRequested: 2, quantityIssued: 0 },
@@ -437,47 +563,86 @@ async function main() {
     },
   });
 
-  // Issued request
+  // REQ-2026-003: Approved request for Store A
   const req3 = await prisma.materialRequest.upsert({
     where: { requestNumber: 'REQ-2026-003' },
-    update: {},
+    update: {
+      storeId: storeA.id,
+      status: RequestStatus.APPROVED,
+      departmentId: csDept.id,
+      requesterId: requester.id,
+      approvedById: manager.id,
+      approvedAt: new Date(),
+    },
     create: {
       requestNumber: 'REQ-2026-003',
       purpose: 'Faculty Office Setup',
-      status: RequestStatus.ISSUED,
-      managerRemarks: 'Approved as requested',
+      status: RequestStatus.APPROVED,
+      managerRemarks: 'Approved for Faculty Offices',
       requesterId: requester.id,
       departmentId: csDept.id,
+      storeId: storeA.id,
       approvedById: manager.id,
-      approvedAt: new Date(Date.now() - 86400000),
+      approvedAt: new Date(),
       items: {
         create: [
-          { materialId: matChair.id, quantityRequested: 2, quantityIssued: 2 },
+          { materialId: matChair.id, quantityRequested: 2, quantityIssued: 0 },
         ],
       },
     },
   });
 
-  // Stock Out transaction for Issued Request
+  // REQ-2026-004: Issued request for Store A
+  const req4 = await prisma.materialRequest.upsert({
+    where: { requestNumber: 'REQ-2026-004' },
+    update: {
+      storeId: storeA.id,
+      status: RequestStatus.ISSUED,
+      departmentId: csDept.id,
+      requesterId: requester.id,
+      approvedById: manager.id,
+      approvedAt: new Date(Date.now() - 86400000),
+    },
+    create: {
+      requestNumber: 'REQ-2026-004',
+      purpose: 'Network Lab Cabling Deployment',
+      status: RequestStatus.ISSUED,
+      managerRemarks: 'Approved and issued for network upgrade',
+      requesterId: requester.id,
+      departmentId: csDept.id,
+      storeId: storeA.id,
+      approvedById: manager.id,
+      approvedAt: new Date(Date.now() - 86400000),
+      items: {
+        create: [
+          { materialId: matCable.id, quantityRequested: 1, quantityIssued: 1 },
+        ],
+      },
+    },
+  });
+
+  // Stock Out transaction for Issued Request (REQ-2026-004)
   await prisma.inventoryTransaction.upsert({
     where: { transactionCode: 'TXN-OUT-001' },
-    update: {},
+    update: {
+      requestId: req4.id,
+    },
     create: {
       transactionCode: 'TXN-OUT-001',
       type: TransactionType.STOCK_OUT,
-      materialId: matChair.id,
-      quantity: 2,
-      requestId: req3.id,
+      materialId: matCable.id,
+      quantity: 1,
+      requestId: req4.id,
       employeeId: emp1.id,
       departmentId: csDept.id,
       issuedById: keeper.id,
       approvedById: manager.id,
-      purpose: 'Faculty Office Setup',
-      remarks: 'Issued 2 mesh chairs to Dr. Chala Bekele',
+      purpose: 'Network Lab Cabling Deployment',
+      remarks: 'Issued 1 roll CAT6 Cable to Dr. Chala Bekele',
     },
   });
 
-  console.log('✅ Sample Material Requests & Transactions seeded');
+  console.log('✅ Sample Material Requests (REQ-2026-001 to 004) & Transactions seeded');
   console.log('🎉 Seed completed successfully!');
 }
 

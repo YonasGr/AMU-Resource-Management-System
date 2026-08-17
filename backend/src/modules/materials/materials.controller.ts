@@ -17,15 +17,15 @@ export class MaterialsController {
   }
 
   @Post('categories')
-  @Roles(Role.ADMINISTRATOR)
-  @ApiOperation({ summary: 'Create a new material category (Administrator only - UC5)' })
+  @Roles(Role.STORE_MANAGER)
+  @ApiOperation({ summary: 'Create a new material category (Store Manager only - UC5)' })
   createCategory(@Body() body: { name: string; description?: string }) {
     return this.materialsService.createCategory(body.name, body.description);
   }
 
   @Post()
-  @Roles(Role.ADMINISTRATOR)
-  @ApiOperation({ summary: 'Register a new store material (Administrator only - UC6 Item Master)' })
+  @Roles(Role.STORE_MANAGER)
+  @ApiOperation({ summary: 'Register a new store material (Store Manager only - UC6 Item Master)' })
   create(@Body() dto: CreateMaterialDto) {
     return this.materialsService.create(dto);
   }
@@ -51,15 +51,15 @@ export class MaterialsController {
   }
 
   @Patch(':id')
-  @Roles(Role.ADMINISTRATOR)
-  @ApiOperation({ summary: 'Update material details (Administrator only)' })
+  @Roles(Role.STORE_MANAGER)
+  @ApiOperation({ summary: 'Update material details (Store Manager only)' })
   update(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateMaterialDto) {
     return this.materialsService.update(id, dto);
   }
 
   @Delete(':id')
-  @Roles(Role.ADMINISTRATOR)
-  @ApiOperation({ summary: 'Delete material (Administrator only)' })
+  @Roles(Role.STORE_MANAGER)
+  @ApiOperation({ summary: 'Delete material (Store Manager only)' })
   async remove(@Param('id', ParseUUIDPipe) id: string) {
     await this.materialsService.delete(id);
     return { success: true };

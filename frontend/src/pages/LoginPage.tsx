@@ -16,7 +16,9 @@ export default function LoginPage() {
   const [error, setError] = useState('');
 
   const quickUsers = [
-    { label: 'Store Manager', email: 'manager@store.com', role: 'Approval & Control' },
+    { label: 'Store Manager (Store A)', email: 'manager@store.com', role: 'Approval & Control' },
+    { label: 'Store Manager (Store B)', email: 'engmanager@store.com', role: 'Approval & Control (Store B)' },
+    { label: 'Global Store Manager', email: 'globalmanager@store.com', role: 'Global Approval & Control' },
     { label: 'Storekeeper', email: 'keeper@store.com', role: 'Stock In/Out Ops' },
     { label: 'Requester (Lecturer)', email: 'requester@store.com', role: 'Item Requests' },
     { label: 'Auditor', email: 'auditor@store.com', role: 'Reports & Logs' },

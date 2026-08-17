@@ -1,9 +1,13 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../../lib/api';
-import { BarChart3, FileSpreadsheet, Printer } from 'lucide-react';
+import { BarChart3, FileSpreadsheet, Printer, ShieldAlert } from 'lucide-react';
+import { useAuthStore } from '../../store/auth.store';
 
 export default function ReportsPage() {
+  const user = useAuthStore((s) => s.user);
+  const isRequester = user?.role === 'REQUESTER';
+
   const [reportType, setReportType] = useState<
     | 'current-stock'
     | 'stock-in'
@@ -21,7 +25,22 @@ export default function ReportsPage() {
       const res = await api.get(`/reports/${reportType}`);
       return res.data.data ?? res.data;
     },
+    enabled: !isRequester,
   });
+
+  if (isRequester) {
+    return (
+      <div className="rounded-2xl bg-white p-8 shadow-sm border border-slate-200 text-center py-16 space-y-4">
+        <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-rose-50 text-rose-600">
+          <ShieldAlert className="h-8 w-8" />
+        </div>
+        <h2 className="text-xl font-bold text-slate-900">Access Denied</h2>
+        <p className="text-sm text-slate-500 max-w-md mx-auto">
+          System inventory reports, valuation audits, and data exports are restricted to Store Management, Storekeeper, Internal Auditor, and System Administrator roles.
+        </p>
+      </div>
+    );
+  }
 
   const reportTitles: Record<string, string> = {
     'current-stock': '1. Current Stock Report',

@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, ParseUUIDPipe, Post, Query } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, HttpStatus, Param, ParseUUIDPipe, Post, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { RequestStatus, Role } from '@prisma/client';
 import { RequestsService, CreateRequestDto } from './requests.service';
@@ -34,14 +34,15 @@ export class RequestsController {
   }
 
   @Post(':id/approve-reject')
-  @Roles(Role.STORE_MANAGER)
-  @ApiOperation({ summary: 'Approve or reject a material request (Store Manager only - UC13)' })
+  @HttpCode(HttpStatus.OK)
+  @Roles(Role.STORE_MANAGER, Role.ADMINISTRATOR)
+  @ApiOperation({ summary: 'Approve or reject a material request (Store Manager / Admin - UC13)' })
   approveOrReject(
     @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser() user: SafeUser,
     @Body() body: { action: 'APPROVE' | 'REJECT'; remarks?: string },
   ) {
-    return this.requestsService.approveOrReject(id, user.id, body.action, body.remarks);
+    return this.requestsService.approveOrReject(id, user, body.action, body.remarks);
   }
 
   @Post(':id/issue')

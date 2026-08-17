@@ -1,6 +1,7 @@
 import { Outlet } from 'react-router-dom';
 import { Sidebar } from './Sidebar';
 import { TopBar } from './TopBar';
+import { NotificationDrawer } from '../notifications/NotificationDrawer';
 
 export function AppShell() {
   return (
@@ -12,6 +13,9 @@ export function AppShell() {
           <Outlet />
         </main>
       </div>
+      {/* Notification drawer renders as a fixed overlay */}
+      <NotificationDrawer />
     </div>
   );
 }
+

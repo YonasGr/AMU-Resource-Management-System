@@ -15,6 +15,17 @@ enum Role {
   REQUESTER
 }
 
+enum ScopeType {
+  GLOBAL
+  ORGANIZATION
+  STORE
+}
+
+enum StoreStatus {
+  ACTIVE
+  INACTIVE
+}
+
 enum UserStatus {
   ACTIVE
   INACTIVE
@@ -32,8 +43,25 @@ model Department {
   employees        Employee[]
   materialRequests MaterialRequest[]
   transactions     InventoryTransaction[]
+  stores           Store[]
 
   @@map("departments")
+}
+
+model Store {
+  id           String          @id @default(uuid())
+  code         String          @unique
+  name         String
+  location     String?
+  status       StoreStatus     @default(ACTIVE)
+  departmentId String?         @map("department_id")
+  department   Department?     @relation(fields: [departmentId], references: [id])
+  users        User[]
+  requests     MaterialRequest[]
+  createdAt    DateTime        @default(now()) @map("created_at")
+  updatedAt    DateTime        @updatedAt @map("updated_at")
+
+  @@map("stores")
 }
 
 model User {
@@ -44,15 +72,20 @@ model User {
   passwordHash String     @map("password_hash")
   role         Role       @default(REQUESTER)
   status       UserStatus @default(ACTIVE)
+  scopeType    ScopeType  @default(STORE) @map("scope_type")
 
   departmentId String?     @map("department_id")
   department   Department? @relation(fields: [departmentId], references: [id])
+
+  storeId      String?     @map("store_id")
+  store        Store?      @relation(fields: [storeId], references: [id])
 
   submittedRequests MaterialRequest[]      @relation("Requester")
   approvedRequests  MaterialRequest[]      @relation("ApprovedBy")
   issuedTransactions InventoryTransaction[] @relation("IssuedBy")
   approvedTransactions InventoryTransaction[] @relation("ApprovedBy")
   auditLogs         AuditLog[]
+  notifications     Notification[]
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -177,6 +210,9 @@ model MaterialRequest {
   departmentId String     @map("department_id")
   department   Department @relation(fields: [departmentId], references: [id])
 
+  storeId      String?    @map("store_id")
+  store        Store?     @relation(fields: [storeId], references: [id])
+
   approvedById String?   @map("approved_by_id")
   approvedBy   User?     @relation("ApprovedBy", fields: [approvedById], references: [id])
   approvedAt   DateTime? @map("approved_at")
@@ -256,4 +292,27 @@ model AuditLog {
   createdAt DateTime @default(now()) @map("created_at")
 
   @@map("audit_logs")
+}
+
+enum NotificationType {
+  REQUEST_SUBMITTED
+  REQUEST_APPROVED
+  REQUEST_REJECTED
+  REQUEST_ISSUED
+  LOW_STOCK_ALERT
+  STOCK_IN_RECORDED
+}
+
+model Notification {
+  id        String           @id @default(uuid())
+  userId    String           @map("user_id")
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      NotificationType
+  title     String
+  message   String
+  isRead    Boolean          @default(false) @map("is_read")
+  metadata  Json?            // { requestId, requestNumber, materialName, etc. }
+  createdAt DateTime         @default(now()) @map("created_at")
+
+  @@map("notifications")
 }

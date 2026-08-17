@@ -2,6 +2,7 @@ import { LogOut, Store, Shield } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuthStore } from '../../store/auth.store';
+import { NotificationBell } from '../notifications/NotificationBell';
 
 export function TopBar() {
   const navigate = useNavigate();
@@ -58,7 +59,12 @@ export function TopBar() {
         )}
       </div>
 
-      <div className="flex items-center gap-5">
+      <div className="flex items-center gap-3">
+        {/* Notification Bell */}
+        <NotificationBell />
+
+        <div className="h-6 w-px bg-slate-200" />
+
         <div className="text-right">
           <p className="text-sm font-semibold leading-tight text-slate-900">{user?.fullName}</p>
           <p className="text-xs text-slate-500">{user?.email}</p>
@@ -75,3 +81,4 @@ export function TopBar() {
     </header>
   );
 }
+

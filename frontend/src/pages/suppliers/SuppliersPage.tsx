@@ -1,13 +1,32 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import {
+  Truck,
+  Building2,
+  Plus,
+  Package,
+  Mail,
+  Phone,
+  MapPin,
+  User,
+  ExternalLink,
+  Sparkles,
+} from 'lucide-react';
 import { api } from '../../lib/api';
-import { Building, Plus, Package } from 'lucide-react';
 import { useAuthStore } from '../../store/auth.store';
+import { PageHeader } from '../../components/ui/PageHeader';
+import { Card, CardHeader, CardTitle, CardDescription, CardBody } from '../../components/ui/Card';
+import { Button } from '../../components/ui/Button';
+import { Badge } from '../../components/ui/Badge';
+import { Input, Label, Textarea, SearchInput } from '../../components/ui/Input';
+import { Modal } from '../../components/ui/Modal';
+import { EmptyState } from '../../components/ui/EmptyState';
 
 export default function SuppliersPage() {
   const queryClient = useQueryClient();
   const user = useAuthStore((s) => s.user);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [search, setSearch] = useState('');
 
   // Form State
   const [supplierCode, setSupplierCode] = useState('');
@@ -34,6 +53,7 @@ export default function SuppliersPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['suppliers'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] });
       setIsModalOpen(false);
       resetForm();
     },
@@ -62,161 +82,224 @@ export default function SuppliersPage() {
 
   const canManage = user?.role === 'ADMINISTRATOR' || user?.role === 'STORE_MANAGER';
 
-  return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
-            <Building className="h-6 w-6 text-indigo-600" /> Supplier Management
-          </h1>
-          <p className="text-sm text-slate-500">
-            Register suppliers, manage vendor details, and track supplied materials
-          </p>
-        </div>
+  const filteredSuppliers = (suppliers || []).filter((s: any) => {
+    const q = search.toLowerCase();
+    return (
+      s.name?.toLowerCase().includes(q) ||
+      s.supplierCode?.toLowerCase().includes(q) ||
+      s.contactPerson?.toLowerCase().includes(q) ||
+      s.email?.toLowerCase().includes(q)
+    );
+  });
 
-        {canManage && (
-          <button
-            onClick={() => setIsModalOpen(true)}
-            className="flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-indigo-600/30 hover:bg-indigo-500 transition-colors"
-          >
-            <Plus className="h-4 w-4" /> Register Supplier
-          </button>
-        )}
-      </div>
+  return (
+    <div className="space-y-6 animate-fade-in">
+      {/* Header */}
+      <PageHeader
+        title="Supplier & Vendor Directory"
+        description="Manage approved university suppliers, commercial vendor profiles, and delivery receipt records."
+        icon={Truck}
+        breadcrumbs={[{ label: 'Home', to: '/' }, { label: 'Suppliers Directory' }]}
+        actions={
+          canManage && (
+            <Button
+              variant="primary"
+              onClick={() => setIsModalOpen(true)}
+              leftIcon={<Plus className="h-4 w-4" />}
+            >
+              Register Supplier
+            </Button>
+          )
+        }
+      />
+
+      {/* Search Toolbar */}
+      <Card className="p-4">
+        <div className="max-w-md">
+          <SearchInput
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            onClear={() => setSearch('')}
+            placeholder="Search suppliers by name, code, contact person..."
+          />
+        </div>
+      </Card>
 
       {/* Grid */}
-      <div className="rounded-2xl bg-white p-6 shadow-sm border border-slate-200">
-        {isLoading ? (
-          <div className="py-8 text-center text-sm text-slate-500">Loading suppliers...</div>
-        ) : suppliers?.length === 0 ? (
-          <div className="py-8 text-center text-sm text-slate-500">No suppliers registered yet.</div>
-        ) : (
-          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-            {suppliers?.map((supp: any) => (
-              <div
-                key={supp.id}
-                className="rounded-xl border border-slate-200 p-5 space-y-3 hover:border-indigo-300 transition-all bg-slate-50/50"
-              >
-                <div className="flex items-center justify-between">
-                  <span className="font-mono text-xs font-bold text-indigo-600 bg-indigo-50 px-2.5 py-1 rounded-md">
+      {isLoading ? (
+        <div className="py-16 text-center">
+          <div className="mx-auto h-7 w-7 animate-spin rounded-full border-2 border-teal-600 border-t-transparent" />
+          <p className="mt-3 text-xs font-semibold text-slate-500">Loading registered suppliers...</p>
+        </div>
+      ) : filteredSuppliers.length === 0 ? (
+        <Card className="p-8">
+          <EmptyState
+            icon={Truck}
+            title="No suppliers found"
+            description={
+              search
+                ? 'No vendors matched your search keyword.'
+                : 'No external vendors or suppliers have been registered yet.'
+            }
+            action={
+              canManage ? (
+                <Button
+                  variant="primary"
+                  size="sm"
+                  onClick={() => setIsModalOpen(true)}
+                  leftIcon={<Plus className="h-3.5 w-3.5" />}
+                >
+                  Register Supplier
+                </Button>
+              ) : undefined
+            }
+          />
+        </Card>
+      ) : (
+        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+          {filteredSuppliers.map((supp: any) => (
+            <Card
+              key={supp.id}
+              className="flex flex-col justify-between hover:border-teal-300 hover:shadow-md transition-all group"
+            >
+              <CardHeader className="pb-3 border-b border-slate-100">
+                <div className="flex items-center justify-between w-full">
+                  <span className="font-mono text-xs font-bold text-teal-800 bg-teal-50 px-2.5 py-1 rounded-lg border border-teal-200">
                     {supp.supplierCode}
                   </span>
-                  <span className="inline-flex items-center gap-1 text-xs font-semibold text-slate-600">
-                    <Package className="h-3.5 w-3.5 text-slate-400" />
-                    {supp._count?.transactions ?? 0} Stock In Shipments
+                  <span className="inline-flex items-center gap-1 text-[11px] font-bold text-slate-600 bg-slate-100 px-2.5 py-1 rounded-lg">
+                    <Package className="h-3 w-3 text-teal-600" />
+                    {supp._count?.transactions ?? 0} Shipments
                   </span>
                 </div>
+              </CardHeader>
 
-                <h3 className="font-bold text-slate-900 text-base">{supp.name}</h3>
-
-                <div className="text-xs text-slate-600 space-y-1">
-                  <p><span className="font-medium text-slate-500">Contact Person:</span> {supp.contactPerson || 'N/A'}</p>
-                  <p><span className="font-medium text-slate-500">Phone:</span> {supp.phone || 'N/A'}</p>
-                  <p><span className="font-medium text-slate-500">Email:</span> {supp.email || 'N/A'}</p>
-                  <p><span className="font-medium text-slate-500">Address:</span> {supp.address || 'N/A'}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* Register Supplier Modal */}
-      {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl space-y-4">
-            <h2 className="text-lg font-bold text-slate-900">Register Supplier</h2>
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Supplier Code *</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. SUP-003"
-                  value={supplierCode}
-                  onChange={(e) => setSupplierCode(e.target.value)}
-                  className="w-full rounded-lg border border-slate-300 p-2.5 text-sm focus:outline-none"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Company / Supplier Name *</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. Ethio Furniture Industries"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  className="w-full rounded-lg border border-slate-300 p-2.5 text-sm focus:outline-none"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
+              <CardBody className="py-4 space-y-3.5 flex-1">
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">Contact Person</label>
-                  <input
-                    type="text"
-                    placeholder="e.g. Ato Mulugeta"
-                    value={contactPerson}
-                    onChange={(e) => setContactPerson(e.target.value)}
-                    className="w-full rounded-lg border border-slate-300 p-2.5 text-sm focus:outline-none"
-                  />
+                  <h3 className="font-extrabold text-slate-900 text-base">{supp.name}</h3>
+                  {supp.contactPerson && (
+                    <p className="flex items-center gap-1.5 text-xs text-slate-600 font-medium mt-1">
+                      <User className="h-3.5 w-3.5 text-slate-400" />
+                      <span>{supp.contactPerson}</span>
+                    </p>
+                  )}
                 </div>
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">Phone Number</label>
-                  <input
-                    type="text"
-                    placeholder="+251..."
-                    value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
-                    className="w-full rounded-lg border border-slate-300 p-2.5 text-sm focus:outline-none"
-                  />
+
+                <div className="space-y-1.5 text-xs text-slate-500 pt-2 border-t border-slate-100">
+                  {supp.phone && (
+                    <div className="flex items-center gap-2">
+                      <Phone className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+                      <span className="font-medium text-slate-700">{supp.phone}</span>
+                    </div>
+                  )}
+                  {supp.email && (
+                    <div className="flex items-center gap-2">
+                      <Mail className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+                      <span className="truncate">{supp.email}</span>
+                    </div>
+                  )}
+                  {supp.address && (
+                    <div className="flex items-center gap-2">
+                      <MapPin className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+                      <span className="truncate">{supp.address}</span>
+                    </div>
+                  )}
+                  {!supp.phone && !supp.email && !supp.address && (
+                    <span className="italic text-slate-400">No additional contact details</span>
+                  )}
                 </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Email</label>
-                <input
-                  type="email"
-                  placeholder="info@supplier.com"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="w-full rounded-lg border border-slate-300 p-2.5 text-sm focus:outline-none"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Address / Location</label>
-                <input
-                  type="text"
-                  placeholder="Sub-city, City"
-                  value={address}
-                  onChange={(e) => setAddress(e.target.value)}
-                  className="w-full rounded-lg border border-slate-300 p-2.5 text-sm focus:outline-none"
-                />
-              </div>
-
-              <div className="flex justify-end gap-3 pt-3 border-t border-slate-100">
-                <button
-                  type="button"
-                  onClick={() => setIsModalOpen(false)}
-                  className="rounded-lg bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-200"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={createMutation.isPending}
-                  className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-500"
-                >
-                  Save Supplier
-                </button>
-              </div>
-            </form>
-          </div>
+              </CardBody>
+            </Card>
+          ))}
         </div>
       )}
+
+      {/* Register Supplier Modal */}
+      <Modal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        title="Register New Vendor"
+        description="Add a new commercial supplier or vendor for store inventory purchases."
+        size="md"
+      >
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <Label required>Supplier Code</Label>
+            <Input
+              required
+              placeholder="e.g. SUP-003"
+              value={supplierCode}
+              onChange={(e) => setSupplierCode(e.target.value)}
+            />
+          </div>
+
+          <div>
+            <Label required>Company / Vendor Name</Label>
+            <Input
+              required
+              placeholder="e.g. Ethio Furniture & Lab Supplies PLC"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+            />
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <Label>Contact Person</Label>
+              <Input
+                placeholder="e.g. Ato Mulugeta Kebede"
+                value={contactPerson}
+                onChange={(e) => setContactPerson(e.target.value)}
+              />
+            </div>
+            <div>
+              <Label>Phone Number</Label>
+              <Input
+                placeholder="+251 91 123 4567"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+              />
+            </div>
+          </div>
+
+          <div>
+            <Label>Email Address</Label>
+            <Input
+              type="email"
+              placeholder="contact@supplier.com"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+            />
+          </div>
+
+          <div>
+            <Label>Office / Physical Address</Label>
+            <Input
+              placeholder="e.g. Arba Minch Main Road, Near Campus Gate"
+              value={address}
+              onChange={(e) => setAddress(e.target.value)}
+            />
+          </div>
+
+          <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => setIsModalOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              variant="primary"
+              isLoading={createMutation.isPending}
+            >
+              Save Supplier
+            </Button>
+          </div>
+        </form>
+      </Modal>
     </div>
   );
 }
+

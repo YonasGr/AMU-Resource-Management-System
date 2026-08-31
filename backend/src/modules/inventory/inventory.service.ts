@@ -2,6 +2,7 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { PrismaService } from '../../prisma/prisma.service';
 import { TransactionType } from '@prisma/client';
 import { NotificationsService } from '../notifications/notifications.service';
+import { AuditService } from '../audit/audit.service';
 
 export interface StockInDto {
   materialId: string;
@@ -48,6 +49,7 @@ export class InventoryService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly notifications: NotificationsService,
+    private readonly auditService: AuditService,
   ) {}
 
   /** Emit a low-stock alert if stock has fallen below minimum */
@@ -140,6 +142,14 @@ export class InventoryService {
       { materialId: dto.materialId, materialCode: material.materialCode, quantity: dto.quantity },
     );
 
+    // Audit Log
+    await this.auditService.log(
+      storekeeperId,
+      'STOCK_IN',
+      'INVENTORY',
+      `Received ${dto.quantity} ${material.unit}(s) of "${material.name}" (${material.materialCode}) [Txn: ${transaction.transactionCode}]`,
+    );
+
     return transaction;
   }
 
@@ -156,7 +166,7 @@ export class InventoryService {
     const available = material.stockSummary?.remainingQuantity ?? 0;
     if (available < dto.quantity) {
       throw new BadRequestException(
-        `Cannot issue ${dto.quantity} ${material.unit}(s). Only ${available} available in stock.`,
+        `Insufficient stock for "${material.name}". Requested: ${dto.quantity}, Available: ${available}`,
       );
     }
 
@@ -174,7 +184,7 @@ export class InventoryService {
           employeeId: dto.employeeId || null,
           departmentId: dto.departmentId || null,
           issuedById: storekeeperId,
-          purpose: dto.purpose || 'Direct Issue',
+          purpose: dto.purpose || 'Direct Material Issue',
           remarks: dto.remarks,
         },
         include: {
@@ -199,6 +209,14 @@ export class InventoryService {
     // Check if stock fell below minimum after this operation
     await this.maybeAlertLowStock(dto.materialId);
 
+    // Audit Log
+    await this.auditService.log(
+      storekeeperId,
+      'STOCK_OUT',
+      'INVENTORY',
+      `Issued ${dto.quantity} ${material.unit}(s) of "${material.name}" (${material.materialCode}) [Txn: ${transaction.transactionCode}]`,
+    );
+
     return transaction;
   }
 
@@ -216,8 +234,8 @@ export class InventoryService {
     const rand = Math.floor(100 + Math.random() * 900);
     const txnCode = `TXN-RET-${timeStamp}-${rand}`;
 
-    return this.prisma.$transaction(async (tx) => {
-      const transaction = await tx.inventoryTransaction.create({
+    const transaction = await this.prisma.$transaction(async (tx) => {
+      const txn = await tx.inventoryTransaction.create({
         data: {
           transactionCode: txnCode,
           type: TransactionType.RETURN,
@@ -245,8 +263,18 @@ export class InventoryService {
         },
       });
 
-      return transaction;
+      return txn;
     });
+
+    // Audit Log
+    await this.auditService.log(
+      storekeeperId,
+      'RETURN',
+      'INVENTORY',
+      `Accepted return of ${dto.quantity} ${material.unit}(s) of "${material.name}" (${material.materialCode}) [Txn: ${transaction.transactionCode}]`,
+    );
+
+    return transaction;
   }
 
   /** Stock Adjustment (Manual stock audit count adjustment) */
@@ -296,6 +324,14 @@ export class InventoryService {
     // Check low-stock after adjustment too
     await this.maybeAlertLowStock(dto.materialId);
 
+    // Audit Log
+    await this.auditService.log(
+      storekeeperId,
+      'STOCK_ADJUSTMENT',
+      'INVENTORY',
+      `Stock audit adjusted "${material.name}" (${material.materialCode}) from ${currentRemaining} to ${dto.newQuantity} (Delta: ${diff >= 0 ? '+' : ''}${diff}). Reason: "${dto.reason}" [Txn: ${transaction.transactionCode}]`,
+    );
+
     return transaction;
   }
 
@@ -320,8 +356,8 @@ export class InventoryService {
     const rand = Math.floor(100 + Math.random() * 900);
     const txnCode = `TXN-TRF-${timeStamp}-${rand}`;
 
-    return this.prisma.$transaction(async (tx) => {
-      const transaction = await tx.inventoryTransaction.create({
+    const transaction = await this.prisma.$transaction(async (tx) => {
+      const txn = await tx.inventoryTransaction.create({
         data: {
           transactionCode: txnCode,
           type: TransactionType.TRANSFER,
@@ -339,8 +375,18 @@ export class InventoryService {
         },
       });
 
-      return transaction;
+      return txn;
     });
+
+    // Audit Log
+    await this.auditService.log(
+      storekeeperId,
+      'TRANSFER',
+      'INVENTORY',
+      `Transferred ${dto.quantity} ${material.unit}(s) of "${material.name}" (${material.materialCode}) to department [Txn: ${transaction.transactionCode}]`,
+    );
+
+    return transaction;
   }
 
   /** Get all inventory transactions with filter */

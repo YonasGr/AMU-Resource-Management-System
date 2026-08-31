@@ -1,28 +1,49 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { api } from '../../lib/api';
-import { useAuthStore } from '../../store/auth.store';
 import {
   FileText,
   Plus,
-  CheckCircle,
+  CheckCircle2,
   XCircle,
   PackageCheck,
   Clock,
   User,
-  Building,
+  Building2,
   Layers,
+  ArrowRight,
+  ShieldCheck,
+  Check,
+  X,
+  Boxes,
+  Trash2,
 } from 'lucide-react';
+import { api } from '../../lib/api';
+import { useAuthStore } from '../../store/auth.store';
+import { PageHeader } from '../../components/ui/PageHeader';
+import { Card, CardHeader, CardTitle, CardBody } from '../../components/ui/Card';
+import { Button } from '../../components/ui/Button';
+import { Badge, statusTone } from '../../components/ui/Badge';
+import { Input, Select, Label, Textarea } from '../../components/ui/Input';
+import { Modal } from '../../components/ui/Modal';
+import { EmptyState } from '../../components/ui/EmptyState';
 
 export default function RequestsPage() {
   const queryClient = useQueryClient();
   const user = useAuthStore((s) => s.user);
 
   const isManager = user?.role === 'STORE_MANAGER' || user?.role === 'ADMINISTRATOR';
-  const isKeeper = user?.role === 'STOREKEEPER' || user?.role === 'STORE_MANAGER' || user?.role === 'ADMINISTRATOR';
+  // Strict Segregation of Duties: Only physical STOREKEEPER can execute stock issuance
+  const isKeeper = user?.role === 'STOREKEEPER';
 
-  // Default tab based on role
-  const [activeTab, setActiveTab] = useState<'all' | 'my' | 'approvals' | 'issue'>('all');
+  // Role-tailored initial tab
+  const getInitialTab = (): 'all' | 'my' | 'approvals' | 'issue' => {
+    if (user?.role === 'REQUESTER') return 'my';
+    if (user?.role === 'STORE_MANAGER') return 'approvals';
+    if (user?.role === 'STOREKEEPER') return 'issue';
+    return 'all';
+  };
+
+  const [activeTab, setActiveTab] = useState<'all' | 'my' | 'approvals' | 'issue'>(getInitialTab());
   const [isModalOpen, setIsModalOpen] = useState(false);
 
   // Form State
@@ -71,6 +92,7 @@ export default function RequestsPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['material-requests'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] });
       setIsModalOpen(false);
       setPurpose('');
       setSelectedItems([]);
@@ -79,7 +101,15 @@ export default function RequestsPage() {
 
   // Approve / Reject Mutation
   const approveRejectMutation = useMutation({
-    mutationFn: async ({ id, action, remarks }: { id: string; action: 'APPROVE' | 'REJECT'; remarks?: string }) => {
+    mutationFn: async ({
+      id,
+      action,
+      remarks,
+    }: {
+      id: string;
+      action: 'APPROVE' | 'REJECT';
+      remarks?: string;
+    }) => {
       const res = await api.post(`/requests/${id}/approve-reject`, { action, remarks });
       return res.data;
     },
@@ -145,51 +175,56 @@ export default function RequestsPage() {
       : allRequests;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 animate-fade-in">
       {/* Header */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
-            <FileText className="h-6 w-6 text-indigo-600" /> Material Requests Hub
-          </h1>
-          <p className="text-sm text-slate-500">
-            Submit item requests, approve requests, and fulfill material issuance
-          </p>
-        </div>
-
-        <button
-          onClick={() => setIsModalOpen(true)}
-          className="flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-indigo-600/30 hover:bg-indigo-500 transition-colors"
-        >
-          <Plus className="h-4 w-4" /> Submit New Request
-        </button>
-      </div>
+      <PageHeader
+        title="Material Requests Hub"
+        description="Submit departmental requisition orders, approve request workflows, and release store items."
+        icon={FileText}
+        breadcrumbs={[{ label: 'Home', to: '/' }, { label: 'Material Requests' }]}
+        actions={
+          <Button
+            variant="primary"
+            onClick={() => setIsModalOpen(true)}
+            leftIcon={<Plus className="h-4 w-4" />}
+          >
+            Submit New Request
+          </Button>
+        }
+      />
 
       {/* Tabs */}
-      <div className="flex border-b border-slate-200 gap-6 text-sm font-semibold">
+      <div className="flex flex-wrap items-center gap-2 border-b border-slate-200/90 pb-3">
         <button
+          type="button"
           onClick={() => setActiveTab('all')}
-          className={`pb-3 flex items-center gap-2 transition-colors ${
+          className={`flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-bold transition-all ${
             activeTab === 'all'
-              ? 'border-b-2 border-indigo-600 text-indigo-600'
-              : 'text-slate-500 hover:text-slate-800'
+              ? 'bg-brand-900 text-white shadow-xs'
+              : 'bg-white text-slate-600 border border-slate-200/80 hover:bg-slate-50'
           }`}
         >
-          <Layers className="h-4 w-4" /> All Requests ({allRequests.length})
+          <Layers className="h-3.5 w-3.5" />
+          <span>All Requests</span>
+          <span className="rounded-full bg-slate-100/30 px-2 py-0.5 text-[10px] font-bold">
+            {allRequests.length}
+          </span>
         </button>
 
         {isKeeper && (
           <button
+            type="button"
             onClick={() => setActiveTab('issue')}
-            className={`pb-3 flex items-center gap-2 transition-colors ${
+            className={`flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-bold transition-all ${
               activeTab === 'issue'
-                ? 'border-b-2 border-indigo-600 text-indigo-600'
-                : 'text-slate-500 hover:text-slate-800'
+                ? 'bg-emerald-600 text-white shadow-xs'
+                : 'bg-white text-slate-600 border border-slate-200/80 hover:bg-slate-50'
             }`}
           >
-            Storekeeper Fulfill (Stock Out)
+            <PackageCheck className="h-3.5 w-3.5" />
+            <span>Storekeeper Fulfill (Stock Out)</span>
             {approvedRequests.length > 0 && (
-              <span className="rounded-full bg-emerald-600 px-2 py-0.5 text-xs text-white">
+              <span className="rounded-full bg-emerald-100 text-emerald-800 px-2 py-0.5 text-[10px] font-bold">
                 {approvedRequests.length}
               </span>
             )}
@@ -198,16 +233,18 @@ export default function RequestsPage() {
 
         {isManager && (
           <button
+            type="button"
             onClick={() => setActiveTab('approvals')}
-            className={`pb-3 flex items-center gap-2 transition-colors ${
+            className={`flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-bold transition-all ${
               activeTab === 'approvals'
-                ? 'border-b-2 border-indigo-600 text-indigo-600'
-                : 'text-slate-500 hover:text-slate-800'
+                ? 'bg-amber-600 text-white shadow-xs'
+                : 'bg-white text-slate-600 border border-slate-200/80 hover:bg-slate-50'
             }`}
           >
-            Manager Approvals Queue
+            <ShieldCheck className="h-3.5 w-3.5" />
+            <span>Manager Approvals Queue</span>
             {pendingRequests.length > 0 && (
-              <span className="rounded-full bg-amber-500 px-2 py-0.5 text-xs text-white">
+              <span className="rounded-full bg-amber-100 text-amber-900 px-2 py-0.5 text-[10px] font-bold">
                 {pendingRequests.length}
               </span>
             )}
@@ -215,266 +252,323 @@ export default function RequestsPage() {
         )}
 
         <button
+          type="button"
           onClick={() => setActiveTab('my')}
-          className={`pb-3 flex items-center gap-2 transition-colors ${
+          className={`flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-bold transition-all ${
             activeTab === 'my'
-              ? 'border-b-2 border-indigo-600 text-indigo-600'
-              : 'text-slate-500 hover:text-slate-800'
+              ? 'bg-teal-700 text-white shadow-xs'
+              : 'bg-white text-slate-600 border border-slate-200/80 hover:bg-slate-50'
           }`}
         >
-          My Requests ({myRequests.length})
+          <User className="h-3.5 w-3.5" />
+          <span>My Requests</span>
+          <span className="rounded-full bg-slate-100/30 px-2 py-0.5 text-[10px] font-bold">
+            {myRequests.length}
+          </span>
         </button>
       </div>
 
       {/* Requests List */}
       <div className="space-y-4">
         {isLoading ? (
-          <div className="py-12 text-center text-sm text-slate-500">Loading requests...</div>
-        ) : displayedRequests.length === 0 ? (
-          <div className="rounded-2xl bg-white p-12 text-center text-slate-500 border border-slate-200">
-            <FileText className="mx-auto h-10 w-10 text-slate-300 mb-2" />
-            <p className="font-semibold text-slate-700">No requests found in this tab</p>
-            <p className="text-xs text-slate-400 mt-1">
-              {activeTab === 'issue'
-                ? 'There are currently no approved requests awaiting stock out release.'
-                : activeTab === 'approvals'
-                ? 'There are currently no pending requests requiring manager approval.'
-                : activeTab === 'my'
-                ? 'You have not submitted any material requests yet.'
-                : 'No material requests found.'}
-            </p>
+          <div className="py-16 text-center">
+            <div className="mx-auto h-7 w-7 animate-spin rounded-full border-2 border-teal-600 border-t-transparent" />
+            <p className="mt-3 text-xs font-semibold text-slate-500">Loading requests...</p>
           </div>
+        ) : displayedRequests.length === 0 ? (
+          <Card className="p-8">
+            <EmptyState
+              icon={FileText}
+              title="No requests in this queue"
+              description={
+                activeTab === 'issue'
+                  ? 'There are currently no approved requests awaiting stock out release.'
+                  : activeTab === 'approvals'
+                  ? 'There are currently no pending requests requiring manager approval.'
+                  : activeTab === 'my'
+                  ? 'You have not submitted any material requisition requests yet.'
+                  : 'No material requests found.'
+              }
+              action={
+                <Button
+                  variant="primary"
+                  size="sm"
+                  onClick={() => setIsModalOpen(true)}
+                  leftIcon={<Plus className="h-3.5 w-3.5" />}
+                >
+                  Submit Request
+                </Button>
+              }
+            />
+          </Card>
         ) : (
           displayedRequests.map((req: any) => (
-            <div
-              key={req.id}
-              className="rounded-2xl bg-white p-6 shadow-sm border border-slate-200 space-y-4"
-            >
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between border-b border-slate-100 pb-3">
-                <div>
-                  <div className="flex items-center gap-3">
-                    <span className="font-mono text-sm font-bold text-slate-900">
-                      {req.requestNumber}
-                    </span>
-                    <span
-                      className={`inline-flex items-center gap-1 rounded-full px-3 py-0.5 text-xs font-bold ${
-                        req.status === 'PENDING'
-                          ? 'bg-amber-50 text-amber-700 border border-amber-200'
-                          : req.status === 'APPROVED'
-                          ? 'bg-blue-50 text-blue-700 border border-blue-200'
-                          : req.status === 'ISSUED'
-                          ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                          : 'bg-rose-50 text-rose-700 border border-rose-200'
-                      }`}
-                    >
-                      {req.status === 'PENDING' && <Clock className="h-3 w-3" />}
-                      {req.status === 'APPROVED' && <CheckCircle className="h-3 w-3" />}
-                      {req.status === 'ISSUED' && <PackageCheck className="h-3 w-3" />}
-                      {req.status === 'REJECTED' && <XCircle className="h-3 w-3" />}
-                      {req.status}
-                    </span>
-                  </div>
-                  <p className="mt-1 text-sm font-medium text-slate-800">{req.purpose}</p>
+            <Card key={req.id} className="overflow-hidden hover:border-slate-300">
+              <CardHeader className="bg-slate-50/60 py-3.5">
+                <div className="flex flex-wrap items-center gap-3">
+                  <span className="font-mono text-xs font-bold text-slate-900 bg-white px-2.5 py-1 rounded-lg border border-slate-200 shadow-xs">
+                    {req.requestNumber}
+                  </span>
+
+                  <Badge tone={statusTone(req.status)}>
+                    {req.status}
+                  </Badge>
+
+                  <span className="text-xs text-slate-400 font-medium">
+                    {new Date(req.createdAt).toLocaleString()}
+                  </span>
                 </div>
 
-                <div className="text-xs text-slate-500 space-y-1">
-                  <p className="flex items-center gap-1">
-                    <User className="h-3.5 w-3.5 text-slate-400" /> Requester: <span className="font-semibold text-slate-700">{req.requester?.fullName}</span>
-                  </p>
-                  <p className="flex items-center gap-1">
-                    <Building className="h-3.5 w-3.5 text-slate-400" /> Dept: <span className="font-semibold text-slate-700">{req.department?.name}</span>
-                  </p>
+                <div className="flex items-center gap-2 text-xs text-slate-600 font-semibold">
+                  <span className="inline-flex items-center gap-1 bg-white px-2.5 py-1 rounded-lg border border-slate-200 shadow-xs">
+                    <User className="h-3.5 w-3.5 text-teal-600" />
+                    {req.requester?.fullName || 'Requester'}
+                  </span>
+                  <span className="inline-flex items-center gap-1 bg-white px-2.5 py-1 rounded-lg border border-slate-200 shadow-xs">
+                    <Building2 className="h-3.5 w-3.5 text-slate-500" />
+                    {req.department?.name || 'Department'}
+                  </span>
                 </div>
-              </div>
+              </CardHeader>
 
-              {/* Items List */}
-              <div className="rounded-xl bg-slate-50 p-4 border border-slate-100">
-                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">
-                  Requested Materials
-                </p>
-                <div className="divide-y divide-slate-200/60">
-                  {req.items?.map((item: any) => (
-                    <div key={item.id} className="py-2 flex items-center justify-between text-sm">
-                      <div>
-                        <span className="font-semibold text-slate-900">{item.material?.name}</span>
-                        <span className="text-xs text-slate-500 ml-2">({item.material?.materialCode})</span>
-                      </div>
-                      <div className="font-bold text-slate-800">
-                        {item.quantityRequested} {item.material?.unit || 'unit'}s
-                      </div>
+              <CardBody className="space-y-4 pt-4">
+                {/* Purpose */}
+                <div className="rounded-xl bg-slate-50 p-3 border border-slate-100">
+                  <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                    Purpose / Requisition Justification:
+                  </p>
+                  <p className="text-sm font-semibold text-slate-800 mt-0.5">{req.purpose}</p>
+                </div>
+
+                {/* Requested Items Table */}
+                <div className="rounded-xl border border-slate-200/80 overflow-hidden">
+                  <table className="w-full text-left text-xs">
+                    <thead className="bg-slate-50 text-slate-500 font-bold uppercase tracking-wider border-b border-slate-200/80">
+                      <tr>
+                        <th className="px-4 py-2.5">Material Name & Code</th>
+                        <th className="px-4 py-2.5 text-center">Category</th>
+                        <th className="px-4 py-2.5 text-center">Qty Requested</th>
+                        <th className="px-4 py-2.5 text-right">Unit of Measure</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {req.items?.map((item: any) => (
+                        <tr key={item.id} className="hover:bg-slate-50/50">
+                          <td className="px-4 py-2.5">
+                            <span className="font-bold text-slate-900">{item.material?.name}</span>
+                            <span className="ml-2 font-mono text-[10px] text-slate-400">
+                              ({item.material?.materialCode})
+                            </span>
+                          </td>
+                          <td className="px-4 py-2.5 text-center text-slate-500">
+                            {item.material?.category?.name || 'General'}
+                          </td>
+                          <td className="px-4 py-2.5 text-center font-bold text-slate-900">
+                            {item.quantityRequested}
+                          </td>
+                          <td className="px-4 py-2.5 text-right font-medium text-slate-600">
+                            {item.material?.unit || 'unit'}s
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Action Section for Manager Review */}
+                {isManager && req.status === 'PENDING' && (
+                  <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-3 border-t border-slate-100 bg-amber-50/30 p-4 rounded-xl border border-amber-200/60">
+                    <div className="w-full sm:flex-1">
+                      <Input
+                        placeholder="Optional approval remarks or rejection notes..."
+                        value={selectedRequestId === req.id ? managerRemarks : ''}
+                        onChange={(e) => {
+                          setSelectedRequestId(req.id);
+                          setManagerRemarks(e.target.value);
+                        }}
+                      />
                     </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Action Buttons for Manager & Keeper */}
-              {isManager && req.status === 'PENDING' && (
-                <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-2">
-                  <input
-                    type="text"
-                    placeholder="Optional remarks/comments..."
-                    value={selectedRequestId === req.id ? managerRemarks : ''}
-                    onChange={(e) => {
-                      setSelectedRequestId(req.id);
-                      setManagerRemarks(e.target.value);
-                    }}
-                    className="w-full sm:w-80 rounded-lg border border-slate-300 px-3 py-1.5 text-xs text-slate-800 focus:outline-none"
-                  />
-                  <div className="flex gap-3">
-                    <button
-                      onClick={() =>
-                        approveRejectMutation.mutate({
-                          id: req.id,
-                          action: 'REJECT',
-                          remarks: managerRemarks,
-                        })
-                      }
-                      disabled={approveRejectMutation.isPending}
-                      className="rounded-lg bg-rose-600 px-4 py-2 text-xs font-bold text-white hover:bg-rose-500"
-                    >
-                      Reject Request
-                    </button>
-                    <button
-                      onClick={() =>
-                        approveRejectMutation.mutate({
-                          id: req.id,
-                          action: 'APPROVE',
-                          remarks: managerRemarks,
-                        })
-                      }
-                      disabled={approveRejectMutation.isPending}
-                      className="rounded-lg bg-indigo-600 px-4 py-2 text-xs font-bold text-white hover:bg-indigo-500"
-                    >
-                      Approve Request
-                    </button>
+                    <div className="flex items-center gap-2.5 shrink-0">
+                      <Button
+                        type="button"
+                        variant="danger"
+                        size="sm"
+                        isLoading={approveRejectMutation.isPending}
+                        onClick={() =>
+                          approveRejectMutation.mutate({
+                            id: req.id,
+                            action: 'REJECT',
+                            remarks: managerRemarks,
+                          })
+                        }
+                        leftIcon={<X className="h-3.5 w-3.5" />}
+                      >
+                        Reject
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="primary"
+                        size="sm"
+                        isLoading={approveRejectMutation.isPending}
+                        onClick={() =>
+                          approveRejectMutation.mutate({
+                            id: req.id,
+                            action: 'APPROVE',
+                            remarks: managerRemarks,
+                          })
+                        }
+                        leftIcon={<Check className="h-3.5 w-3.5" />}
+                      >
+                        Approve Request
+                      </Button>
+                    </div>
                   </div>
-                </div>
-              )}
+                )}
 
-              {isKeeper && req.status === 'APPROVED' && (
-                <div className="flex justify-end pt-2">
-                  <button
-                    onClick={() => issueMutation.mutate({ id: req.id })}
-                    disabled={issueMutation.isPending}
-                    className="flex items-center gap-2 rounded-xl bg-emerald-600 px-5 py-2.5 text-xs font-bold text-white shadow-lg shadow-emerald-600/30 hover:bg-emerald-500 transition-colors"
-                  >
-                    <PackageCheck className="h-4 w-4" /> Issue Materials (Stock Out)
-                  </button>
-                </div>
-              )}
-            </div>
+                {/* Action Section for Storekeeper Issuance */}
+                {isKeeper && req.status === 'APPROVED' && (
+                  <div className="flex items-center justify-between pt-3 border-t border-slate-100 bg-emerald-50/30 p-4 rounded-xl border border-emerald-200/60">
+                    <div className="text-xs text-emerald-800 font-medium">
+                      Request is approved and ready for stock release to department.
+                    </div>
+                    <Button
+                      type="button"
+                      variant="success"
+                      size="sm"
+                      isLoading={issueMutation.isPending}
+                      onClick={() => issueMutation.mutate({ id: req.id })}
+                      leftIcon={<PackageCheck className="h-4 w-4" />}
+                    >
+                      Issue Materials (Stock Out)
+                    </Button>
+                  </div>
+                )}
+              </CardBody>
+            </Card>
           ))
         )}
       </div>
 
       {/* New Request Modal */}
-      {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-xl rounded-2xl bg-white p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
-            <h2 className="text-xl font-bold text-slate-900">Submit Material Request</h2>
-            <form onSubmit={handleSubmitRequest} className="space-y-4">
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Department *</label>
-                <select
-                  required
-                  value={departmentId}
-                  onChange={(e) => setDepartmentId(e.target.value)}
-                  className="w-full rounded-lg border border-slate-300 p-2.5 text-sm focus:border-indigo-500 focus:outline-none"
-                >
-                  <option value="">Select Department</option>
-                  {departments?.map((d: any) => (
-                    <option key={d.id} value={d.id}>
-                      {d.name} ({d.code})
-                    </option>
-                  ))}
-                </select>
-              </div>
+      <Modal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        title="Submit Material Request"
+        description="Select requisition items and department purpose for store manager approval."
+        size="xl"
+      >
+        <form onSubmit={handleSubmitRequest} className="space-y-4">
+          <div>
+            <Label required>Department</Label>
+            <Select
+              required
+              value={departmentId}
+              onChange={(e) => setDepartmentId(e.target.value)}
+            >
+              <option value="">Select Requisitioning Department...</option>
+              {departments?.map((d: any) => (
+                <option key={d.id} value={d.id}>
+                  {d.name} ({d.code})
+                </option>
+              ))}
+            </Select>
+          </div>
 
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Purpose of Issue *</label>
-                <textarea
-                  required
-                  rows={2}
-                  placeholder="e.g. End of semester exam paper printing for CS Dept"
-                  value={purpose}
-                  onChange={(e) => setPurpose(e.target.value)}
-                  className="w-full rounded-lg border border-slate-300 p-2.5 text-sm focus:border-indigo-500 focus:outline-none"
-                />
-              </div>
+          <div>
+            <Label required>Purpose of Requisition</Label>
+            <Textarea
+              required
+              rows={2}
+              placeholder="e.g. End of semester examination paper printing and lab supplies"
+              value={purpose}
+              onChange={(e) => setPurpose(e.target.value)}
+            />
+          </div>
 
-              {/* Add Material Selector */}
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Select Materials *</label>
-                <select
-                  onChange={(e) => {
-                    handleAddItem(e.target.value);
-                    e.target.value = '';
-                  }}
-                  className="w-full rounded-lg border border-slate-300 p-2.5 text-sm focus:border-indigo-500 focus:outline-none"
-                >
-                  <option value="">Choose item to add to request...</option>
-                  {materials?.map((m: any) => (
-                    <option key={m.id} value={m.id}>
-                      {m.name} ({m.materialCode}) — Avail: {m.stockSummary?.remainingQuantity ?? 0} {m.unit}s
-                    </option>
-                  ))}
-                </select>
-              </div>
+          {/* Add Material Selector */}
+          <div>
+            <Label required>Choose Items to Add</Label>
+            <Select
+              onChange={(e) => {
+                handleAddItem(e.target.value);
+                e.target.value = '';
+              }}
+            >
+              <option value="">Select item from catalog to add...</option>
+              {materials?.map((m: any) => (
+                <option key={m.id} value={m.id}>
+                  {m.name} ({m.materialCode}) — Avail: {m.stockSummary?.remainingQuantity ?? 0} {m.unit}s
+                </option>
+              ))}
+            </Select>
+          </div>
 
-              {/* Selected Items Table */}
-              {selectedItems.length > 0 && (
-                <div className="rounded-xl border border-slate-200 p-3 space-y-2 bg-slate-50">
-                  <p className="text-xs font-semibold text-slate-600 uppercase tracking-wider">
-                    Selected Items List:
-                  </p>
-                  {selectedItems.map((item, idx) => {
-                    const mat = materials?.find((m: any) => m.id === item.materialId);
-                    return (
-                      <div key={item.materialId} className="flex items-center justify-between gap-3 text-sm bg-white p-2.5 rounded-lg border border-slate-200">
-                        <span className="font-medium text-slate-900">{mat?.name}</span>
-                        <div className="flex items-center gap-3">
+          {/* Selected Items Table */}
+          {selectedItems.length > 0 && (
+            <div className="rounded-2xl border border-slate-200 p-4 space-y-3 bg-slate-50">
+              <p className="text-[11px] font-bold uppercase tracking-wider text-slate-600">
+                Selected Requisition Items ({selectedItems.length}):
+              </p>
+
+              <div className="space-y-2">
+                {selectedItems.map((item, idx) => {
+                  const mat = materials?.find((m: any) => m.id === item.materialId);
+                  return (
+                    <div
+                      key={item.materialId}
+                      className="flex items-center justify-between gap-3 text-sm bg-white p-3 rounded-xl border border-slate-200 shadow-xs"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <p className="font-bold text-slate-900 truncate">{mat?.name}</p>
+                        <p className="text-xs text-slate-400 font-mono">{mat?.materialCode}</p>
+                      </div>
+
+                      <div className="flex items-center gap-3 shrink-0">
+                        <div className="flex items-center gap-1.5">
                           <input
                             type="number"
                             min={1}
                             value={item.quantityRequested}
                             onChange={(e) => handleUpdateItemQty(idx, Number(e.target.value))}
-                            className="w-20 rounded-md border border-slate-300 p-1 text-center text-xs"
+                            className="w-20 rounded-lg border border-slate-200 py-1 px-2 text-center text-xs font-bold text-slate-900 focus:border-teal-500 focus:outline-none"
                           />
-                          <span className="text-xs text-slate-500">{mat?.unit}s</span>
-                          <button
-                            type="button"
-                            onClick={() => handleRemoveItem(idx)}
-                            className="text-xs font-bold text-rose-600 hover:underline"
-                          >
-                            Remove
-                          </button>
+                          <span className="text-xs font-medium text-slate-500">{mat?.unit}s</span>
                         </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
 
-              <div className="flex justify-end gap-3 pt-3 border-t border-slate-100">
-                <button
-                  type="button"
-                  onClick={() => setIsModalOpen(false)}
-                  className="rounded-lg bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-200"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={createRequestMutation.isPending || selectedItems.length === 0}
-                  className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-500 disabled:opacity-50"
-                >
-                  {createRequestMutation.isPending ? 'Submitting...' : 'Submit Request'}
-                </button>
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveItem(idx)}
+                          className="rounded-lg p-1 text-coral-600 hover:bg-coral-50 transition-colors"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
-            </form>
+            </div>
+          )}
+
+          <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => setIsModalOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              variant="primary"
+              disabled={selectedItems.length === 0}
+              isLoading={createRequestMutation.isPending}
+            >
+              Submit Request
+            </Button>
           </div>
-        </div>
-      )}
+        </form>
+      </Modal>
     </div>
   );
 }

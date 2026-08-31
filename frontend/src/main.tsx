@@ -36,11 +36,46 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
               <Route path="/" element={<DashboardPage />} />
               <Route path="/materials" element={<MaterialsPage />} />
               <Route path="/requests" element={<RequestsPage />} />
-              <Route path="/inventory" element={<InventoryPage />} />
-              <Route path="/employees" element={<EmployeesPage />} />
-              <Route path="/suppliers" element={<SuppliersPage />} />
-              <Route path="/reports" element={<ReportsPage />} />
-              <Route path="/users" element={<UsersPage />} />
+              <Route
+                path="/inventory"
+                element={
+                  <ProtectedRoute allowedRoles={['STOREKEEPER', 'STORE_MANAGER', 'AUDITOR']} />
+                }
+              >
+                <Route index element={<InventoryPage />} />
+              </Route>
+              <Route
+                path="/employees"
+                element={
+                  <ProtectedRoute allowedRoles={['ADMINISTRATOR', 'STORE_MANAGER', 'STOREKEEPER', 'AUDITOR']} />
+                }
+              >
+                <Route index element={<EmployeesPage />} />
+              </Route>
+              <Route
+                path="/suppliers"
+                element={
+                  <ProtectedRoute allowedRoles={['ADMINISTRATOR', 'STORE_MANAGER']} />
+                }
+              >
+                <Route index element={<SuppliersPage />} />
+              </Route>
+              <Route
+                path="/reports"
+                element={
+                  <ProtectedRoute allowedRoles={['ADMINISTRATOR', 'STORE_MANAGER', 'STOREKEEPER', 'AUDITOR']} />
+                }
+              >
+                <Route index element={<ReportsPage />} />
+              </Route>
+              <Route
+                path="/users"
+                element={
+                  <ProtectedRoute allowedRoles={['ADMINISTRATOR']} />
+                }
+              >
+                <Route index element={<UsersPage />} />
+              </Route>
             </Route>
           </Route>
         </Routes>

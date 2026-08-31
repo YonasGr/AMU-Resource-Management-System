@@ -237,24 +237,22 @@ flowchart TD
 ```
 
 1. **`GLOBAL` Scope (`ScopeType.GLOBAL`)**:
-   - The user possesses unrestricted operational authority across all physical stores and faculties across the university.
-   - Used for System Administrators, the Global Store Manager, and Central Internal Auditors.
-   - Example: A Store Manager with `GLOBAL` scope (`globalmanager@store.com`) can approve material requests targeting Store A (`STORE-MAIN`), Store B (`STORE-ENG`), or any future store.
+   - Unrestricted administrative and compliance audit access across the entire institutional system.
+   - Assigned to System Administrators and Central Internal Auditors.
 
 2. **`STORE` Scope (`ScopeType.STORE`)**:
-   - The user's authority is strictly bounded to a single physical store identified by `user.storeId`.
-   - Used for Store Managers and Storekeepers assigned to specific faculties or central warehouses.
-   - Example: Store Manager A (`manager@store.com`, assigned to `Store A`) can approve requests targeting `Store A`, but receives HTTP 403 Forbidden when attempting to approve requests targeting `Store B`.
+   - Bounded to the dedicated Store (`STORE-MAIN`) for direct stock control and material movement execution.
+   - Assigned to Store Managers and Storekeepers.
 
 3. **`ORGANIZATION` Scope (`ScopeType.ORGANIZATION`)**:
-   - The user's authority is bounded to an organizational unit (e.g., Department or College) and its recursive sub-units.
-   - Used for Department Heads and academic unit administrators validating departmental resource consumption.
+   - Bounded to academic departments (e.g. Computer Science, Electrical Engineering) for departmental material requests.
+   - Assigned to Academic Requesters and Department staff.
 
 ---
 
-### 5.3 Store-Scope Enforcement on Request Approvals (`POST /requests/:id/approve-reject`)
+### 5.3 Request Review & Approval Security (`POST /requests/:id/approve-reject`)
 
-Store-level isolation during material request approvals is governed by `AccessControlService.enforceStoreScope()`:
+Store management authority during material request approvals is governed by `AccessControlService`:
 
 ```typescript
 // backend/src/modules/auth/access-control.service.ts
@@ -286,27 +284,17 @@ export class AccessControlService {
 }
 ```
 
-#### Request Approval Enforcement Flow:
-1. When `POST /requests/:id/approve-reject` is called, `RolesGuard` verifies that the caller has either `Role.STORE_MANAGER` or `Role.ADMINISTRATOR`.
-2. Inside `RequestsService.approveOrReject(id, user, action, remarks)`:
-   - The target `MaterialRequest` is retrieved, including its `storeId`.
-   - `this.accessControlService.enforceStoreScope(user, request.storeId)` is executed.
-   - If a Store Manager assigned to Store A attempts to approve a request with `storeId` belonging to Store B, `AccessControlService` immediately throws `ForbiddenException`, returning HTTP 403.
-   - If the Store Manager's `storeId` matches or if the manager has `GLOBAL` scope, the transaction proceeds, updating the status to `APPROVED` or `REJECTED` and dispatching real-time notifications to the requester.
-
 ---
 
 ### 5.4 Seeded System Accounts and Scoping Topology
 
 | Account Email | System Role | Scope Type | Assigned Store | Department | Purpose in RBAC Topology |
 |---|---|---|---|---|---|
-| `admin@store.com` | `ADMINISTRATOR` | `GLOBAL` | *None* | `ADMIN` | System IT admin, user CRUD, department creator, audit inspector |
-| `manager@store.com` | `STORE_MANAGER` | `STORE` | `STORE-MAIN` (Store A) | `STORE` | Central Warehouse Manager, item catalog owner, Store A approvals |
-| `engmanager@store.com` | `STORE_MANAGER` | `STORE` | `STORE-ENG` (Store B) | `EE` | Engineering Faculty Store Manager, Store B approvals |
-| `globalmanager@store.com` | `STORE_MANAGER` | `GLOBAL` | *None* | `ADMIN` | University-wide Global Store Manager, multi-store approvals |
-| `keeper@store.com` | `STOREKEEPER` | `STORE` | `STORE-MAIN` (Store A) | `STORE` | Storekeeper executing Stock In/Out and Request Item Issuance |
-| `auditor@store.com` | `AUDITOR` | `GLOBAL` | *None* | `FIN` | Compliance officer inspecting audit trail & inventory reports |
-| `requester@store.com` | `REQUESTER` | `STORE` | *None* | `CS` | Academic faculty member filing material requisitions |
+| `admin@store.com` | `ADMINISTRATOR` | `GLOBAL` | *None* | `ADMIN` | System IT admin, user CRUD, system configuration, audit inspector |
+| `manager@store.com` | `STORE_MANAGER` | `STORE` | `STORE-MAIN` | `STORE` | Store Manager, catalog governance, request approvals |
+| `keeper@store.com` | `STOREKEEPER` | `STORE` | `STORE-MAIN` | `STORE` | Storekeeper executing Stock In/Out, Returns, Adjustments & Issuance |
+| `auditor@store.com` | `AUDITOR` | `GLOBAL` | *None* | `FIN` | Compliance officer inspecting audit trail & 8 official reports |
+| `requester@store.com` | `REQUESTER` | `ORGANIZATION` | *None* | `CS` | Academic faculty member filing departmental material requisitions |
 
 *All demo accounts initialized with default password: `password123` (argon2 hashed).*
 

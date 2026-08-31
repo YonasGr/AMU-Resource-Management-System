@@ -1,22 +1,36 @@
-import { LucideIcon } from 'lucide-react';
+import React from 'react';
+import { LucideIcon, Inbox } from 'lucide-react';
+import { cn } from '../../lib/cn';
 
 export function EmptyState({
-  icon: Icon,
+  icon: Icon = Inbox,
   title,
   description,
   action,
+  className,
 }: {
   icon?: LucideIcon;
   title: string;
   description?: string;
   action?: React.ReactNode;
+  className?: string;
 }) {
   return (
-    <div className="flex flex-col items-center justify-center gap-2 py-16 text-center">
-      {Icon && <Icon className="mb-2 h-8 w-8 text-muted" strokeWidth={1.5} />}
-      <p className="font-medium text-ink">{title}</p>
-      {description && <p className="max-w-sm text-sm text-muted">{description}</p>}
-      {action && <div className="mt-3">{action}</div>}
+    <div
+      className={cn(
+        'flex flex-col items-center justify-center gap-3 py-16 px-4 text-center rounded-2xl border border-dashed border-slate-200 bg-slate-50/50',
+        className,
+      )}
+    >
+      <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-white shadow-xs border border-slate-200/80 text-slate-400">
+        <Icon className="h-7 w-7 text-slate-400" strokeWidth={1.8} />
+      </div>
+      <div className="max-w-sm space-y-1">
+        <h4 className="text-sm font-bold text-slate-900">{title}</h4>
+        {description && <p className="text-xs text-slate-500 leading-relaxed">{description}</p>}
+      </div>
+      {action && <div className="mt-2">{action}</div>}
     </div>
   );
 }
+

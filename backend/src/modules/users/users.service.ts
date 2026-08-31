@@ -1,7 +1,8 @@
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import * as argon2 from 'argon2';
 import { User, Role, UserStatus, ScopeType } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
+import { AuditService } from '../audit/audit.service';
 
 export interface CreateUserDto {
   fullName: string;
@@ -28,9 +29,12 @@ export interface UpdateUserDto {
 
 @Injectable()
 export class UsersService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly auditService: AuditService,
+  ) {}
 
-  async create(dto: CreateUserDto): Promise<Omit<User, 'passwordHash'>> {
+  async create(dto: CreateUserDto, actorId?: string): Promise<Omit<User, 'passwordHash'>> {
     const existing = await this.prisma.user.findUnique({ where: { email: dto.email } });
     if (existing) {
       throw new ConflictException(`A user with email ${dto.email} already exists`);
@@ -54,6 +58,13 @@ export class UsersService {
         store: true,
       },
     });
+
+    await this.auditService.log(
+      actorId || user.id,
+      'CREATE_USER',
+      'USERS',
+      `Registered new user "${user.fullName}" (${user.email}) with role [${user.role}] and scope [${user.scopeType}]`,
+    );
 
     return this.stripPassword(user);
   }
@@ -87,10 +98,30 @@ export class UsersService {
     return users.map((u) => this.stripPassword(u));
   }
 
-  async update(id: string, dto: UpdateUserDto): Promise<any> {
+  async update(id: string, dto: UpdateUserDto, actorId?: string): Promise<any> {
     const user = await this.prisma.user.findUnique({ where: { id } });
     if (!user) {
       throw new NotFoundException(`User ${id} not found`);
+    }
+
+    // Safety: Protect against deactivating or demoting the last active Administrator
+    if (user.role === Role.ADMINISTRATOR) {
+      const isDemoting = dto.role && dto.role !== Role.ADMINISTRATOR;
+      const isDeactivating = dto.status && dto.status === UserStatus.INACTIVE;
+      if (isDemoting || isDeactivating) {
+        const otherActiveAdmins = await this.prisma.user.count({
+          where: {
+            role: Role.ADMINISTRATOR,
+            status: UserStatus.ACTIVE,
+            id: { not: id },
+          },
+        });
+        if (otherActiveAdmins === 0) {
+          throw new BadRequestException(
+            'Cannot deactivate or demote the last remaining active Administrator in the system',
+          );
+        }
+      }
     }
 
     let passwordHash = undefined;
@@ -117,11 +148,48 @@ export class UsersService {
       },
     });
 
+    const changeSummary = Object.keys(dto).filter((k) => k !== 'password').join(', ');
+    await this.auditService.log(
+      actorId || id,
+      'UPDATE_USER',
+      'USERS',
+      `Updated user "${updated.fullName}" (${updated.email}). Modified fields: [${changeSummary || 'password'}]`,
+    );
+
     return this.stripPassword(updated);
   }
 
-  async delete(id: string): Promise<void> {
+  async delete(id: string, currentUserId?: string): Promise<void> {
+    const user = await this.prisma.user.findUnique({ where: { id } });
+    if (!user) {
+      throw new NotFoundException(`User ${id} not found`);
+    }
+
+    if (currentUserId && currentUserId === id) {
+      throw new BadRequestException('Security violation: You cannot delete your own active administrator account');
+    }
+
+    if (user.role === Role.ADMINISTRATOR) {
+      const otherActiveAdmins = await this.prisma.user.count({
+        where: {
+          role: Role.ADMINISTRATOR,
+          status: UserStatus.ACTIVE,
+          id: { not: id },
+        },
+      });
+      if (otherActiveAdmins === 0) {
+        throw new BadRequestException('Cannot delete the last remaining active Administrator in the system');
+      }
+    }
+
     await this.prisma.user.delete({ where: { id } });
+
+    await this.auditService.log(
+      currentUserId || null,
+      'DELETE_USER',
+      'USERS',
+      `Deleted user account "${user.fullName}" (${user.email}, role: ${user.role})`,
+    );
   }
 
   private stripPassword(user: any): any {

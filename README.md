@@ -1,6 +1,7 @@
-# Store Management System
+# AMU Dedicated Store & Resource Management System
+## Arba Minch University — Department & Central ICT Store Management Platform
 
-A web-based inventory management application designed to automate the registration, tracking, and management of materials stored in an organization.
+A modern, web-based inventory and resource management system designed specifically for Arba Minch University (AMU) to automate the registration, real-time tracking, departmental requisitions, supplier shipments, and audit reporting for dedicated institutional stores (such as the Central ICT & Resource Store).
 
 ![NestJS](https://img.shields.io/badge/backend-NestJS_10-red.svg?style=for-the-badge&logo=nestjs)
 ![React](https://img.shields.io/badge/frontend-React_18-blue.svg?style=for-the-badge&logo=react)
@@ -19,10 +20,10 @@ docker compose up -d --build
 
 This single command automatically:
 1. Starts the **PostgreSQL** database container.
-2. Runs **Prisma database migrations** & automatically seeds the database with materials, suppliers, departments, employees, and 5 demo user accounts.
+2. Runs **Prisma database migrations** & automatically seeds the database with materials, suppliers, departments, employees, and the 5 canonical demo user accounts for the dedicated store.
 3. Builds and launches the **NestJS Backend API**.
-4. Builds and launches the **React Frontend Console**.
-5. Starts **Nginx Proxy**.
+4. Builds and launches the **React + Tailwind Frontend Console**.
+5. Starts **Nginx Reverse Proxy**.
 
 ### Access Links
 - **Web Application Portal**: [http://localhost:5173](http://localhost:5173) or [http://localhost:8080](http://localhost:8080)
@@ -31,34 +32,39 @@ This single command automatically:
 
 ---
 
-## 🔐 Pre-Seeded Demo Accounts
+## 🔐 Canonical Demo Accounts (Single Dedicated Store)
 
-The login page features a **Quick Demo Switcher** box allowing 1-click login into any of the 5 roles:
+The login page features a **1-Click Quick Demo Switcher** box allowing instant login into any of the 5 roles:
 
-| Role | Email | Password | Scope & Primary Use Case |
+| Role | Email | Password | Primary Scope & Responsibilities |
 | :--- | :--- | :--- | :--- |
-| **Requester** | `requester@store.com` | `password123` | Submit material requests & track status in real-time |
-| **Store Manager** | `manager@store.com` | `password123` | Review & Approve/Reject pending requests, manage catalog |
-| **Storekeeper** | `keeper@store.com` | `password123` | Fulfill approved requests (Stock Out), Stock In, Returns, Adjustments |
-| **Auditor** | `auditor@store.com` | `password123` | View all 8 inventory reports & system audit logs |
-| **Administrator** | `admin@store.com` | `password123` | System user creation & role assignment |
+| **Store Manager** | `manager@store.com` | `password123` | Material catalog governance, category creation, request reviews & approvals |
+| **Storekeeper** | `keeper@store.com` | `password123` | Physical store operations (Stock In, Stock Out, Returns, Adjustments, Transfers, Issuance) |
+| **Requester (Academic Staff)** | `requester@store.com` | `password123` | Submit departmental material requisitions & track live fulfillment status |
+| **Internal Auditor** | `auditor@store.com` | `password123` | Inspect transaction history, audit trails, and all 8 official valuation/movement reports |
+| **System Administrator** | `admin@store.com` | `password123` | User account management, security role assignment, department setup, system backups |
 
 ---
 
-## 📦 System Modules & Features
+## 📦 Core System Modules & Features
 
-1. **Material Management**: Register materials with unique codes, categories, units of measure, minimum stock alerts, shelf location, and barcode/QR metadata. Real-time balance calculations (`Total Received`, `Issued`, `Remaining Stock`).
-2. **Inventory Operations**:
-   - **Stock In**: Receive materials from suppliers.
-   - **Stock Out**: Direct issue or approved request release.
-   - **Material Returns**: Record returned items back into store.
-   - **Stock Adjustments**: Audit inventory count adjustments.
-   - **Transaction Ledger**: Search and filter all stock movements.
-3. **Request & Approval Workflow**:
-   - `Requester` submits material request ➔ `Store Manager` approves/rejects with comments ➔ `Storekeeper` issues materials (Stock Out).
-4. **Employee & Department Management**: Directory and complete issue history per department/employee.
-5. **Supplier Management**: Supplier profiles and supplied material tracking.
-6. **Reporting Hub**: Generate all **8 requested reports** with **1-click Export to Excel/CSV** and **PDF Print** functions:
+1. **Item & Material Management**:
+   - Register items with unique material codes, categories, units of measure, minimum stock thresholds, shelf locations, and QR metadata.
+   - Real-time dynamic stock calculations (`Quantity Received`, `Quantity Issued`, `Remaining Stock Balance`).
+2. **Inventory Movement Operations**:
+   - **Stock In (Receiving)**: Ingest shipments directly from registered vendors with purchase batch metadata.
+   - **Direct Stock Out**: Issue items directly to authorized employees/departments.
+   - **Material Returns**: Re-ingest unused or returned items with condition notes back into active store balances.
+   - **Stock Adjustments**: Log physical count reconciliation audits with mandatory reason notes.
+   - **Store Transfers**: Record departmental transfers with destination tracking.
+   - **Master Transaction Ledger**: Searchable, filterable audit ledger of all historical movements.
+3. **Requisition & Approval Workflow**:
+   - Academic staff files requisition ➔ Store Manager reviews & Approves/Rejects ➔ Storekeeper issues items from active inventory.
+4. **Employee & Department Directory**:
+   - Manage university faculties and staff with automated issue ledgers tracking historical material allocations per department.
+5. **Supplier Directory**:
+   - Vendor profiles, contact information, and supplied material tracking.
+6. **Reporting & Audit Hub (8 Official University Reports)**:
    - Current Stock Report
    - Stock In Report
    - Stock Out Report
@@ -67,6 +73,9 @@ The login page features a **Quick Demo Switcher** box allowing 1-click login int
    - Employee Material Issue Report
    - Supplier Report
    - Full Transaction History Report
+   - *Features 1-Click Export to Excel/CSV and Official University Print/PDF format.*
+7. **Administration & Security**:
+   - Role-Based Access Control (RBAC), live audit log inspector, and automated JSON database backup export.
 
 ---
 

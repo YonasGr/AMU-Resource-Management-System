@@ -1,8 +1,32 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import {
+  ShieldAlert,
+  UserPlus,
+  ShieldCheck,
+  History,
+  Settings,
+  Database,
+  Download,
+  Upload,
+  UserCheck,
+  Mail,
+  Phone,
+  Lock,
+  Building2,
+  CheckCircle2,
+  AlertTriangle,
+  FileCode,
+} from 'lucide-react';
 import { api } from '../../lib/api';
-import { ShieldAlert, UserPlus, ShieldCheck, History, Settings, Database, Download, Upload } from 'lucide-react';
 import { useAuthStore } from '../../store/auth.store';
+import { PageHeader } from '../../components/ui/PageHeader';
+import { Card, CardHeader, CardTitle, CardDescription, CardBody } from '../../components/ui/Card';
+import { Button } from '../../components/ui/Button';
+import { Badge } from '../../components/ui/Badge';
+import { Input, Select, Label, SearchInput } from '../../components/ui/Input';
+import { Modal } from '../../components/ui/Modal';
+import { EmptyState } from '../../components/ui/EmptyState';
 
 export default function UsersPage() {
   const queryClient = useQueryClient();
@@ -11,13 +35,16 @@ export default function UsersPage() {
 
   const [activeTab, setActiveTab] = useState<'users' | 'audit' | 'settings'>('users');
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [search, setSearch] = useState('');
 
   // Form State
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('password123');
-  const [role, setRole] = useState<'ADMINISTRATOR' | 'STORE_MANAGER' | 'STOREKEEPER' | 'AUDITOR' | 'REQUESTER'>('STOREKEEPER');
+  const [role, setRole] = useState<
+    'ADMINISTRATOR' | 'STORE_MANAGER' | 'STOREKEEPER' | 'AUDITOR' | 'REQUESTER'
+  >('STOREKEEPER');
 
   // Settings State
   const [systemName, setSystemName] = useState('Arba Minch University Store Management System');
@@ -99,130 +126,186 @@ export default function UsersPage() {
     a.href = url;
     a.download = `store_system_backup_${new Date().toISOString().slice(0, 10)}.json`;
     a.click();
-    setBackupMessage('Backup snapshot generated and downloaded successfully!');
+    setBackupMessage('Administrative backup snapshot generated and saved to device.');
     setTimeout(() => setBackupMessage(''), 4000);
   };
 
   const handleRestoreSim = () => {
-    setBackupMessage('Database state verified & synchronized cleanly.');
+    setBackupMessage('Database schema verification and state sync complete.');
     setTimeout(() => setBackupMessage(''), 4000);
   };
 
-  // Strictly enforce Admin role per Use Case Diagram (Use Cases 2, 3, 4)
   if (!isAdmin) {
     return (
-      <div className="rounded-2xl bg-white p-12 text-center shadow-sm border border-slate-200 space-y-4 max-w-xl mx-auto my-12">
-        <ShieldAlert className="mx-auto h-12 w-12 text-rose-500" />
-        <h2 className="text-xl font-bold text-slate-900">Admin Privileges Required</h2>
-        <p className="text-sm text-slate-500 leading-relaxed">
-          User Management, Role Assignments, System Settings, Audit Logs, and Database Backup & Restore utilities are strictly restricted to system <strong>Administrators</strong> as specified in the Store Management System architecture diagram.
+      <div className="rounded-3xl bg-white p-12 text-center shadow-sm border border-slate-200 space-y-4 max-w-lg mx-auto my-12">
+        <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-coral-50 text-coral-600">
+          <ShieldAlert className="h-8 w-8" />
+        </div>
+        <h2 className="text-xl font-bold text-slate-900">Administrator Clearance Required</h2>
+        <p className="text-xs text-slate-500 leading-relaxed">
+          User account management, role assignment, system security parameters, audit trail logs, and database snapshots are strictly reserved for System <strong>Administrators</strong>.
         </p>
       </div>
     );
   }
 
+  const filteredUsers = (users || []).filter((u: any) => {
+    const q = search.toLowerCase();
+    return (
+      u.fullName?.toLowerCase().includes(q) ||
+      u.email?.toLowerCase().includes(q) ||
+      u.role?.toLowerCase().includes(q) ||
+      u.department?.name?.toLowerCase().includes(q)
+    );
+  });
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 animate-fade-in">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
-            <ShieldAlert className="h-6 w-6 text-indigo-600" /> Admin Control & System Backup
-          </h1>
-          <p className="text-sm text-slate-500">
-            Manage users (UC2), assign roles (UC3), system settings (UC4), database backup & restore, and view audit logs
-          </p>
-        </div>
+      <PageHeader
+        title="Admin Control & System Security"
+        description="Manage user credentials, assign role-based access privileges, inspect system audit logs, and download database backups."
+        icon={ShieldCheck}
+        breadcrumbs={[{ label: 'Home', to: '/' }, { label: 'Admin Security Control' }]}
+        actions={
+          <Button
+            variant="primary"
+            onClick={() => setIsModalOpen(true)}
+            leftIcon={<UserPlus className="h-4 w-4" />}
+          >
+            Create User Account
+          </Button>
+        }
+      />
 
+      {/* Navigation Tabs */}
+      <div className="flex flex-wrap items-center gap-2 border-b border-slate-200/90 pb-3">
         <button
-          onClick={() => setIsModalOpen(true)}
-          className="flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-indigo-600/30 hover:bg-indigo-500 transition-colors"
-        >
-          <UserPlus className="h-4 w-4" /> Create User Account
-        </button>
-      </div>
-
-      {/* Tabs */}
-      <div className="flex border-b border-slate-200 gap-6 text-sm font-semibold">
-        <button
+          type="button"
           onClick={() => setActiveTab('users')}
-          className={`pb-3 flex items-center gap-2 transition-colors ${
+          className={`flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-bold transition-all ${
             activeTab === 'users'
-              ? 'border-b-2 border-indigo-600 text-indigo-600'
-              : 'text-slate-500 hover:text-slate-800'
+              ? 'bg-brand-900 text-white shadow-xs'
+              : 'bg-white text-slate-600 border border-slate-200/80 hover:bg-slate-50'
           }`}
         >
-          <ShieldCheck className="h-4 w-4" /> System Users ({users?.length ?? 0})
+          <ShieldCheck className="h-3.5 w-3.5" />
+          <span>System Users</span>
+          <span className="rounded-full bg-slate-100/30 px-2 py-0.5 text-[10px] font-bold">
+            {users?.length ?? 0}
+          </span>
         </button>
 
         <button
+          type="button"
           onClick={() => setActiveTab('audit')}
-          className={`pb-3 flex items-center gap-2 transition-colors ${
+          className={`flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-bold transition-all ${
             activeTab === 'audit'
-              ? 'border-b-2 border-indigo-600 text-indigo-600'
-              : 'text-slate-500 hover:text-slate-800'
+              ? 'bg-brand-900 text-white shadow-xs'
+              : 'bg-white text-slate-600 border border-slate-200/80 hover:bg-slate-50'
           }`}
         >
-          <History className="h-4 w-4" /> Audit Logs ({auditLogs?.length ?? 0})
+          <History className="h-3.5 w-3.5" />
+          <span>Audit Logs</span>
+          <span className="rounded-full bg-slate-100/30 px-2 py-0.5 text-[10px] font-bold">
+            {auditLogs?.length ?? 0}
+          </span>
         </button>
 
         <button
+          type="button"
           onClick={() => setActiveTab('settings')}
-          className={`pb-3 flex items-center gap-2 transition-colors ${
+          className={`flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-bold transition-all ${
             activeTab === 'settings'
-              ? 'border-b-2 border-indigo-600 text-indigo-600'
-              : 'text-slate-500 hover:text-slate-800'
+              ? 'bg-brand-900 text-white shadow-xs'
+              : 'bg-white text-slate-600 border border-slate-200/80 hover:bg-slate-50'
           }`}
         >
-          <Settings className="h-4 w-4" /> System Settings & Backup/Restore
+          <Settings className="h-3.5 w-3.5" />
+          <span>System Settings & Backups</span>
         </button>
       </div>
 
-      {/* Views */}
-      <div className="rounded-2xl bg-white p-6 shadow-sm border border-slate-200">
-        {activeTab === 'users' && (
-          <div>
-            {loadingUsers ? (
-              <div className="py-8 text-center text-sm text-slate-500">Loading users...</div>
-            ) : (
+      {/* Tab: Users Management */}
+      {activeTab === 'users' && (
+        <Card className="overflow-hidden space-y-4">
+          <div className="p-4 border-b border-slate-200/80 max-w-md">
+            <SearchInput
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              onClear={() => setSearch('')}
+              placeholder="Search users by name, email, or role..."
+            />
+          </div>
+
+          {loadingUsers ? (
+            <div className="py-16 text-center">
+              <div className="mx-auto h-7 w-7 animate-spin rounded-full border-2 border-teal-600 border-t-transparent" />
+              <p className="mt-3 text-xs font-semibold text-slate-500">Loading system users...</p>
+            </div>
+          ) : filteredUsers.length === 0 ? (
+            <div className="p-8">
+              <EmptyState
+                icon={UserCheck}
+                title="No users found"
+                description={
+                  search
+                    ? 'No user accounts match your search filter.'
+                    : 'No system accounts are configured.'
+                }
+              />
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
               <table className="w-full text-left text-sm text-slate-700">
-                <thead className="bg-slate-50 text-xs font-semibold text-slate-500 uppercase tracking-wider border-b border-slate-200">
+                <thead className="bg-slate-50/90 text-xs font-bold uppercase tracking-wider text-slate-500 border-b border-slate-200/80">
                   <tr>
-                    <th className="px-6 py-4">User Name</th>
+                    <th className="px-6 py-4">User Details</th>
                     <th className="px-6 py-4">Email</th>
-                    <th className="px-6 py-4">System Role</th>
-                    <th className="px-6 py-4">Department</th>
-                    <th className="px-6 py-4 text-right">Manage Role</th>
+                    <th className="px-6 py-4">Current Role</th>
+                    <th className="px-6 py-4">Department Unit</th>
+                    <th className="px-6 py-4 text-right">Assign Role</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {users?.map((u: any) => (
-                    <tr key={u.id} className="hover:bg-slate-50">
-                      <td className="px-6 py-4 font-semibold text-slate-900">{u.fullName}</td>
-                      <td className="px-6 py-4 text-slate-600">{u.email}</td>
+                  {filteredUsers.map((u: any) => (
+                    <tr key={u.id} className="hover:bg-slate-50/80 transition-colors">
                       <td className="px-6 py-4">
-                        <span
-                          className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-bold ${
+                        <p className="font-bold text-slate-900">{u.fullName}</p>
+                        {u.phone && <p className="text-xs text-slate-400 font-mono">{u.phone}</p>}
+                      </td>
+
+                      <td className="px-6 py-4 text-xs font-medium text-slate-600">{u.email}</td>
+
+                      <td className="px-6 py-4">
+                        <Badge
+                          tone={
                             u.role === 'ADMINISTRATOR'
-                              ? 'bg-purple-100 text-purple-700'
+                              ? 'purple'
                               : u.role === 'STORE_MANAGER'
-                              ? 'bg-indigo-100 text-indigo-700'
+                              ? 'teal'
                               : u.role === 'STOREKEEPER'
-                              ? 'bg-emerald-100 text-emerald-700'
+                              ? 'success'
                               : u.role === 'AUDITOR'
-                              ? 'bg-amber-100 text-amber-700'
-                              : 'bg-slate-100 text-slate-700'
-                          }`}
+                              ? 'amber'
+                              : 'neutral'
+                          }
                         >
                           {u.role.replace('_', ' ')}
-                        </span>
+                        </Badge>
                       </td>
-                      <td className="px-6 py-4 text-xs text-slate-500">{u.department?.name || 'Store & Inventory Management'}</td>
+
+                      <td className="px-6 py-4 text-xs text-slate-500">
+                        {u.department?.name || 'General Inventory Ops'}
+                      </td>
+
                       <td className="px-6 py-4 text-right">
                         <select
                           value={u.role}
-                          onChange={(e) => updateRoleMutation.mutate({ id: u.id, role: e.target.value })}
-                          className="rounded-lg border border-slate-300 px-2.5 py-1 text-xs text-slate-800 focus:outline-none"
+                          onChange={(e) =>
+                            updateRoleMutation.mutate({ id: u.id, role: e.target.value })
+                          }
+                          className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-800 shadow-2xs focus:border-teal-500 focus:outline-none"
                         >
                           <option value="ADMINISTRATOR">ADMINISTRATOR</option>
                           <option value="STORE_MANAGER">STORE_MANAGER</option>
@@ -235,209 +318,248 @@ export default function UsersPage() {
                   ))}
                 </tbody>
               </table>
-            )}
-          </div>
-        )}
+            </div>
+          )}
+        </Card>
+      )}
 
-        {activeTab === 'audit' && (
-          <div>
+      {/* Tab: Audit Logs */}
+      {activeTab === 'audit' && (
+        <Card className="overflow-hidden">
+          <CardHeader>
+            <CardTitle>System Activity Audit Log</CardTitle>
+            <CardDescription>
+              Immutable audit trail recording security events, user logins, role changes, and inventory actions.
+            </CardDescription>
+          </CardHeader>
+
+          <CardBody className="p-0">
             {loadingAudit ? (
-              <div className="py-8 text-center text-sm text-slate-500">Loading audit trail...</div>
+              <div className="py-16 text-center">
+                <div className="mx-auto h-7 w-7 animate-spin rounded-full border-2 border-teal-600 border-t-transparent" />
+                <p className="mt-3 text-xs font-semibold text-slate-500">Loading audit trail...</p>
+              </div>
+            ) : auditLogs?.length === 0 ? (
+              <div className="p-8">
+                <EmptyState
+                  icon={History}
+                  title="No audit entries"
+                  description="No audit logs have been recorded in the active period."
+                />
+              </div>
             ) : (
-              <table className="w-full text-left text-sm text-slate-700">
-                <thead className="bg-slate-50 text-xs font-semibold text-slate-500 uppercase tracking-wider border-b border-slate-200">
-                  <tr>
-                    <th className="px-4 py-3">Timestamp</th>
-                    <th className="px-4 py-3">User</th>
-                    <th className="px-4 py-3">Module</th>
-                    <th className="px-4 py-3">Action</th>
-                    <th className="px-4 py-3">Details</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {auditLogs?.map((log: any) => (
-                    <tr key={log.id} className="hover:bg-slate-50">
-                      <td className="px-4 py-3 text-xs text-slate-400 font-mono">
-                        {new Date(log.createdAt).toLocaleString()}
-                      </td>
-                      <td className="px-4 py-3 font-medium text-slate-900">
-                        {log.user?.fullName || 'System'}
-                      </td>
-                      <td className="px-4 py-3 text-xs font-bold text-indigo-600">{log.module}</td>
-                      <td className="px-4 py-3 font-semibold text-slate-800">{log.action}</td>
-                      <td className="px-4 py-3 text-xs text-slate-500">{log.details || 'N/A'}</td>
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs text-slate-700">
+                  <thead className="bg-slate-50/90 font-bold uppercase tracking-wider text-slate-500 border-b border-slate-200/80">
+                    <tr>
+                      <th className="px-6 py-4">Timestamp</th>
+                      <th className="px-6 py-4">Actor</th>
+                      <th className="px-6 py-4">Module</th>
+                      <th className="px-6 py-4">Action</th>
+                      <th className="px-6 py-4">Event Details</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-          </div>
-        )}
-
-        {activeTab === 'settings' && (
-          <div className="space-y-6 max-w-2xl">
-            {backupMessage && (
-              <div className="rounded-lg bg-emerald-50 p-3 text-xs font-semibold text-emerald-700 border border-emerald-200">
-                {backupMessage}
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {auditLogs?.map((log: any) => (
+                      <tr key={log.id} className="hover:bg-slate-50/80 transition-colors">
+                        <td className="px-6 py-4 text-slate-400 font-mono">
+                          {new Date(log.createdAt).toLocaleString()}
+                        </td>
+                        <td className="px-6 py-4 font-bold text-slate-900">
+                          {log.user?.fullName || 'System Automated'}
+                        </td>
+                        <td className="px-6 py-4">
+                          <span className="font-mono font-bold text-teal-800 bg-teal-50 px-2 py-0.5 rounded-md border border-teal-200">
+                            {log.module}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 font-semibold text-slate-800">{log.action}</td>
+                        <td className="px-6 py-4 text-slate-500 font-mono text-[11px]">
+                          {log.details || 'N/A'}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             )}
+          </CardBody>
+        </Card>
+      )}
 
-            <div className="space-y-4">
-              <h3 className="text-base font-bold text-slate-900 border-b border-slate-100 pb-2">
-                System General Settings
-              </h3>
+      {/* Tab: System Settings & Backup */}
+      {activeTab === 'settings' && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>System Parameters</CardTitle>
+              <CardDescription>Configure global store policies and thresholds.</CardDescription>
+            </CardHeader>
+
+            <CardBody className="space-y-4">
+              {backupMessage && (
+                <div className="flex items-center gap-2 rounded-xl bg-teal-50 p-3 text-xs font-bold text-teal-800 border border-teal-200">
+                  <CheckCircle2 className="h-4 w-4 text-teal-600 shrink-0" />
+                  <span>{backupMessage}</span>
+                </div>
+              )}
 
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">System Name</label>
-                <input
-                  type="text"
+                <Label>System Brand Name</Label>
+                <Input
                   value={systemName}
                   onChange={(e) => setSystemName(e.target.value)}
-                  className="w-full rounded-lg border border-slate-300 p-2.5 text-sm"
                 />
               </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    Default Low Stock Limit
-                  </label>
-                  <input
+                  <Label>Default Minimum Stock Limit</Label>
+                  <Input
                     type="number"
                     value={defaultThreshold}
                     onChange={(e) => setDefaultThreshold(e.target.value)}
-                    className="w-full rounded-lg border border-slate-300 p-2.5 text-sm"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">Currency</label>
-                  <input
-                    type="text"
-                    disabled
-                    value="ETB (Ethiopian Birr)"
-                    className="w-full rounded-lg border border-slate-200 bg-slate-50 p-2.5 text-sm text-slate-500"
-                  />
+                  <Label>Default Valuation Currency</Label>
+                  <Input disabled value="ETB (Ethiopian Birr)" />
                 </div>
               </div>
-            </div>
+            </CardBody>
+          </Card>
 
-            <div className="space-y-4 border-t border-slate-100 pt-6">
-              <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
-                <Database className="h-5 w-5 text-indigo-600" /> Database Backup & Restore Utility
-              </h3>
-              <p className="text-xs text-slate-500">
-                Perform administrative backup snapshots of material catalog, stock transactions, and user records.
-              </p>
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Database className="h-5 w-5 text-teal-600" />
+                <span>Database Backup & Snapshot Utility</span>
+              </CardTitle>
+              <CardDescription>
+                Export JSON snapshots of material items, inventory ledgers, and user directories.
+              </CardDescription>
+            </CardHeader>
 
-              <div className="flex gap-4">
-                <button
-                  type="button"
-                  onClick={handleBackup}
-                  className="flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-xs font-bold text-white shadow-lg shadow-indigo-600/30 hover:bg-indigo-500"
-                >
-                  <Download className="h-4 w-4" /> Download Database Backup (.json)
-                </button>
-                <button
-                  type="button"
-                  onClick={handleRestoreSim}
-                  className="flex items-center gap-2 rounded-xl bg-slate-100 px-4 py-2.5 text-xs font-bold text-slate-700 border border-slate-200 hover:bg-slate-200"
-                >
-                  <Upload className="h-4 w-4" /> Verify & Restore Backup
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* Create User Modal */}
-      {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl space-y-4">
-            <h2 className="text-lg font-bold text-slate-900">Create System User Account</h2>
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Full Name *</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. Abebe Kebede"
-                  value={fullName}
-                  onChange={(e) => setFullName(e.target.value)}
-                  className="w-full rounded-lg border border-slate-300 p-2.5 text-sm focus:outline-none"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Email Address *</label>
-                <input
-                  type="email"
-                  required
-                  placeholder="user@store.com"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="w-full rounded-lg border border-slate-300 p-2.5 text-sm focus:outline-none"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">Phone</label>
-                  <input
-                    type="text"
-                    placeholder="+251..."
-                    value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
-                    className="w-full rounded-lg border border-slate-300 p-2.5 text-sm focus:outline-none"
-                  />
+            <CardBody className="space-y-4">
+              <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-3">
+                <div className="flex items-center gap-2 text-xs font-bold text-slate-800">
+                  <FileCode className="h-4 w-4 text-teal-600" />
+                  <span>Database Snapshot Management</span>
                 </div>
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">Assigned Role *</label>
-                  <select
-                    value={role}
-                    onChange={(e) => setRole(e.target.value as any)}
-                    className="w-full rounded-lg border border-slate-300 p-2.5 text-sm focus:outline-none"
+                <p className="text-xs text-slate-500">
+                  Generate administrative backup archives for disaster recovery or offline data compliance.
+                </p>
+
+                <div className="flex flex-col sm:flex-row gap-3 pt-2">
+                  <Button
+                    type="button"
+                    variant="primary"
+                    size="sm"
+                    onClick={handleBackup}
+                    leftIcon={<Download className="h-4 w-4" />}
                   >
-                    <option value="STORE_MANAGER">Store Manager</option>
-                    <option value="STOREKEEPER">Storekeeper</option>
-                    <option value="AUDITOR">Auditor</option>
-                    <option value="ADMINISTRATOR">Administrator</option>
-                    <option value="REQUESTER">Requester</option>
-                  </select>
+                    Download Database Backup (.json)
+                  </Button>
+
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    onClick={handleRestoreSim}
+                    leftIcon={<Upload className="h-4 w-4" />}
+                  >
+                    Verify & Sync State
+                  </Button>
                 </div>
               </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Initial Password *</label>
-                <input
-                  type="password"
-                  required
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="w-full rounded-lg border border-slate-300 p-2.5 text-sm focus:outline-none"
-                />
-              </div>
-
-              <div className="flex justify-end gap-3 pt-3 border-t border-slate-100">
-                <button
-                  type="button"
-                  onClick={() => setIsModalOpen(false)}
-                  className="rounded-lg bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-200"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={createUserMutation.isPending}
-                  className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-500"
-                >
-                  Save User Account
-                </button>
-              </div>
-            </form>
-          </div>
+            </CardBody>
+          </Card>
         </div>
       )}
+
+      {/* Create User Modal */}
+      <Modal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        title="Create System User Account"
+        description="Provision access credentials and assign institutional role permissions."
+        size="md"
+      >
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <Label required>Full Name</Label>
+            <Input
+              required
+              placeholder="e.g. Abebe Kebede"
+              value={fullName}
+              onChange={(e) => setFullName(e.target.value)}
+            />
+          </div>
+
+          <div>
+            <Label required>Email Address</Label>
+            <Input
+              type="email"
+              required
+              placeholder="user@university.edu"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <Label>Phone Number</Label>
+              <Input
+                placeholder="+251..."
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+              />
+            </div>
+            <div>
+              <Label required>Assigned System Role</Label>
+              <Select
+                value={role}
+                onChange={(e) => setRole(e.target.value as any)}
+              >
+                <option value="STORE_MANAGER">Store Manager</option>
+                <option value="STOREKEEPER">Storekeeper</option>
+                <option value="AUDITOR">Auditor</option>
+                <option value="ADMINISTRATOR">Administrator</option>
+                <option value="REQUESTER">Requester</option>
+              </Select>
+            </div>
+          </div>
+
+          <div>
+            <Label required>Initial Password</Label>
+            <Input
+              type="password"
+              required
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+            />
+          </div>
+
+          <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => setIsModalOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              variant="primary"
+              isLoading={createUserMutation.isPending}
+            >
+              Save User Account
+            </Button>
+          </div>
+        </form>
+      </Modal>
     </div>
   );
 }
+

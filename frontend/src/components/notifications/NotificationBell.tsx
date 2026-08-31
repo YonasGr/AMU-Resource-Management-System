@@ -1,10 +1,11 @@
+import React from 'react';
 import { Bell } from 'lucide-react';
 import { useNotificationStore } from '../../store/notifications.store';
 import { useUnreadCount } from '../../hooks/useNotifications';
 import { cn } from '../../lib/cn';
 
 export function NotificationBell() {
-  // Kick off the polling so the count stays fresh
+  // Kick off polling so the count stays fresh
   useUnreadCount();
 
   const unreadCount = useNotificationStore((s) => s.unreadCount);
@@ -16,30 +17,25 @@ export function NotificationBell() {
       onClick={toggleDrawer}
       aria-label={`Notifications${unreadCount > 0 ? ` (${unreadCount} unread)` : ''}`}
       className={cn(
-        'relative flex h-9 w-9 items-center justify-center rounded-lg transition-colors',
+        'relative flex h-10 w-10 items-center justify-center rounded-2xl transition-all duration-150 border',
         isDrawerOpen
-          ? 'bg-indigo-50 text-indigo-600'
-          : 'text-slate-500 hover:bg-slate-100 hover:text-slate-700',
+          ? 'bg-teal-50 text-teal-700 border-teal-200 shadow-xs'
+          : 'bg-white text-slate-600 border-slate-200/80 hover:bg-slate-50 hover:text-slate-900 shadow-xs',
       )}
     >
       <Bell
         className={cn(
-          'h-5 w-5 transition-transform',
-          unreadCount > 0 && 'animate-[bell-ring_0.5s_ease-in-out]',
+          'h-4.5 w-4.5 transition-transform duration-200',
+          unreadCount > 0 && 'text-slate-800',
         )}
-        strokeWidth={2}
+        strokeWidth={2.2}
       />
       {unreadCount > 0 && (
-        <span
-          className={cn(
-            'absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center',
-            'rounded-full bg-rose-500 px-1 text-[10px] font-bold leading-none text-white',
-            'ring-2 ring-white',
-          )}
-        >
+        <span className="absolute -top-1 -right-1 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-coral-500 px-1 text-[10px] font-bold text-white shadow-sm ring-2 ring-white">
           {unreadCount > 99 ? '99+' : unreadCount}
         </span>
       )}
     </button>
   );
 }
+

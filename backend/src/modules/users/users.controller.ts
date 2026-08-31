@@ -3,6 +3,7 @@ import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Role } from '@prisma/client';
 import { UsersService, CreateUserDto, UpdateUserDto } from './users.service';
 import { Roles } from '../auth/decorators/roles.decorator';
+import { CurrentUser, SafeUser } from '../auth/decorators/current-user.decorator';
 
 @ApiTags('users')
 @ApiBearerAuth()
@@ -13,8 +14,8 @@ export class UsersController {
 
   @Post()
   @ApiOperation({ summary: 'Create a new user (Administrator only - UC2, UC3)' })
-  create(@Body() dto: CreateUserDto) {
-    return this.usersService.create(dto);
+  create(@CurrentUser() currentUser: SafeUser, @Body() dto: CreateUserDto) {
+    return this.usersService.create(dto, currentUser.id);
   }
 
   @Get()
@@ -31,14 +32,21 @@ export class UsersController {
 
   @Patch(':id')
   @ApiOperation({ summary: 'Update user details & role (Administrator only)' })
-  update(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateUserDto) {
-    return this.usersService.update(id, dto);
+  update(
+    @CurrentUser() currentUser: SafeUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdateUserDto,
+  ) {
+    return this.usersService.update(id, dto, currentUser.id);
   }
 
   @Delete(':id')
   @ApiOperation({ summary: 'Delete user (Administrator only)' })
-  async remove(@Param('id', ParseUUIDPipe) id: string) {
-    await this.usersService.delete(id);
+  async remove(
+    @CurrentUser() currentUser: SafeUser,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    await this.usersService.delete(id, currentUser.id);
     return { success: true };
   }
 }

@@ -4,6 +4,7 @@ import { RequestStatus, TransactionType } from '@prisma/client';
 import { NotificationsService } from '../notifications/notifications.service';
 import { AccessControlService } from '../auth/access-control.service';
 import { SafeUser } from '../auth/decorators/current-user.decorator';
+import { AuditService } from '../audit/audit.service';
 
 export interface CreateRequestDto {
   purpose: string;
@@ -21,6 +22,7 @@ export class RequestsService {
     private readonly prisma: PrismaService,
     private readonly notifications: NotificationsService,
     private readonly accessControlService: AccessControlService,
+    private readonly auditService: AuditService,
   ) {}
 
   async create(requesterId: string, dto: CreateRequestDto) {
@@ -59,6 +61,14 @@ export class RequestsService {
         },
       },
     });
+
+    // Log Audit Event
+    await this.auditService.log(
+      requesterId,
+      'CREATE_REQUEST',
+      'REQUESTS',
+      `Submitted requisition ${requestNumber} for ${request.department?.name || 'Department'} (${dto.items.length} item line(s)): "${dto.purpose}"`,
+    );
 
     // Notify all Store Managers about the new request
     const managerIds = await this.notifications.getUserIdsByRole('STORE_MANAGER');
@@ -165,6 +175,14 @@ export class RequestsService {
       },
     });
 
+    // Log Audit Event
+    await this.auditService.log(
+      user.id,
+      action === 'APPROVE' ? 'APPROVE_REQUEST' : 'REJECT_REQUEST',
+      'REQUESTS',
+      `${user.fullName} (${user.role}) ${action === 'APPROVE' ? 'approved' : 'rejected'} request ${request.requestNumber}.${remarks ? ` Remarks: ${remarks}` : ''}`,
+    );
+
     // Notify the requester of the decision
     const isApproved = action === 'APPROVE';
     await this.notifications.createForUsers(
@@ -265,6 +283,14 @@ export class RequestsService {
         },
       });
     });
+
+    // Log Audit Event
+    await this.auditService.log(
+      storekeeperId,
+      'ISSUE_REQUEST',
+      'REQUESTS',
+      `Storekeeper fulfilled and issued materials for request ${request.requestNumber} (${request.items.length} item line(s))`,
+    );
 
     // Notify requester that materials have been issued
     await this.notifications.createForUsers(

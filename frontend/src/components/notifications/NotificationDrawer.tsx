@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   X,
@@ -6,7 +6,7 @@ import {
   Trash2,
   Bell,
   BellOff,
-  CheckCircle,
+  CheckCircle2,
   XCircle,
   PackageCheck,
   FileText,
@@ -38,19 +38,47 @@ function relativeTime(iso: string): string {
 function notifIcon(type: AppNotification['type']) {
   switch (type) {
     case 'REQUEST_SUBMITTED':
-      return <FileText className="h-4 w-4 text-indigo-500" />;
+      return (
+        <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-teal-50 text-teal-600">
+          <FileText className="h-4 w-4" />
+        </div>
+      );
     case 'REQUEST_APPROVED':
-      return <CheckCircle className="h-4 w-4 text-emerald-500" />;
+      return (
+        <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600">
+          <CheckCircle2 className="h-4 w-4" />
+        </div>
+      );
     case 'REQUEST_REJECTED':
-      return <XCircle className="h-4 w-4 text-rose-500" />;
+      return (
+        <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-coral-50 text-coral-600">
+          <XCircle className="h-4 w-4" />
+        </div>
+      );
     case 'REQUEST_ISSUED':
-      return <PackageCheck className="h-4 w-4 text-blue-500" />;
+      return (
+        <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-cyan-50 text-cyan-600">
+          <PackageCheck className="h-4 w-4" />
+        </div>
+      );
     case 'LOW_STOCK_ALERT':
-      return <AlertTriangle className="h-4 w-4 text-amber-500" />;
+      return (
+        <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-coral-50 text-coral-600">
+          <AlertTriangle className="h-4 w-4" />
+        </div>
+      );
     case 'STOCK_IN_RECORDED':
-      return <ArrowDownLeft className="h-4 w-4 text-teal-500" />;
+      return (
+        <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600">
+          <ArrowDownLeft className="h-4 w-4" />
+        </div>
+      );
     default:
-      return <Bell className="h-4 w-4 text-slate-400" />;
+      return (
+        <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-slate-100 text-slate-500">
+          <Bell className="h-4 w-4" />
+        </div>
+      );
   }
 }
 
@@ -95,37 +123,35 @@ function NotificationItem({
     <button
       onClick={handleClick}
       className={cn(
-        'w-full text-left px-4 py-3.5 flex gap-3 transition-colors',
+        'w-full text-left px-5 py-4 flex gap-3.5 transition-all duration-150',
         'border-b border-slate-100 last:border-0',
         notif.isRead
-          ? 'bg-white hover:bg-slate-50'
-          : 'bg-indigo-50/60 hover:bg-indigo-50',
+          ? 'bg-white hover:bg-slate-50/80'
+          : 'bg-teal-50/40 hover:bg-teal-50/70',
       )}
     >
       {/* Icon */}
-      <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white shadow-sm border border-slate-200">
-        {notifIcon(notif.type)}
-      </div>
+      <div className="shrink-0 mt-0.5">{notifIcon(notif.type)}</div>
 
       {/* Content */}
       <div className="flex-1 min-w-0">
         <div className="flex items-start justify-between gap-2">
           <p
             className={cn(
-              'text-sm leading-snug truncate',
-              notif.isRead ? 'font-medium text-slate-700' : 'font-semibold text-slate-900',
+              'text-xs leading-snug truncate',
+              notif.isRead ? 'font-semibold text-slate-800' : 'font-bold text-slate-900',
             )}
           >
             {notif.title}
           </p>
           {!notif.isRead && (
-            <span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-indigo-500" />
+            <span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-teal-500 ring-2 ring-teal-200" />
           )}
         </div>
-        <p className="mt-0.5 text-xs text-slate-500 line-clamp-2 leading-relaxed">
+        <p className="mt-1 text-xs text-slate-500 line-clamp-2 leading-relaxed font-normal">
           {notif.message}
         </p>
-        <p className="mt-1 text-[10px] font-medium text-slate-400 uppercase tracking-wide">
+        <p className="mt-1.5 text-[10px] font-semibold text-slate-400 uppercase tracking-wider">
           {relativeTime(notif.createdAt)}
         </p>
       </div>
@@ -137,10 +163,10 @@ function NotificationItem({
 
 function NotificationSkeleton() {
   return (
-    <div className="px-4 py-3.5 flex gap-3 animate-pulse border-b border-slate-100">
-      <div className="h-8 w-8 rounded-full bg-slate-200 shrink-0" />
+    <div className="px-5 py-4 flex gap-3.5 animate-pulse border-b border-slate-100">
+      <div className="h-8 w-8 rounded-xl bg-slate-200 shrink-0" />
       <div className="flex-1 space-y-2">
-        <div className="h-3 w-3/4 rounded bg-slate-200" />
+        <div className="h-3.5 w-3/4 rounded-lg bg-slate-200" />
         <div className="h-3 w-full rounded bg-slate-100" />
         <div className="h-2 w-1/4 rounded bg-slate-100" />
       </div>
@@ -187,7 +213,7 @@ export function NotificationDrawer() {
       {/* Backdrop */}
       <div
         className={cn(
-          'fixed inset-0 z-40 bg-slate-900/20 backdrop-blur-[2px] transition-opacity duration-200',
+          'fixed inset-0 z-40 bg-slate-900/50 backdrop-blur-xs transition-opacity duration-200',
           isOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none',
         )}
         aria-hidden="true"
@@ -199,50 +225,52 @@ export function NotificationDrawer() {
         role="dialog"
         aria-label="Notifications"
         className={cn(
-          'fixed top-0 right-0 z-50 h-full w-[380px] max-w-full bg-white shadow-2xl',
-          'flex flex-col transition-transform duration-300 ease-out',
+          'fixed top-0 right-0 z-50 h-full w-[400px] max-w-full bg-white shadow-2xl',
+          'flex flex-col transition-transform duration-300 ease-out border-l border-slate-200',
           isOpen ? 'translate-x-0' : 'translate-x-full',
         )}
       >
         {/* Header */}
-        <div className="flex shrink-0 items-center justify-between border-b border-slate-200 px-5 py-4">
+        <div className="flex shrink-0 items-center justify-between border-b border-slate-200/90 px-6 py-4.5 bg-white">
           <div className="flex items-center gap-2.5">
-            <Bell className="h-5 w-5 text-indigo-600" strokeWidth={2} />
-            <h2 className="font-bold text-slate-900">Notifications</h2>
+            <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-teal-50 text-teal-700">
+              <Bell className="h-4.5 w-4.5" strokeWidth={2.2} />
+            </div>
+            <h2 className="text-base font-bold text-slate-900 tracking-tight">System Alerts</h2>
             {unreadCount > 0 && (
-              <span className="rounded-full bg-rose-500 px-2 py-0.5 text-[10px] font-bold text-white">
+              <span className="rounded-full bg-coral-500 px-2 py-0.5 text-[10px] font-bold text-white shadow-xs">
                 {unreadCount} new
               </span>
             )}
           </div>
           <button
             onClick={closeDrawer}
-            className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-colors"
+            className="flex h-8 w-8 items-center justify-center rounded-xl text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-colors"
           >
             <X className="h-4 w-4" />
           </button>
         </div>
 
         {/* Action buttons */}
-        <div className="flex shrink-0 items-center gap-2 border-b border-slate-100 bg-slate-50 px-5 py-2">
+        <div className="flex shrink-0 items-center justify-between border-b border-slate-100 bg-slate-50/70 px-6 py-2.5">
           <button
             onClick={() => markAllRead.mutate()}
             disabled={markAllRead.isPending || unreadCount === 0}
             className={cn(
-              'flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-semibold transition-colors',
+              'flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-semibold transition-colors',
               unreadCount > 0
-                ? 'text-indigo-600 hover:bg-indigo-100'
+                ? 'text-teal-700 hover:bg-teal-100/60'
                 : 'text-slate-400 cursor-not-allowed',
             )}
           >
             <CheckCheck className="h-3.5 w-3.5" />
             Mark all read
           </button>
-          <div className="h-4 w-px bg-slate-200" />
+
           <button
             onClick={() => clearRead.mutate()}
             disabled={clearRead.isPending}
-            className="flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-semibold text-slate-500 hover:bg-slate-200 transition-colors"
+            className="flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-semibold text-slate-500 hover:bg-slate-200/70 hover:text-slate-700 transition-colors"
           >
             <Trash2 className="h-3.5 w-3.5" />
             Clear read
@@ -258,10 +286,14 @@ export function NotificationDrawer() {
               ))}
             </div>
           ) : !notifications || notifications.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-full gap-3 py-16 text-slate-400">
-              <BellOff className="h-12 w-12 text-slate-300" />
-              <p className="text-sm font-semibold text-slate-600">You're all caught up!</p>
-              <p className="text-xs text-slate-400">No notifications yet.</p>
+            <div className="flex flex-col items-center justify-center h-full gap-3 py-16 px-6 text-center text-slate-400">
+              <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-100 text-slate-400">
+                <BellOff className="h-7 w-7" strokeWidth={1.8} />
+              </div>
+              <p className="text-sm font-bold text-slate-700">All Caught Up</p>
+              <p className="text-xs text-slate-400 max-w-xs">
+                No new store requests, approval alerts, or low stock warnings.
+              </p>
             </div>
           ) : (
             <div>
@@ -278,8 +310,8 @@ export function NotificationDrawer() {
 
         {/* Footer */}
         {notifications && notifications.length > 0 && (
-          <div className="shrink-0 border-t border-slate-100 px-5 py-3 text-center">
-            <p className="text-xs text-slate-400">
+          <div className="shrink-0 border-t border-slate-100 bg-slate-50/50 px-6 py-3 text-center">
+            <p className="text-[11px] font-medium text-slate-400">
               Showing {notifications.length} notification{notifications.length !== 1 ? 's' : ''}
             </p>
           </div>
@@ -288,3 +320,4 @@ export function NotificationDrawer() {
     </>
   );
 }
+

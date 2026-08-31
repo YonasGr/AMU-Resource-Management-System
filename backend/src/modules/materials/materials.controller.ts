@@ -18,14 +18,14 @@ export class MaterialsController {
 
   @Post('categories')
   @Roles(Role.STORE_MANAGER)
-  @ApiOperation({ summary: 'Create a new material category (Store Manager only - UC5)' })
+  @ApiOperation({ summary: 'Create a new material category (Store Manager - UC5)' })
   createCategory(@Body() body: { name: string; description?: string }) {
     return this.materialsService.createCategory(body.name, body.description);
   }
 
   @Post()
   @Roles(Role.STORE_MANAGER)
-  @ApiOperation({ summary: 'Register a new store material (Store Manager only - UC6 Item Master)' })
+  @ApiOperation({ summary: 'Register a new store material (Store Manager - UC6 Item Master)' })
   create(@Body() dto: CreateMaterialDto) {
     return this.materialsService.create(dto);
   }

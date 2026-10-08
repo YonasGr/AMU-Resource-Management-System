@@ -77,8 +77,27 @@ async function main() {
 
   console.log('✅ Store seeded: AMU Central & ICT Resource Store (STORE-MAIN)');
 
-  // 3. Users (5 Core System Users)
-  const passwordHash = await argon2.hash('password123');
+  // 3. Users (5 Core System Users with Locked-Down Role Credentials)
+  const isProd = process.env.NODE_ENV === 'production';
+  const adminPassword = process.env.SEED_ADMIN_PASSWORD || (!isProd ? 'Admin#AMU2026!SecureKey' : '');
+  const managerPassword = process.env.SEED_MANAGER_PASSWORD || (!isProd ? 'Manager#AMU2026!StoreKey' : '');
+  const keeperPassword = process.env.SEED_KEEPER_PASSWORD || (!isProd ? 'Keeper#AMU2026!InventoryKey' : '');
+  const auditorPassword = process.env.SEED_AUDITOR_PASSWORD || (!isProd ? 'Auditor#AMU2026!AuditKey' : '');
+  const requesterPassword = process.env.SEED_REQUESTER_PASSWORD || (!isProd ? 'Requester#AMU2026!StaffKey' : '');
+
+  if (isProd && (!adminPassword || !managerPassword || !keeperPassword || !auditorPassword || !requesterPassword)) {
+    throw new Error(
+      'Production Security Error: In production, explicit SEED_*_PASSWORD environment variables must be defined for all 5 accounts.',
+    );
+  }
+
+  const [adminHash, managerHash, keeperHash, auditorHash, requesterHash] = await Promise.all([
+    argon2.hash(adminPassword),
+    argon2.hash(managerPassword),
+    argon2.hash(keeperPassword),
+    argon2.hash(auditorPassword),
+    argon2.hash(requesterPassword),
+  ]);
 
   const admin = await prisma.user.upsert({
     where: { email: 'admin@store.com' },
@@ -88,12 +107,13 @@ async function main() {
       scopeType: ScopeType.GLOBAL,
       departmentId: adminDept.id,
       storeId: null,
+      passwordHash: adminHash,
     },
     create: {
       fullName: 'System Administrator',
       email: 'admin@store.com',
       phone: '+251911001122',
-      passwordHash,
+      passwordHash: adminHash,
       role: Role.ADMINISTRATOR,
       scopeType: ScopeType.GLOBAL,
       departmentId: adminDept.id,
@@ -109,12 +129,13 @@ async function main() {
       scopeType: ScopeType.STORE,
       storeId: storeMain.id,
       departmentId: storeDept.id,
+      passwordHash: managerHash,
     },
     create: {
       fullName: 'Abebe Kebede (Store Manager)',
       email: 'manager@store.com',
       phone: '+251911223344',
-      passwordHash,
+      passwordHash: managerHash,
       role: Role.STORE_MANAGER,
       scopeType: ScopeType.STORE,
       storeId: storeMain.id,
@@ -130,12 +151,13 @@ async function main() {
       scopeType: ScopeType.STORE,
       storeId: storeMain.id,
       departmentId: storeDept.id,
+      passwordHash: keeperHash,
     },
     create: {
       fullName: 'Tigist Haile (Storekeeper)',
       email: 'keeper@store.com',
       phone: '+251911334455',
-      passwordHash,
+      passwordHash: keeperHash,
       role: Role.STOREKEEPER,
       scopeType: ScopeType.STORE,
       storeId: storeMain.id,
@@ -151,12 +173,13 @@ async function main() {
       scopeType: ScopeType.GLOBAL,
       storeId: null,
       departmentId: finDept.id,
+      passwordHash: auditorHash,
     },
     create: {
       fullName: 'Dawit Solomon (Internal Auditor)',
       email: 'auditor@store.com',
       phone: '+251911445566',
-      passwordHash,
+      passwordHash: auditorHash,
       role: Role.AUDITOR,
       scopeType: ScopeType.GLOBAL,
       storeId: null,
@@ -171,19 +194,20 @@ async function main() {
       role: Role.REQUESTER,
       scopeType: ScopeType.STORE,
       departmentId: csDept.id,
+      passwordHash: requesterHash,
     },
     create: {
       fullName: 'Dr. Chala Bekele (Requester / CS Lecturer)',
       email: 'requester@store.com',
       phone: '+251911556677',
-      passwordHash,
+      passwordHash: requesterHash,
       role: Role.REQUESTER,
       scopeType: ScopeType.STORE,
       departmentId: csDept.id,
     },
   });
 
-  console.log('✅ 5 System Users Seeded:');
+  console.log('✅ 5 System Users Seeded with distinct credentials:');
   console.log('   - Administrator: admin@store.com');
   console.log('   - Store Manager: manager@store.com');
   console.log('   - Storekeeper: keeper@store.com');

@@ -7,15 +7,15 @@ This document presents the primary real-world operational scenarios supported by
 
 ## 1. System Roles & Demo Accounts Matrix
 
-All demo accounts use the standard password: **`password123`**
+Each demo account is secured with an independent default role password in dev:
 
-| Account Email | Role Name | Primary Responsibility in Dedicated Store |
-| :--- | :--- | :--- |
-| `manager@store.com` | **Store Manager** | Catalog management, category creation, material requisition review & approval. |
-| `keeper@store.com` | **Storekeeper** | Physical inventory operations: Stock In, Direct Stock Out, Returns, Adjustments, Transfers, and Issuing approved requests. |
-| `requester@store.com` | **Requester (Academic Staff)** | Departmental material requests, tracking live status from Pending to Approved and Issued. |
-| `auditor@store.com` | **Internal Auditor** | Full audit compliance, inspecting transaction history and all 8 official valuation and movement reports. |
-| `admin@store.com` | **System Administrator** | User administration, role modification, faculty/department configuration, and system JSON backups. |
+| Account Email | Default Password | Role Name | Primary Responsibility in Dedicated Store |
+| :--- | :--- | :--- | :--- |
+| `manager@store.com` | `Manager#AMU2026!StoreKey` | **Store Manager** | Catalog management, category creation, material requisition review & approval. |
+| `keeper@store.com` | `Keeper#AMU2026!InventoryKey` | **Storekeeper** | Physical inventory operations: Stock In, Direct Stock Out, Returns, Adjustments, Transfers, and Issuing approved requests. |
+| `requester@store.com` | `Requester#AMU2026!StaffKey` | **Requester (Academic Staff)** | Departmental material requests, tracking live status from Pending to Approved and Issued. |
+| `auditor@store.com` | `Auditor#AMU2026!AuditKey` | **Internal Auditor** | Full audit compliance, inspecting transaction history and all 8 official valuation and movement reports. |
+| `admin@store.com` | `Admin#AMU2026!SecureKey` | **System Administrator** | User administration, role modification, faculty/department configuration, and system JSON backups. |
 
 ---
 
@@ -25,7 +25,7 @@ All demo accounts use the standard password: **`password123`**
 **Context**: A registered supplier delivers a shipment of network cables, paper, or office furniture for the university store.
 
 #### Step-by-Step Execution:
-1. Log in as `keeper@store.com` (`password123`) or `manager@store.com`.
+1. Log in as `keeper@store.com` (`Keeper#AMU2026!InventoryKey`) or `manager@store.com` (`Manager#AMU2026!StoreKey`).
 2. Navigate to **Inventory Operations** (`/inventory`).
 3. Click the **Stock In (Receiving)** tab.
 4. Select the material (e.g. `CAT6 Ethernet Cable Roll`), enter Quantity (e.g. `10`), Unit Price (e.g. `2800.00 ETB`), select Supplier (e.g. `Ethio-Telecom IT Suppliers`), and add delivery notes.

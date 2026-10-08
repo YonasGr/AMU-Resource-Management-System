@@ -107,7 +107,18 @@ describe('RBAC Redesign & Store Scope Enforcement E2E', () => {
     });
 
     // 2. Authenticate all 7 test users and retrieve JWT tokens
-    const loginUser = async (email: string, password = 'password123') => {
+    const rolePasswords: Record<string, string> = {
+      'admin@store.com': process.env.SEED_ADMIN_PASSWORD || 'Admin#AMU2026!SecureKey',
+      'manager@store.com': process.env.SEED_MANAGER_PASSWORD || 'Manager#AMU2026!StoreKey',
+      'keeper@store.com': process.env.SEED_KEEPER_PASSWORD || 'Keeper#AMU2026!InventoryKey',
+      'auditor@store.com': process.env.SEED_AUDITOR_PASSWORD || 'Auditor#AMU2026!AuditKey',
+      'requester@store.com': process.env.SEED_REQUESTER_PASSWORD || 'Requester#AMU2026!StaffKey',
+      'engmanager@store.com': 'password123',
+      'globalmanager@store.com': 'password123',
+    };
+
+    const loginUser = async (email: string) => {
+      const password = rolePasswords[email] || 'password123';
       const res = await request(app.getHttpServer())
         .post('/auth/login')
         .send({ email, password })

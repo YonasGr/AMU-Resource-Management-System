@@ -55,6 +55,14 @@ class EnvironmentVariables {
   @IsString()
   @IsOptional()
   SMTP_FROM?: string;
+
+  @IsString()
+  @IsOptional()
+  CORS_ORIGIN?: string;
+
+  @IsString()
+  @IsOptional()
+  CORS_ORIGINS?: string;
 }
 
 export function validateEnv(config: Record<string, unknown>) {

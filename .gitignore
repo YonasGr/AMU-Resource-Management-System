@@ -27,3 +27,6 @@ backend/.pnpm/*
 .agents/
 ORIGINAL_REQUEST.md
 PROJECT.md
+
+# Generated knowledge graphs
+graphify-out/

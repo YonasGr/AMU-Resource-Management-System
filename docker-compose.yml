@@ -47,7 +47,7 @@ services:
       JWT_REFRESH_EXPIRES_IN: 7d
     command: >
       sh -c "pnpm prisma:generate &&
-            npx prisma db push --accept-data-loss &&
+            npx prisma migrate deploy &&
             pnpm prisma:seed &&
             pnpm start:dev"
     ports:

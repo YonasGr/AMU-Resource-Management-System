@@ -36,15 +36,15 @@ This single command automatically:
 
 Use these seeded accounts for local development and demonstrations. Credentials are documented here and are not prefilled or displayed in the login screen. Change or disable these accounts before exposing a deployment outside a trusted demo environment.
 
-| Role | Email | Password | Primary Scope & Responsibilities |
+| Role | Email | Default Dev Password | Primary Scope & Responsibilities |
 | :--- | :--- | :--- | :--- |
-| **Store Manager** | `manager@store.com` | `password123` | Material catalog governance, category creation, request reviews & approvals |
-| **Storekeeper** | `keeper@store.com` | `password123` | Physical store operations (Stock In, Stock Out, Returns, Adjustments, Transfers, Issuance) |
-| **Requester (Academic Staff)** | `requester@store.com` | `password123` | Submit departmental material requisitions & track live fulfillment status |
-| **Internal Auditor** | `auditor@store.com` | `password123` | Inspect transaction history, audit trails, and all 8 official valuation/movement reports |
-| **System Administrator** | `admin@store.com` | `password123` | User account management, security role assignment, department setup, system backups |
+| **Store Manager** | `manager@store.com` | `Manager#AMU2026!StoreKey` | Material catalog governance, category creation, request reviews & approvals |
+| **Storekeeper** | `keeper@store.com` | `Keeper#AMU2026!InventoryKey` | Physical store operations (Stock In, Stock Out, Returns, Adjustments, Transfers, Issuance) |
+| **Requester (Academic Staff)** | `requester@store.com` | `Requester#AMU2026!StaffKey` | Submit departmental material requisitions & track live fulfillment status |
+| **Internal Auditor** | `auditor@store.com` | `Auditor#AMU2026!AuditKey` | Inspect transaction history, audit trails, and all 8 official valuation/movement reports |
+| **System Administrator** | `admin@store.com` | `Admin#AMU2026!SecureKey` | User account management, security role assignment, department setup, system backups |
 
-All five accounts use the same demo password: `password123`.
+> **Production Lockdown**: Each account has an independent, Argon2-hashed credential. In production (`NODE_ENV=production`), fallback default passwords are blocked and distinct passwords must be configured using `SEED_ADMIN_PASSWORD`, `SEED_MANAGER_PASSWORD`, `SEED_KEEPER_PASSWORD`, `SEED_AUDITOR_PASSWORD`, and `SEED_REQUESTER_PASSWORD`.
 
 ---
 

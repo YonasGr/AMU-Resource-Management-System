@@ -1,10 +1,11 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { HttpException, HttpStatus, Injectable, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import * as argon2 from 'argon2';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { PrismaService } from '../../prisma/prisma.service';
 import { UsersService } from '../users/users.service';
+import { RedisService } from '../../common/redis/redis.service';
 
 export interface AuthResponse {
   accessToken: string;
@@ -21,27 +22,70 @@ export interface AuthResponse {
 
 @Injectable()
 export class AuthService {
+  private static readonly MAX_FAILED_LOGIN_ATTEMPTS = 5;
+  private static readonly LOCKOUT_WINDOW_SECONDS = 900; // 15 minutes lockout
+  private static readonly MAX_IP_REQUESTS_PER_MINUTE = 20;
+  private static readonly IP_WINDOW_SECONDS = 60;
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly usersService: UsersService,
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
+    private readonly redisService: RedisService,
   ) {}
 
-  async login(email: string, password: string): Promise<AuthResponse> {
+  async login(email: string, password: string, clientIp?: string): Promise<AuthResponse> {
+    const normalizedEmail = email ? email.trim().toLowerCase() : '';
+    const emailKey = `login:failed:email:${normalizedEmail}`;
+    const ipKey = clientIp ? `login:rate:ip:${clientIp}` : null;
+
+    // 1. IP rate limiting (protects against rapid credential stuffing/DoS)
+    if (ipKey) {
+      const ipRate = await this.redisService.checkRateLimit(ipKey, AuthService.MAX_IP_REQUESTS_PER_MINUTE);
+      if (!ipRate.allowed) {
+        throw new HttpException(
+          'Too many requests from this IP address. Please wait a minute and try again.',
+          HttpStatus.TOO_MANY_REQUESTS,
+        );
+      }
+      await this.redisService.recordFailedAttempt(ipKey, AuthService.IP_WINDOW_SECONDS);
+    }
+
+    // 2. Email-based lockout check (checked before expensive argon2 hash verification)
+    const emailRate = await this.redisService.checkRateLimit(emailKey, AuthService.MAX_FAILED_LOGIN_ATTEMPTS);
+    if (!emailRate.allowed) {
+      const retryMin = Math.max(1, Math.ceil(emailRate.retryAfterSeconds / 60));
+      throw new HttpException(
+        `Too many failed login attempts. Account temporarily locked. Please try again in ${retryMin} minute(s).`,
+        HttpStatus.TOO_MANY_REQUESTS,
+      );
+    }
+
     const user = await this.prisma.user.findUnique({
-      where: { email },
+      where: { email: normalizedEmail },
       include: { department: true },
     });
 
     if (!user || user.status !== 'ACTIVE') {
+      await this.redisService.recordFailedAttempt(emailKey, AuthService.LOCKOUT_WINDOW_SECONDS);
       throw new UnauthorizedException('Invalid email or password');
     }
 
     const passwordValid = await argon2.verify(user.passwordHash, password);
     if (!passwordValid) {
+      const attempts = await this.redisService.recordFailedAttempt(emailKey, AuthService.LOCKOUT_WINDOW_SECONDS);
+      if (attempts >= AuthService.MAX_FAILED_LOGIN_ATTEMPTS) {
+        throw new HttpException(
+          'Too many failed login attempts. Account temporarily locked for 15 minutes.',
+          HttpStatus.TOO_MANY_REQUESTS,
+        );
+      }
       throw new UnauthorizedException('Invalid email or password');
     }
+
+    // Reset failed login attempts upon successful authentication
+    await this.redisService.resetAttempts(emailKey);
 
     return this.createSession(user);
   }

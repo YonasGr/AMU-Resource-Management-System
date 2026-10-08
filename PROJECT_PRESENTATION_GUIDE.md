@@ -25,15 +25,15 @@ $$\text{Item Cataloging} \longrightarrow \text{Stock In (Suppliers)} \longrighta
 
 ## 2. Test Accounts Matrix & Credentials
 
-All demo accounts use the standard password: **`password123`**
+Each role has an independent, secured default credential in dev:
 
-| Account Email | Role Name | Scope | Purpose in Presentation |
-|---|---|---|---|
-| `manager@store.com` | **Store Manager** | Store | Catalog management, new category creation, requisition review & approval. |
-| `keeper@store.com` | **Storekeeper** | Store | Fulfills approved requisitions, logs Stock In, Direct Out, Returns, Adjustments, Transfers. |
-| `requester@store.com` | **Requester** | Academic Dept | Submits departmental material requests and monitors status in real time. |
-| `auditor@store.com` | **Auditor** | Global Compliance | Inspects system audit logs and all 8 official valuation and balance reports. |
-| `admin@store.com` | **Administrator** | System Global | User account management, security role configuration, JSON database backup. |
+| Account Email | Default Password | Role Name | Scope | Purpose in Presentation |
+|---|---|---|---|---|
+| `manager@store.com` | `Manager#AMU2026!StoreKey` | **Store Manager** | Store | Catalog management, new category creation, requisition review & approval. |
+| `keeper@store.com` | `Keeper#AMU2026!InventoryKey` | **Storekeeper** | Store | Fulfills approved requisitions, logs Stock In, Direct Out, Returns, Adjustments, Transfers. |
+| `requester@store.com` | `Requester#AMU2026!StaffKey` | **Requester** | Academic Dept | Submits departmental material requests and monitors status in real time. |
+| `auditor@store.com` | `Auditor#AMU2026!AuditKey` | **Auditor** | Global Compliance | Inspects system audit logs and all 8 official valuation and balance reports. |
+| `admin@store.com` | `Admin#AMU2026!SecureKey` | **Administrator** | System Global | User account management, security role configuration, JSON database backup. |
 
 ---
 
@@ -55,7 +55,7 @@ docker compose up -d --build
 ### DEMO FLOW 1: Requisition Filing, Manager Approval & Storekeeper Issuance
 1. **Step 1: File Requisition as Academic Requester**
    - Open `http://localhost:5173/login`.
-   - Click Quick Login: **Requester (Academic Staff)** (`requester@store.com` / `password123`).
+   - Log in: **Requester (Academic Staff)** (`requester@store.com` / `Requester#AMU2026!StaffKey`).
    - Navigate to **Material Requests** (`/requests`) → Click **+ New Material Request**.
    - Select Department (`Computer Science`), enter purpose (`Final Exam Printing Supplies`), add `A4 Paper x 5`.
    - Click **Submit Request**. Observe status is `PENDING`.

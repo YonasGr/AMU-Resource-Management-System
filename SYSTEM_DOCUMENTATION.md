@@ -296,7 +296,7 @@ export class AccessControlService {
 | `auditor@store.com` | `AUDITOR` | `GLOBAL` | *None* | `FIN` | Compliance officer inspecting audit trail & 8 official reports |
 | `requester@store.com` | `REQUESTER` | `ORGANIZATION` | *None* | `CS` | Academic faculty member filing departmental material requisitions |
 
-*All demo accounts initialized with default password: `password123` (argon2 hashed).*
+*All demo accounts initialized with distinct role-specific credentials in dev (e.g. `Admin#AMU2026!SecureKey`, `Manager#AMU2026!StoreKey`, `Keeper#AMU2026!InventoryKey`, `Auditor#AMU2026!AuditKey`, `Requester#AMU2026!StaffKey`), and locked down via mandatory `SEED_*_PASSWORD` environment variables in production.*
 
 ---
 

@@ -47,7 +47,7 @@ describe('AMU Resource Management System (E2E Smoke & Core Endpoints)', () => {
       .post('/auth/login')
       .send({
         email: 'admin@store.com',
-        password: 'password123',
+        password: process.env.SEED_ADMIN_PASSWORD || 'Admin#AMU2026!SecureKey',
       })
       .expect(200);
 
@@ -63,7 +63,7 @@ describe('AMU Resource Management System (E2E Smoke & Core Endpoints)', () => {
       .post('/auth/login')
       .send({
         email: 'manager@store.com',
-        password: 'password123',
+        password: process.env.SEED_MANAGER_PASSWORD || 'Manager#AMU2026!StoreKey',
       })
       .expect(200);
 
@@ -79,7 +79,7 @@ describe('AMU Resource Management System (E2E Smoke & Core Endpoints)', () => {
       .post('/auth/login')
       .send({
         email: 'requester@store.com',
-        password: 'password123',
+        password: process.env.SEED_REQUESTER_PASSWORD || 'Requester#AMU2026!StaffKey',
       })
       .expect(200);
 

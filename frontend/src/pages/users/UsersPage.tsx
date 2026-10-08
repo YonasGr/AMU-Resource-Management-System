@@ -41,7 +41,7 @@ export default function UsersPage() {
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
-  const [password, setPassword] = useState('password123');
+  const [password, setPassword] = useState('');
   const [role, setRole] = useState<
     'ADMINISTRATOR' | 'STORE_MANAGER' | 'STOREKEEPER' | 'AUDITOR' | 'REQUESTER'
   >('STOREKEEPER');
@@ -99,7 +99,7 @@ export default function UsersPage() {
     setFullName('');
     setEmail('');
     setPhone('');
-    setPassword('password123');
+    setPassword('');
     setRole('STOREKEEPER');
   };
 

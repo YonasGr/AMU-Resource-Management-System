@@ -23,6 +23,7 @@ export const useAuthStore = create<AuthState>()(
   persist(
     (set) => ({
       accessToken: null,
+      refreshToken: null,
       user: null,
       setSession: (sessionPayload) => {
         const data = sessionPayload?.data || sessionPayload;

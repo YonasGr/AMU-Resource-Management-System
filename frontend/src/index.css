@@ -73,7 +73,7 @@
 @media print {
   @page {
     size: landscape;
-    margin: 10mm;
+    margin: 8mm 6mm;
   }
 
   html,
@@ -97,6 +97,7 @@
   #root > div > aside,
   #root > div > div > header,
   #root > div > .fixed,
+  .print\:hidden,
   #root main > div > div > :not(#print-report) {
     display: none !important;
   }
@@ -107,55 +108,92 @@
     max-width: none !important;
     margin: 0 !important;
     padding: 0 !important;
-    border: 0 !important;
+    border: none !important;
     border-radius: 0 !important;
     box-shadow: none !important;
+    background: #fff !important;
     overflow: visible !important;
   }
 
-  #print-report .report-table-wrap {
-    display: none !important;
+  .report-printable-table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+    font-size: 8.5pt !important;
+    line-height: 1.35 !important;
+    color: #0f172a !important;
+    margin-top: 8pt !important;
+    margin-bottom: 12pt !important;
   }
 
-  #print-report .report-print-groups {
+  .report-printable-table thead {
+    display: table-header-group !important;
+  }
+
+  .report-printable-table tbody tr {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  .report-printable-table th {
+    background-color: #f1f5f9 !important;
+    color: #0f172a !important;
+    font-weight: 700 !important;
+    font-size: 7.5pt !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.03em !important;
+    border: 1px solid #94a3b8 !important;
+    padding: 5pt 5pt !important;
+    vertical-align: middle !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  .report-printable-table td {
+    border: 1px solid #cbd5e1 !important;
+    padding: 4pt 5pt !important;
+    vertical-align: middle !important;
+    font-size: 8pt !important;
+    word-break: break-word !important;
+  }
+
+  .report-printable-table tbody tr:nth-child(even) {
+    background-color: #f8fafc !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  .report-printable-table .row-number {
+    width: 22pt;
+    text-align: center !important;
+    font-weight: 600;
+    color: #64748b !important;
+  }
+
+  .print-signature-section {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+    margin-top: 16pt !important;
     display: block !important;
   }
 
-  #print-report .report-print-group + .report-print-group {
-    break-before: page;
-    page-break-before: always;
-  }
-
-  #print-report .report-print-table {
-    width: 100% !important;
-    table-layout: fixed !important;
-    border-collapse: collapse !important;
-    font-size: 9pt !important;
-    color: #111827 !important;
-  }
-
-  #print-report .report-print-table th,
-  #print-report .report-print-table td {
-    padding: 5pt 7pt !important;
+  .print-sign-box {
     border: 1px solid #94a3b8 !important;
-    overflow-wrap: anywhere !important;
-    word-break: break-word !important;
-    vertical-align: top !important;
-    text-align: left !important;
+    padding: 8pt !important;
+    background: #ffffff !important;
+    box-shadow: none !important;
   }
 
-  #print-report .report-print-table th {
-    background: #f1f5f9 !important;
-    font-weight: 700 !important;
+  .print-seal-box {
+    border: 2px dashed #64748b !important;
+    padding: 8pt !important;
+    background: #ffffff !important;
+    box-shadow: none !important;
   }
 
-  #print-report .report-print-table thead {
-    display: table-header-group;
-  }
-
-  #print-report .report-print-table .row-number {
-    width: 28pt;
-    text-align: right !important;
-    color: #64748b !important;
+  .print-letterhead {
+    border-bottom: 2px solid #0f172a !important;
+    padding-bottom: 8pt !important;
+    margin-bottom: 8pt !important;
   }
 }
+

@@ -109,37 +109,56 @@ export default function ReportsPage() {
   };
 
   const currentConfig = reportConfigs[reportType];
-  const CurrentIcon = currentConfig.icon;
 
-  // Export to CSV / Excel helper
+  const reportRows = Array.isArray(data) ? data : [];
+  const flattenRecord = (record: Record<string, any>, prefix = ''): Record<string, string> =>
+    Object.entries(record ?? {}).reduce<Record<string, string>>((result, [key, value]) => {
+      const path = prefix ? `${prefix}.${key}` : key;
+      if (value === null || value === undefined) result[path] = '';
+      else if (value instanceof Date) result[path] = value.toLocaleString();
+      else if (Array.isArray(value)) result[path] = value.map((entry) => typeof entry === 'object' && entry ? JSON.stringify(entry) : String(entry)).join('; ');
+      else if (typeof value === 'object') Object.assign(result, flattenRecord(value, path));
+      else result[path] = String(value);
+      return result;
+    }, {});
+  const flattenedRows = reportRows.map((row: Record<string, any>) => flattenRecord(row));
+  const allColumns = Array.from(new Set(flattenedRows.flatMap((row) => Object.keys(row))));
+  const columns = allColumns.filter((column) =>
+    flattenedRows.some((row) => row[column]?.trim().length > 0),
+  );
+  const printableColumnGroups: string[][] = [];
+  for (let index = 0; index < columns.length; index += 4) {
+    printableColumnGroups.push(columns.slice(index, index + 4));
+  }
+  const labelForColumn = (column: string) => column
+    .split('.')
+    .map((part) => part.replace(/([a-z0-9])([A-Z])/g, '$1 $2').replace(/_/g, ' '))
+    .join(' / ')
+    .toUpperCase();
+
+  // CSV uses the same selected and flattened table data as the screen.
   const handleExportCSV = () => {
-    if (!data || !Array.isArray(data) || data.length === 0) return;
-
-    const headers = Object.keys(data[0]).join(',');
-    const rows = data.map((row) =>
-      Object.values(row)
-        .map((val) => `"${typeof val === 'object' ? JSON.stringify(val) : val}"`)
-        .join(','),
-    );
-
-    const csvContent = 'data:text/csv;charset=utf-8,' + [headers, ...rows].join('\n');
-    const encodedUri = encodeURI(csvContent);
+    if (flattenedRows.length === 0) return;
+    const escapeCSV = (value: string) => `"${value.replace(/"/g, '""')}"`;
+    const csv = [
+      columns.map(labelForColumn).map(escapeCSV).join(','),
+      ...flattenedRows.map((row) => columns.map((column) => escapeCSV(row[column] ?? '')).join(',')),
+    ].join('\r\n');
+    const url = URL.createObjectURL(new Blob([`\uFEFF${csv}`], { type: 'text/csv;charset=utf-8' }));
     const link = document.createElement('a');
-    link.setAttribute('href', encodedUri);
-    link.setAttribute(
-      'download',
-      `${reportType}_report_${new Date().toISOString().slice(0, 10)}.csv`,
-    );
+    link.href = url;
+    link.download = `${reportType}_report_${new Date().toISOString().slice(0, 10)}.csv`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
 
   const handlePrintPDF = () => {
     window.print();
   };
 
-  const rowsCount = Array.isArray(data) ? data.length : 0;
+  const rowsCount = reportRows.length;
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -158,11 +177,12 @@ export default function ReportsPage() {
                 disabled={rowsCount === 0}
                 leftIcon={<FileSpreadsheet className="h-4 w-4 text-emerald-600" />}
               >
-                Export CSV / Excel
+                Export CSV
               </Button>
               <Button
                 variant="primary"
                 onClick={handlePrintPDF}
+                disabled={isLoading || rowsCount === 0}
                 leftIcon={<Printer className="h-4 w-4" />}
               >
                 Print / Export PDF
@@ -196,7 +216,7 @@ export default function ReportsPage() {
       </div>
 
       {/* Official Report Document Paper */}
-      <Card className="p-8 space-y-6">
+      <Card id="print-report" className="report-paper p-8 space-y-6">
         {/* Letterhead Header */}
         <div className="border-b border-slate-200 pb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div className="flex items-start gap-4">
@@ -228,44 +248,64 @@ export default function ReportsPage() {
             <div className="mx-auto h-7 w-7 animate-spin rounded-full border-2 border-teal-600 border-t-transparent" />
             <p className="mt-3 text-xs font-semibold text-slate-500">Compiling report data...</p>
           </div>
-        ) : !data || rowsCount === 0 ? (
+        ) : rowsCount === 0 ? (
           <EmptyState
             icon={BarChart3}
             title="No records found"
             description="There is no transaction or inventory data available for this report type."
           />
         ) : (
-          <div className="overflow-x-auto rounded-xl border border-slate-200/80">
-            <table className="w-full text-left text-xs text-slate-700">
+          <div className="report-table-wrap overflow-x-auto rounded-xl border border-slate-200/80 print:hidden">
+            <table className="report-table min-w-max w-full table-auto text-left text-xs text-slate-700">
               <thead className="bg-slate-50 text-slate-500 font-bold uppercase tracking-wider border-b border-slate-200/80">
                 <tr>
-                  {Object.keys(data[0]).map((col) => (
+                  {columns.map((col) => (
                     <th key={col} className="px-4 py-3">
-                      {col.replace(/([A-Z])/g, ' $1').toUpperCase()}
+                      {labelForColumn(col)}
                     </th>
                   ))}
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {data.map((row: any, idx: number) => (
+                {flattenedRows.map((row, idx) => (
                   <tr key={idx} className="hover:bg-slate-50/70 transition-colors">
-                    {Object.values(row).map((val: any, cIdx: number) => (
-                      <td key={cIdx} className="px-4 py-3">
-                        {typeof val === 'object' && val !== null ? (
-                          <span className="font-mono text-[10px] text-slate-500">
-                            {JSON.stringify(val)}
-                          </span>
-                        ) : typeof val === 'number' ? (
-                          <span className="font-bold text-slate-900">{val}</span>
-                        ) : (
-                          <span className="font-medium text-slate-700">{String(val ?? 'N/A')}</span>
-                        )}
+                    {columns.map((column) => (
+                      <td key={column} className="px-4 py-3 font-medium text-slate-700">
+                        {row[column] || ''}
                       </td>
                     ))}
                   </tr>
                 ))}
               </tbody>
             </table>
+          </div>
+        )}
+
+        {!isLoading && rowsCount > 0 && (
+          <div className="report-print-groups hidden">
+            {printableColumnGroups.map((group, groupIndex) => (
+              <section className="report-print-group" key={groupIndex}>
+                <h3 className="mb-2 text-xs font-bold text-slate-700">
+                  Report data — columns {groupIndex * 4 + 1}–{groupIndex * 4 + group.length} of {columns.length}
+                </h3>
+                <table className="report-print-table">
+                  <thead>
+                    <tr>
+                      <th className="row-number">#</th>
+                      {group.map((column) => <th key={column}>{labelForColumn(column)}</th>)}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {flattenedRows.map((row, rowIndex) => (
+                      <tr key={rowIndex}>
+                        <td className="row-number">{rowIndex + 1}</td>
+                        {group.map((column) => <td key={column}>{row[column] || ''}</td>)}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </section>
+            ))}
           </div>
         )}
 
@@ -280,4 +320,3 @@ export default function ReportsPage() {
     </div>
   );
 }
-

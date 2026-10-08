@@ -69,3 +69,93 @@
     background: linear-gradient(135deg, #F04D3F 0%, #F59E0B 100%);
   }
 }
+
+@media print {
+  @page {
+    size: landscape;
+    margin: 10mm;
+  }
+
+  html,
+  body,
+  #root,
+  #root > div,
+  #root > div > div,
+  #root main,
+  #root main > div {
+    width: 100% !important;
+    height: auto !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+    background: #fff !important;
+  }
+
+  #root > div {
+    display: block !important;
+  }
+
+  #root > div > aside,
+  #root > div > div > header,
+  #root > div > .fixed,
+  #root main > div > div > :not(#print-report) {
+    display: none !important;
+  }
+
+  #print-report {
+    display: block !important;
+    width: 100% !important;
+    max-width: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    overflow: visible !important;
+  }
+
+  #print-report .report-table-wrap {
+    display: none !important;
+  }
+
+  #print-report .report-print-groups {
+    display: block !important;
+  }
+
+  #print-report .report-print-group + .report-print-group {
+    break-before: page;
+    page-break-before: always;
+  }
+
+  #print-report .report-print-table {
+    width: 100% !important;
+    table-layout: fixed !important;
+    border-collapse: collapse !important;
+    font-size: 9pt !important;
+    color: #111827 !important;
+  }
+
+  #print-report .report-print-table th,
+  #print-report .report-print-table td {
+    padding: 5pt 7pt !important;
+    border: 1px solid #94a3b8 !important;
+    overflow-wrap: anywhere !important;
+    word-break: break-word !important;
+    vertical-align: top !important;
+    text-align: left !important;
+  }
+
+  #print-report .report-print-table th {
+    background: #f1f5f9 !important;
+    font-weight: 700 !important;
+  }
+
+  #print-report .report-print-table thead {
+    display: table-header-group;
+  }
+
+  #print-report .report-print-table .row-number {
+    width: 28pt;
+    text-align: right !important;
+    color: #64748b !important;
+  }
+}

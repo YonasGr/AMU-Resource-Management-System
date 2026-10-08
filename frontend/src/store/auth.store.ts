@@ -12,6 +12,7 @@ export interface AuthUser {
 
 interface AuthState {
   accessToken: string | null;
+  refreshToken: string | null;
   user: AuthUser | null;
   setSession: (sessionPayload: any) => void;
   setUser: (user: AuthUser) => void;
@@ -27,11 +28,12 @@ export const useAuthStore = create<AuthState>()(
         const data = sessionPayload?.data || sessionPayload;
         set({
           accessToken: data?.accessToken || null,
+          refreshToken: data?.refreshToken || null,
           user: data?.user || null,
         });
       },
       setUser: (user) => set({ user }),
-      clearSession: () => set({ accessToken: null, user: null }),
+      clearSession: () => set({ accessToken: null, refreshToken: null, user: null }),
     }),
     { name: 'store-mgmt-auth' },
   ),

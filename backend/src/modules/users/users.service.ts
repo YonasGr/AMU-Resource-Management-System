@@ -18,12 +18,12 @@ export interface CreateUserDto {
 export interface UpdateUserDto {
   fullName?: string;
   email?: string;
-  phone?: string;
+  phone?: string | null;
   role?: Role;
   status?: UserStatus;
   scopeType?: ScopeType;
-  departmentId?: string;
-  storeId?: string;
+  departmentId?: string | null;
+  storeId?: string | null;
   password?: string;
 }
 
@@ -96,6 +96,37 @@ export class UsersService {
       orderBy: { fullName: 'asc' },
     });
     return users.map((u) => this.stripPassword(u));
+  }
+
+  async restoreUsers(records: unknown[], actorId: string): Promise<{ restored: number; skipped: number }> {
+    if (!Array.isArray(records) || records.length > 10000) {
+      throw new BadRequestException('Backup must contain a valid users array');
+    }
+    let restored = 0;
+    let skipped = 0;
+    for (const value of records) {
+      if (!value || typeof value !== 'object') { skipped++; continue; }
+      const row = value as Record<string, unknown>;
+      if (typeof row.email !== 'string' || typeof row.fullName !== 'string') { skipped++; continue; }
+      const existing = await this.prisma.user.findUnique({ where: { email: row.email } });
+      // Exported user listings omit password hashes. Restore updates matching
+      // accounts while preserving credentials and never invents a password.
+      if (!existing) { skipped++; continue; }
+      const allowedRoles = Object.values(Role) as string[];
+      const allowedStatuses = Object.values(UserStatus) as string[];
+      const allowedScopes = Object.values(ScopeType) as string[];
+      await this.update(existing.id, {
+        fullName: row.fullName,
+        phone: typeof row.phone === 'string' || row.phone === null ? row.phone as string : undefined,
+        ...(allowedRoles.includes(String(row.role)) ? { role: row.role as Role } : {}),
+        ...(allowedStatuses.includes(String(row.status)) ? { status: row.status as UserStatus } : {}),
+        ...(allowedScopes.includes(String(row.scopeType)) ? { scopeType: row.scopeType as ScopeType } : {}),
+        ...(row.departmentId === null || typeof row.departmentId === 'string' ? { departmentId: row.departmentId as string | null } : {}),
+        ...(row.storeId === null || typeof row.storeId === 'string' ? { storeId: row.storeId as string | null } : {}),
+      }, actorId);
+      restored++;
+    }
+    return { restored, skipped };
   }
 
   async update(id: string, dto: UpdateUserDto, actorId?: string): Promise<any> {

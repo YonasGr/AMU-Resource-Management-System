@@ -2,11 +2,13 @@ import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import * as argon2 from 'argon2';
+import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { PrismaService } from '../../prisma/prisma.service';
 import { UsersService } from '../users/users.service';
 
 export interface AuthResponse {
   accessToken: string;
+  refreshToken: string;
   user: {
     id: string;
     fullName: string;
@@ -41,6 +43,28 @@ export class AuthService {
       throw new UnauthorizedException('Invalid email or password');
     }
 
+    return this.createSession(user);
+  }
+
+  async refresh(dto: RefreshTokenDto): Promise<AuthResponse> {
+    try {
+      const payload = this.jwtService.verify<{ sub: string; type: string }>(
+        dto.refreshToken,
+        { secret: this.configService.getOrThrow<string>('JWT_REFRESH_SECRET') },
+      );
+      if (payload.type !== 'refresh') throw new Error('Invalid token type');
+      const user = await this.prisma.user.findUnique({
+        where: { id: payload.sub },
+        include: { department: true },
+      });
+      if (!user || user.status !== 'ACTIVE') throw new Error('Inactive user');
+      return this.createSession(user);
+    } catch {
+      throw new UnauthorizedException('Invalid or expired refresh token');
+    }
+  }
+
+  private createSession(user: { id: string; email: string; role: string; fullName: string; departmentId: string | null; department?: { name: string } | null }): AuthResponse {
     const accessToken = this.jwtService.sign(
       { sub: user.id, email: user.email, role: user.role },
       {
@@ -48,9 +72,17 @@ export class AuthService {
         expiresIn: this.configService.getOrThrow<string>('JWT_ACCESS_EXPIRES_IN'),
       },
     );
+    const refreshToken = this.jwtService.sign(
+      { sub: user.id, type: 'refresh' },
+      {
+        secret: this.configService.getOrThrow<string>('JWT_REFRESH_SECRET'),
+        expiresIn: this.configService.getOrThrow<string>('JWT_REFRESH_EXPIRES_IN'),
+      },
+    );
 
     return {
       accessToken,
+      refreshToken,
       user: {
         id: user.id,
         fullName: user.fullName,

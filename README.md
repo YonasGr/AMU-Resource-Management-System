@@ -32,9 +32,9 @@ This single command automatically:
 
 ---
 
-## 🔐 Canonical Demo Accounts (Single Dedicated Store)
+## 🔐 Demo Login Credentials
 
-The login page features a **1-Click Quick Demo Switcher** box allowing instant login into any of the 5 roles:
+Use these seeded accounts for local development and demonstrations. Credentials are documented here and are not prefilled or displayed in the login screen. Change or disable these accounts before exposing a deployment outside a trusted demo environment.
 
 | Role | Email | Password | Primary Scope & Responsibilities |
 | :--- | :--- | :--- | :--- |
@@ -43,6 +43,8 @@ The login page features a **1-Click Quick Demo Switcher** box allowing instant l
 | **Requester (Academic Staff)** | `requester@store.com` | `password123` | Submit departmental material requisitions & track live fulfillment status |
 | **Internal Auditor** | `auditor@store.com` | `password123` | Inspect transaction history, audit trails, and all 8 official valuation/movement reports |
 | **System Administrator** | `admin@store.com` | `password123` | User account management, security role assignment, department setup, system backups |
+
+All five accounts use the same demo password: `password123`.
 
 ---
 

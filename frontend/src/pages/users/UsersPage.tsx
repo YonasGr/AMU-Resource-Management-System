@@ -50,6 +50,7 @@ export default function UsersPage() {
   const [systemName, setSystemName] = useState('Arba Minch University Store Management System');
   const [defaultThreshold, setDefaultThreshold] = useState('10');
   const [backupMessage, setBackupMessage] = useState('');
+  const [restoring, setRestoring] = useState(false);
 
   // Queries
   const { data: users, isLoading: loadingUsers } = useQuery({
@@ -115,6 +116,8 @@ export default function UsersPage() {
 
   const handleBackup = () => {
     const backupData = {
+      format: 'amu-store-users',
+      version: 1,
       timestamp: new Date().toISOString(),
       system: systemName,
       users,
@@ -130,9 +133,23 @@ export default function UsersPage() {
     setTimeout(() => setBackupMessage(''), 4000);
   };
 
-  const handleRestoreSim = () => {
-    setBackupMessage('Database schema verification and state sync complete.');
-    setTimeout(() => setBackupMessage(''), 4000);
+  const handleRestore = async (file?: File) => {
+    if (!file) return;
+    setRestoring(true);
+    try {
+      const backup = JSON.parse(await file.text());
+      if (backup?.format !== 'amu-store-users' || backup?.version !== 1 || !Array.isArray(backup.users)) {
+        throw new Error('Choose a valid Store Management user backup file.');
+      }
+      const response = await api.post('/users/restore', { users: backup.users });
+      const result = response.data.data ?? response.data;
+      await queryClient.invalidateQueries({ queryKey: ['users'] });
+      setBackupMessage(`Restore complete: ${result.restored} existing accounts restored; ${result.skipped} skipped. Passwords were preserved.`);
+    } catch (error: any) {
+      setBackupMessage(error?.response?.data?.message ?? error?.message ?? 'Could not restore this backup.');
+    } finally {
+      setRestoring(false);
+    }
   };
 
   if (!isAdmin) {
@@ -461,15 +478,10 @@ export default function UsersPage() {
                     Download Database Backup (.json)
                   </Button>
 
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    size="sm"
-                    onClick={handleRestoreSim}
-                    leftIcon={<Upload className="h-4 w-4" />}
-                  >
-                    Verify & Sync State
-                  </Button>
+                  <label className={`inline-flex cursor-pointer items-center gap-2 rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 ${restoring ? 'pointer-events-none opacity-50' : ''}`}>
+                    <Upload className="h-4 w-4" /> {restoring ? 'Restoring…' : 'Restore User Backup'}
+                    <input className="sr-only" type="file" accept="application/json,.json" disabled={restoring} onChange={(e) => { void handleRestore(e.currentTarget.files?.[0]); e.currentTarget.value = ''; }} />
+                  </label>
                 </div>
               </div>
             </CardBody>
@@ -562,4 +574,3 @@ export default function UsersPage() {
     </div>
   );
 }
-

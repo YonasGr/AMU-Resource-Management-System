@@ -1,17 +1,12 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  Boxes,
   Lock,
   Mail,
   User,
-  Shield,
   ArrowRight,
-  Sparkles,
-  CheckCircle2,
   KeyRound,
   UserPlus,
-  Building,
 } from 'lucide-react';
 import { api } from '../lib/api';
 import { useAuthStore } from '../store/auth.store';
@@ -22,19 +17,11 @@ export default function LoginPage() {
   const setSession = useAuthStore((s) => s.setSession);
 
   const [isRegister, setIsRegister] = useState(false);
-  const [email, setEmail] = useState('manager@store.com');
-  const [password, setPassword] = useState('password123');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-
-  const quickUsers = [
-    { label: 'Store Manager', email: 'manager@store.com', role: 'Approval & Catalog Control', badge: 'Manager' },
-    { label: 'Storekeeper', email: 'keeper@store.com', role: 'Stock In/Out & Issuance', badge: 'Keeper' },
-    { label: 'Requester (Academic Staff)', email: 'requester@store.com', role: 'Department Material Requisitions', badge: 'Requester' },
-    { label: 'Internal Auditor', email: 'auditor@store.com', role: 'Audit Logs & Inventory Valuation', badge: 'Auditor' },
-    { label: 'System Administrator', email: 'admin@store.com', role: 'User Management & Security Control', badge: 'Admin' },
-  ];
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -61,15 +48,9 @@ export default function LoginPage() {
     }
   };
 
-  const handleQuickLogin = (userEmail: string) => {
-    setEmail(userEmail);
-    setPassword('password123');
-    setIsRegister(false);
-  };
-
   return (
     <div className="flex min-h-screen w-screen bg-canvas">
-      {/* Left side: Enterprise Hero Showcase with Iconic Campus Background */}
+      {/* Brand panel */}
       <div className="hidden lg:flex lg:w-1/2 flex-col justify-between p-12 relative overflow-hidden border-r border-brand-800 text-white select-none">
         {/* Campus Background Image */}
         <div 
@@ -77,13 +58,9 @@ export default function LoginPage() {
           style={{ backgroundImage: `url('/amu-campus.jpg')` }}
         />
         
-        {/* Layered Gradient & Frosted Vignette Overlays for High Legibility */}
+        {/* Soft overlays keep the campus image atmospheric and the brand legible. */}
         <div className="absolute inset-0 bg-gradient-to-b from-brand-950/85 via-brand-950/75 to-brand-950/95 backdrop-blur-[2px]" />
         <div className="absolute inset-0 bg-gradient-to-tr from-teal-950/50 via-transparent to-brand-900/60" />
-
-        {/* Ambient glow accents */}
-        <div className="absolute top-0 left-1/4 h-80 w-80 rounded-full bg-teal-500/20 blur-3xl pointer-events-none" />
-        <div className="absolute bottom-10 right-10 h-72 w-72 rounded-full bg-cyan-500/20 blur-3xl pointer-events-none" />
 
         {/* Top brand */}
         <div className="relative z-10">
@@ -102,48 +79,20 @@ export default function LoginPage() {
           </div>
         </div>
 
-        {/* Center content */}
-        <div className="relative z-10 space-y-6 my-auto max-w-lg">
-          <div className="inline-flex items-center gap-2 rounded-full bg-teal-500/25 backdrop-blur-md px-3.5 py-1 text-xs font-bold text-teal-200 border border-teal-400/40 shadow-sm">
-            <Sparkles className="h-3.5 w-3.5 text-teal-300" />
-            <span>Arba Minch University • Central Store Portal</span>
-          </div>
-
-          <h2 className="text-3xl font-extrabold tracking-tight text-white leading-tight drop-shadow-lg">
-            Institutional Resource Allocation, Material Tracking & Live Inventory Auditing.
+        {/* Minimal supporting copy */}
+        <div className="relative z-10 my-auto max-w-lg py-16">
+          <p className="text-sm font-medium tracking-wide text-teal-200">CENTRAL STORE PORTAL</p>
+          <h2 className="mt-4 text-4xl font-bold leading-tight tracking-tight text-white drop-shadow-lg">
+            University resources, managed with clarity.
           </h2>
-
-          <p className="text-sm text-slate-200 leading-relaxed drop-shadow-md font-medium">
-            Dedicated store operations platform connecting university academic faculties, department requisitions, supplier deliveries, and physical inventory control.
-          </p>
-
-          <div className="grid grid-cols-2 gap-4 pt-2">
-            <div className="rounded-2xl bg-brand-900/60 backdrop-blur-md p-4 border border-white/15 shadow-xl">
-              <div className="flex items-center gap-2 text-teal-300 text-xs font-bold uppercase tracking-wider">
-                <CheckCircle2 className="h-4 w-4" /> Dedicated Store
-              </div>
-              <p className="mt-1 text-xs text-slate-300">Catalog, stock in/out, returns & transfer operations</p>
-            </div>
-
-            <div className="rounded-2xl bg-brand-900/60 backdrop-blur-md p-4 border border-white/15 shadow-xl">
-              <div className="flex items-center gap-2 text-teal-300 text-xs font-bold uppercase tracking-wider">
-                <CheckCircle2 className="h-4 w-4" /> Role Governance
-              </div>
-              <p className="mt-1 text-xs text-slate-300">Manager approvals, keeper issuance & auditor ledger</p>
-            </div>
-          </div>
         </div>
 
-        {/* Footer info */}
-        <div className="relative z-10 flex items-center justify-between text-xs text-slate-300 border-t border-white/15 pt-6 backdrop-blur-xs font-medium">
-          <span>Arba Minch University &copy; 2026</span>
-          <span className="flex items-center gap-1.5 text-teal-300">
-            <Shield className="h-3.5 w-3.5" /> Enterprise Secured
-          </span>
+        <div className="relative z-10 border-t border-white/15 pt-5 text-xs text-slate-300">
+          Arba Minch University
         </div>
       </div>
 
-      {/* Right side: Login & Quick Switcher Card */}
+      {/* Sign-in form */}
       <div className="flex flex-1 flex-col justify-center px-6 py-12 lg:px-16 overflow-y-auto">
         <div className="mx-auto w-full max-w-md space-y-6">
           {/* Header */}
@@ -163,12 +112,12 @@ export default function LoginPage() {
             </div>
 
             <h3 className="text-2xl font-extrabold tracking-tight text-slate-900">
-              {isRegister ? 'Create System Account' : 'Welcome to AMU Store'}
+              {isRegister ? 'Create an account' : 'Sign in'}
             </h3>
             <p className="text-xs text-slate-500 mt-1">
               {isRegister
-                ? 'Register your university faculty credentials'
-                : 'Sign in to access your role-based store operations & requisitions'}
+                ? 'Register your university account.'
+                : 'Access your AMU store account.'}
             </p>
           </div>
 
@@ -258,55 +207,8 @@ export default function LoginPage() {
             </button>
           </div>
 
-          {/* Demo Quick Account Switcher */}
-          <div className="rounded-2xl bg-slate-50 p-4 border border-slate-200/90 space-y-2.5">
-            <div className="flex items-center justify-between">
-              <span className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-slate-600">
-                <Shield className="h-3.5 w-3.5 text-teal-600" /> Demo Quick Login Accounts:
-              </span>
-              <span className="text-[10px] text-slate-400 font-medium">Click to populate</span>
-            </div>
-
-            <div className="grid grid-cols-1 gap-1.5">
-              {quickUsers.map((u) => {
-                const isSelected = email === u.email;
-                return (
-                  <button
-                    key={u.email}
-                    type="button"
-                    onClick={() => handleQuickLogin(u.email)}
-                    className={`flex items-center justify-between rounded-xl px-3 py-2 text-xs text-left transition-all ${
-                      isSelected
-                        ? 'bg-teal-50 border border-teal-300 text-teal-900 font-bold shadow-xs'
-                        : 'bg-white border border-slate-200/80 text-slate-700 hover:bg-slate-100/80 hover:text-slate-900'
-                    }`}
-                  >
-                    <div className="flex items-center gap-2 truncate">
-                      <div
-                        className={`h-2 w-2 rounded-full shrink-0 ${
-                          isSelected ? 'bg-teal-500' : 'bg-slate-300'
-                        }`}
-                      />
-                      <span className="truncate">{u.label}</span>
-                    </div>
-
-                    <span
-                      className={`text-[10px] px-2 py-0.5 rounded-full font-semibold shrink-0 ml-2 ${
-                        isSelected
-                          ? 'bg-teal-100 text-teal-800'
-                          : 'bg-slate-100 text-slate-500'
-                      }`}
-                    >
-                      {u.badge}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
         </div>
       </div>
     </div>
   );
 }
-

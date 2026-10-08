@@ -24,6 +24,12 @@ export class UsersController {
     return this.usersService.findAll();
   }
 
+  @Post('restore')
+  @ApiOperation({ summary: 'Restore existing user records from an administrative backup' })
+  restore(@CurrentUser() currentUser: SafeUser, @Body() body: { users: unknown[] }) {
+    return this.usersService.restoreUsers(body.users, currentUser.id);
+  }
+
   @Get(':id')
   @ApiOperation({ summary: 'Get a single user by ID (Administrator only)' })
   findOne(@Param('id', ParseUUIDPipe) id: string) {

@@ -16,6 +16,7 @@ import {
   X,
   Boxes,
   Trash2,
+  AlertTriangle,
 } from 'lucide-react';
 import { api } from '../../lib/api';
 import { useAuthStore } from '../../store/auth.store';
@@ -46,6 +47,11 @@ export default function RequestsPage() {
   const [activeTab, setActiveTab] = useState<'all' | 'my' | 'approvals' | 'issue'>(getInitialTab());
   const [isModalOpen, setIsModalOpen] = useState(false);
 
+  const [feedback, setFeedback] = useState<{
+    type: 'success' | 'error';
+    message: string;
+  } | null>(null);
+
   // Form State
   const [purpose, setPurpose] = useState('');
   const [departmentId, setDepartmentId] = useState(user?.departmentId || '');
@@ -53,9 +59,8 @@ export default function RequestsPage() {
     { materialId: string; quantityRequested: number }[]
   >([]);
 
-  // Remarks State for Approval/Rejection
-  const [managerRemarks, setManagerRemarks] = useState('');
-  const [selectedRequestId, setSelectedRequestId] = useState<string | null>(null);
+  // Remarks State for Approval/Rejection per Request
+  const [remarksMap, setRemarksMap] = useState<Record<string, string>>({});
 
   // Fetch Requests
   const { data: requests, isLoading } = useQuery({
@@ -90,12 +95,22 @@ export default function RequestsPage() {
       const res = await api.post('/requests', data);
       return res.data;
     },
-    onSuccess: () => {
+    onSuccess: (data: any) => {
       queryClient.invalidateQueries({ queryKey: ['material-requests'] });
       queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] });
       setIsModalOpen(false);
       setPurpose('');
       setSelectedItems([]);
+      setFeedback({
+        type: 'success',
+        message: `Material requisition ${data?.data?.requestNumber || ''} submitted successfully! Awaiting Store Manager approval.`,
+      });
+    },
+    onError: (err: any) => {
+      setFeedback({
+        type: 'error',
+        message: err.response?.data?.message || err.message || 'Failed to submit material request',
+      });
     },
   });
 
@@ -113,11 +128,24 @@ export default function RequestsPage() {
       const res = await api.post(`/requests/${id}/approve-reject`, { action, remarks });
       return res.data;
     },
-    onSuccess: () => {
+    onSuccess: (data: any, variables) => {
       queryClient.invalidateQueries({ queryKey: ['material-requests'] });
       queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] });
-      setSelectedRequestId(null);
-      setManagerRemarks('');
+      setFeedback({
+        type: 'success',
+        message: `Request ${variables.action === 'APPROVE' ? 'approved successfully! Ready for storekeeper issuance.' : 'rejected.'}`,
+      });
+      setRemarksMap((prev) => {
+        const next = { ...prev };
+        delete next[variables.id];
+        return next;
+      });
+    },
+    onError: (err: any) => {
+      setFeedback({
+        type: 'error',
+        message: err.response?.data?.message || err.message || 'Failed to update request status',
+      });
     },
   });
 
@@ -127,10 +155,20 @@ export default function RequestsPage() {
       const res = await api.post(`/requests/${id}/issue`, { remarks });
       return res.data;
     },
-    onSuccess: () => {
+    onSuccess: (data: any) => {
       queryClient.invalidateQueries({ queryKey: ['material-requests'] });
       queryClient.invalidateQueries({ queryKey: ['materials'] });
       queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] });
+      setFeedback({
+        type: 'success',
+        message: 'Materials issued and released to department successfully! Stock balances updated.',
+      });
+    },
+    onError: (err: any) => {
+      setFeedback({
+        type: 'error',
+        message: err.response?.data?.message || err.message || 'Failed to issue materials',
+      });
     },
   });
 
@@ -192,6 +230,31 @@ export default function RequestsPage() {
           </Button>
         }
       />
+
+      {/* Feedback Banner */}
+      {feedback && (
+        <div
+          className={`flex items-center gap-3 p-4 rounded-2xl border text-sm font-semibold animate-fade-in ${
+            feedback.type === 'success'
+              ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+              : 'bg-coral-50 text-coral-800 border-coral-200'
+          }`}
+        >
+          {feedback.type === 'success' ? (
+            <CheckCircle2 className="h-5 w-5 text-emerald-600 shrink-0" />
+          ) : (
+            <AlertTriangle className="h-5 w-5 text-coral-600 shrink-0" />
+          )}
+          <span className="flex-1">{feedback.message}</span>
+          <button
+            type="button"
+            onClick={() => setFeedback(null)}
+            className="text-xs underline hover:no-underline opacity-80"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
 
       {/* Tabs */}
       <div className="flex flex-wrap items-center gap-2 border-b border-slate-200/90 pb-3">
@@ -381,10 +444,10 @@ export default function RequestsPage() {
                     <div className="w-full sm:flex-1">
                       <Input
                         placeholder="Optional approval remarks or rejection notes..."
-                        value={selectedRequestId === req.id ? managerRemarks : ''}
+                        value={remarksMap[req.id] || ''}
                         onChange={(e) => {
-                          setSelectedRequestId(req.id);
-                          setManagerRemarks(e.target.value);
+                          const val = e.target.value;
+                          setRemarksMap((prev) => ({ ...prev, [req.id]: val }));
                         }}
                       />
                     </div>
@@ -398,7 +461,7 @@ export default function RequestsPage() {
                           approveRejectMutation.mutate({
                             id: req.id,
                             action: 'REJECT',
-                            remarks: managerRemarks,
+                            remarks: remarksMap[req.id] || '',
                           })
                         }
                         leftIcon={<X className="h-3.5 w-3.5" />}
@@ -414,7 +477,7 @@ export default function RequestsPage() {
                           approveRejectMutation.mutate({
                             id: req.id,
                             action: 'APPROVE',
-                            remarks: managerRemarks,
+                            remarks: remarksMap[req.id] || '',
                           })
                         }
                         leftIcon={<Check className="h-3.5 w-3.5" />}

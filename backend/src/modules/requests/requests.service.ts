@@ -30,6 +30,14 @@ export class RequestsService {
       throw new BadRequestException('A material request must include at least one item');
     }
 
+    let targetStoreId = dto.storeId || null;
+    if (!targetStoreId) {
+      const defaultStore = await this.prisma.store.findFirst();
+      if (defaultStore) {
+        targetStoreId = defaultStore.id;
+      }
+    }
+
     const count = await this.prisma.materialRequest.count();
     const requestNumber = `REQ-${new Date().getFullYear()}-${String(count + 1).padStart(4, '0')}`;
 
@@ -39,7 +47,7 @@ export class RequestsService {
         purpose: dto.purpose,
         requesterId,
         departmentId: dto.departmentId,
-        storeId: dto.storeId || null,
+        storeId: targetStoreId,
         status: RequestStatus.PENDING,
         items: {
           create: dto.items.map((item) => ({
@@ -154,7 +162,8 @@ export class RequestsService {
     }
 
     // Scope Enforcement (Requirement R2)
-    this.accessControlService.enforceStoreScope(user, request.storeId);
+    const targetStoreId = request.storeId || user.storeId;
+    this.accessControlService.enforceStoreScope(user, targetStoreId);
 
     const newStatus = action === 'APPROVE' ? RequestStatus.APPROVED : RequestStatus.REJECTED;
 

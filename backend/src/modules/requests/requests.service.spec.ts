@@ -11,6 +11,7 @@ describe('RequestsService Store-Scope Enforcement Verification', () => {
   let prisma: any;
   let notifications: any;
   let accessControlService: AccessControlService;
+  let auditService: any;
 
   beforeEach(() => {
     accessControlService = new AccessControlService();
@@ -19,6 +20,11 @@ describe('RequestsService Store-Scope Enforcement Verification', () => {
       materialRequest: {
         findUnique: jest.fn(),
         update: jest.fn(),
+        create: jest.fn(),
+        count: jest.fn().mockResolvedValue(0),
+      },
+      store: {
+        findFirst: jest.fn().mockResolvedValue({ id: 'store-a' }),
       },
     };
 
@@ -27,10 +33,15 @@ describe('RequestsService Store-Scope Enforcement Verification', () => {
       createForUsers: jest.fn().mockResolvedValue([]),
     };
 
+    auditService = {
+      log: jest.fn().mockResolvedValue({}),
+    };
+
     service = new RequestsService(
       prisma as unknown as PrismaService,
       notifications as unknown as NotificationsService,
       accessControlService,
+      auditService,
     );
   });
 

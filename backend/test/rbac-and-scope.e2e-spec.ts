@@ -1,6 +1,8 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import * as request from 'supertest';
+import * as argon2 from 'argon2';
+import { Role, ScopeType } from '@prisma/client';
 import { AppModule } from '../src/app.module';
 import { TransformInterceptor } from '../src/common/interceptors/transform.interceptor';
 import { AllExceptionsFilter } from '../src/common/filters/all-exceptions.filter';
@@ -49,7 +51,62 @@ describe('RBAC Redesign & Store Scope Enforcement E2E', () => {
 
     prisma = app.get(PrismaService);
 
-    // 1. Authenticate all 7 test users and retrieve JWT tokens
+    // 1. Ensure test stores exist
+    const storeDept = await prisma.department.findFirst();
+    departmentId = storeDept!.id;
+
+    const storeA = await prisma.store.upsert({
+      where: { code: 'STORE-MAIN' },
+      update: {},
+      create: {
+        code: 'STORE-MAIN',
+        name: 'Main Central Store',
+        departmentId: storeDept!.id,
+      },
+    });
+    storeAId = storeA.id;
+
+    const storeB = await prisma.store.upsert({
+      where: { code: 'STORE-ENG' },
+      update: {},
+      create: {
+        code: 'STORE-ENG',
+        name: 'Engineering Store',
+        departmentId: storeDept!.id,
+      },
+    });
+    storeBId = storeB.id;
+
+    // Ensure secondary test users exist
+    const hash = await argon2.hash('password123');
+    await prisma.user.upsert({
+      where: { email: 'engmanager@store.com' },
+      update: { role: Role.STORE_MANAGER, scopeType: ScopeType.STORE, storeId: storeBId },
+      create: {
+        email: 'engmanager@store.com',
+        fullName: 'Engineering Store Manager',
+        passwordHash: hash,
+        role: Role.STORE_MANAGER,
+        scopeType: ScopeType.STORE,
+        storeId: storeBId,
+        departmentId: storeDept!.id,
+      },
+    });
+
+    await prisma.user.upsert({
+      where: { email: 'globalmanager@store.com' },
+      update: { role: Role.STORE_MANAGER, scopeType: ScopeType.GLOBAL },
+      create: {
+        email: 'globalmanager@store.com',
+        fullName: 'Global Store Manager',
+        passwordHash: hash,
+        role: Role.STORE_MANAGER,
+        scopeType: ScopeType.GLOBAL,
+        departmentId: storeDept!.id,
+      },
+    });
+
+    // 2. Authenticate all 7 test users and retrieve JWT tokens
     const loginUser = async (email: string, password = 'password123') => {
       const res = await request(app.getHttpServer())
         .post('/auth/login')
@@ -66,21 +123,6 @@ describe('RBAC Redesign & Store Scope Enforcement E2E', () => {
     auditorToken = await loginUser('auditor@store.com');
     requesterToken = await loginUser('requester@store.com');
 
-    // 2. Discover or resolve supporting entities
-    const storeA = await prisma.store.findUnique({ where: { code: 'STORE-MAIN' } });
-    const storeB = await prisma.store.findUnique({ where: { code: 'STORE-ENG' } });
-    if (!storeA || !storeB) {
-      throw new Error('Stores STORE-MAIN and STORE-ENG must exist in the database (run prisma:seed)');
-    }
-    storeAId = storeA.id;
-    storeBId = storeB.id;
-
-    const dept = await prisma.department.findFirst();
-    if (!dept) {
-      throw new Error('At least one department must exist (run prisma:seed)');
-    }
-    departmentId = dept.id;
-
     const cat = await prisma.materialCategory.findFirst();
     if (!cat) {
       throw new Error('At least one material category must exist (run prisma:seed)');
@@ -93,42 +135,33 @@ describe('RBAC Redesign & Store Scope Enforcement E2E', () => {
     }
     materialId = mat.id;
 
-    // 3. Locate seeded pending requests REQ-2026-001 (Store A) and REQ-2026-002 (Store B)
-    const req1 = await prisma.materialRequest.findUnique({ where: { requestNumber: 'REQ-2026-001' } });
-    const req2 = await prisma.materialRequest.findUnique({ where: { requestNumber: 'REQ-2026-002' } });
+    // 3. Create fresh PENDING test requests for Store A and Store B
+    const requester = await prisma.user.findUnique({ where: { email: 'requester@store.com' } });
+    const createdA = await prisma.materialRequest.create({
+      data: {
+        requestNumber: `REQ-E2E-${Date.now()}-A`,
+        purpose: 'Test Request Store A',
+        storeId: storeAId,
+        departmentId,
+        status: 'PENDING',
+        requesterId: requester!.id,
+        items: { create: [{ materialId, quantityRequested: 1 }] },
+      },
+    });
+    storeARequestId = createdA.id;
 
-    if (req1) {
-      storeARequestId = req1.id;
-    } else {
-      // Create if not present
-      const created = await prisma.materialRequest.create({
-        data: {
-          requestNumber: `REQ-TEST-${Date.now()}-A`,
-          purpose: 'Test Request Store A',
-          storeId: storeAId,
-          departmentId,
-          requesterId: (await prisma.user.findUnique({ where: { email: 'requester@store.com' } }))!.id,
-          items: { create: [{ materialId, quantityRequested: 1 }] },
-        },
-      });
-      storeARequestId = created.id;
-    }
-
-    if (req2) {
-      storeBRequestId = req2.id;
-    } else {
-      const created = await prisma.materialRequest.create({
-        data: {
-          requestNumber: `REQ-TEST-${Date.now()}-B`,
-          purpose: 'Test Request Store B',
-          storeId: storeBId,
-          departmentId,
-          requesterId: (await prisma.user.findUnique({ where: { email: 'requester@store.com' } }))!.id,
-          items: { create: [{ materialId, quantityRequested: 1 }] },
-        },
-      });
-      storeBRequestId = created.id;
-    }
+    const createdB = await prisma.materialRequest.create({
+      data: {
+        requestNumber: `REQ-E2E-${Date.now()}-B`,
+        purpose: 'Test Request Store B',
+        storeId: storeBId,
+        departmentId,
+        status: 'PENDING',
+        requesterId: requester!.id,
+        items: { create: [{ materialId, quantityRequested: 1 }] },
+      },
+    });
+    storeBRequestId = createdB.id;
   });
 
   afterAll(async () => {

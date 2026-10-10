@@ -1,7 +1,6 @@
 import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios';
 import { useAuthStore } from '../store/auth.store';
-
-const rawApiBase = ((import.meta as any).env?.VITE_API_BASE_URL as string | undefined) ?? import.meta.env?.VITE_API_BASE_URL;
+const rawApiBase = (import.meta as { env?: Record<string, string | undefined> }).env?.VITE_API_BASE_URL;
 export const apiBase = rawApiBase
   ? rawApiBase.trim().replace(/\/+$/, '').replace(/\/api$/, '')
   : '/api';

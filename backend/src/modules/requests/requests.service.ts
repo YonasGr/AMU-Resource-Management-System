@@ -253,6 +253,7 @@ export class RequestsService {
             materialId: item.materialId,
             quantity: item.quantityRequested,
             requestId: request.id,
+            requestItemId: item.id,
             departmentId: request.departmentId,
             employeeId: employeeId || null,
             issuedById: storekeeperId,

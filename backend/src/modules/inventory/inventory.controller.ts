@@ -33,7 +33,7 @@ export class InventoryController {
 
   @Post('return')
   @Roles(Role.STOREKEEPER, Role.STORE_MANAGER, Role.ADMINISTRATOR)
-  @ApiOperation({ summary: 'Return Materials (Storekeeper / Manager / Admin - UC10)' })
+  @ApiOperation({ summary: 'Return materials against an issued request item (Storekeeper / Manager / Admin - UC10)' })
   returnMaterial(@Req() req: any, @Body() dto: ReturnDto) {
     return this.inventoryService.returnMaterial(req.user.id, dto);
   }

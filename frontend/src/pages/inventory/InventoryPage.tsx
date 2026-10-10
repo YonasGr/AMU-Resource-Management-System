@@ -59,6 +59,9 @@ export default function InventoryPage() {
   const [remarks, setRemarks] = useState('');
   const [newQuantity, setNewQuantity] = useState(0);
   const [adjustReason, setAdjustReason] = useState('');
+  const [returnRequestId, setReturnRequestId] = useState('');
+  const [returnRequestItemId, setReturnRequestItemId] = useState('');
+  const [returnQuantity, setReturnQuantity] = useState(1);
 
   // Ledger Filter State
   const [historySearch, setHistorySearch] = useState('');
@@ -107,6 +110,28 @@ export default function InventoryPage() {
       return res.data.data ?? res.data;
     },
   });
+
+  const { data: issuedRequests } = useQuery({
+    queryKey: ['material-requests', 'issued-returnable'],
+    queryFn: async () => {
+      const res = await api.get('/requests');
+      return (res.data.data ?? res.data).filter(
+        (request: any) => request.status === 'ISSUED' && request.items?.some(
+          (item: any) => item.quantityIssued > (item.quantityReturned ?? 0),
+        ),
+      );
+    },
+    enabled: activeTab === 'return',
+  });
+
+  const selectedReturnRequest = issuedRequests?.find((request: any) => request.id === returnRequestId);
+  const selectedReturnItem = selectedReturnRequest?.items?.find((item: any) => item.id === returnRequestItemId);
+  const returnableItems = selectedReturnRequest?.items?.filter(
+    (item: any) => item.quantityIssued > (item.quantityReturned ?? 0),
+  ) ?? [];
+  const returnableQuantity = selectedReturnItem
+    ? selectedReturnItem.quantityIssued - (selectedReturnItem.quantityReturned ?? 0)
+    : 0;
 
   // Fetch Transactions
   const { data: transactions, isLoading } = useQuery({
@@ -173,6 +198,7 @@ export default function InventoryPage() {
     },
     onSuccess: (data: any) => {
       queryClient.invalidateQueries({ queryKey: ['materials'] });
+      queryClient.invalidateQueries({ queryKey: ['material-requests'] });
       queryClient.invalidateQueries({ queryKey: ['inventory-transactions'] });
       queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] });
       const code = data?.data?.transactionCode || data?.transactionCode || '';
@@ -181,6 +207,9 @@ export default function InventoryPage() {
         message: `Return to stock recorded successfully! ${code ? `Transaction Code: ${code}` : ''}`,
       });
       resetForm();
+      setReturnRequestId('');
+      setReturnRequestItemId('');
+      setReturnQuantity(1);
     },
     onError: (err: any) => {
       setFeedback({
@@ -281,10 +310,11 @@ export default function InventoryPage() {
     e.preventDefault();
     setFeedback(null);
     returnMutation.mutate({
+      requestId: returnRequestId,
+      requestItemId: returnRequestItemId,
       materialId,
-      quantity: Number(quantity),
-      employeeId: employeeId || undefined,
-      departmentId: departmentId || undefined,
+      quantity: Number(returnQuantity),
+      departmentId: selectedReturnRequest?.departmentId,
       remarks,
     });
   };
@@ -387,7 +417,7 @@ export default function InventoryPage() {
               }`}
             >
               <RotateCcw className="h-3.5 w-3.5" />
-              <span>Material Returns</span>
+              <span>Request Returns</span>
             </button>
 
             <button
@@ -484,12 +514,14 @@ export default function InventoryPage() {
                   <CardTitle>
                     {activeTab === 'in' && 'Record Stock In (Supplier Shipment)'}
                     {activeTab === 'out' && 'Record Direct Stock Out (Store Issuance)'}
-                    {activeTab === 'return' && 'Record Material Return to Inventory'}
+                    {activeTab === 'return' && 'Record Return Against Request'}
                     {activeTab === 'adjust' && 'Manual Physical Stock Audit Adjustment'}
                     {activeTab === 'transfer' && 'Record Store Department Transfer'}
                   </CardTitle>
                   <CardDescription>
-                    Fill in the transaction details to update current inventory balances and log audit records.
+                    {activeTab === 'return'
+                      ? 'Select the issued request and item. Returns are capped at the outstanding quantity and recorded against that request.'
+                      : 'Fill in the transaction details to update current inventory balances and log audit records.'}
                   </CardDescription>
                 </div>
               </CardHeader>
@@ -688,20 +720,71 @@ export default function InventoryPage() {
                 {activeTab === 'return' && (
                   <form onSubmit={handleReturnSubmit} className="space-y-4">
                     <div>
-                      <Label required>Select Material Returned</Label>
+                      <Label required>Original Issued Request</Label>
                       <Select
                         required
-                        value={materialId}
-                        onChange={(e) => setMaterialId(e.target.value)}
+                        value={returnRequestId}
+                        onChange={(e) => {
+                          const requestId = e.target.value;
+                          const request = issuedRequests?.find((item: any) => item.id === requestId);
+                          const firstReturnable = request?.items?.find(
+                            (item: any) => item.quantityIssued > (item.quantityReturned ?? 0),
+                          );
+                          setReturnRequestId(requestId);
+                          setReturnRequestItemId(firstReturnable?.id ?? '');
+                          setMaterialId(firstReturnable?.materialId ?? '');
+                          setReturnQuantity(1);
+                        }}
                       >
-                        <option value="">Choose item being returned...</option>
-                        {materials?.map((m: any) => (
-                          <option key={m.id} value={m.id}>
-                            {m.name} ({m.materialCode})
+                        <option value="">Choose an issued request...</option>
+                        {issuedRequests?.map((request: any) => (
+                          <option key={request.id} value={request.id}>
+                            {request.requestNumber} — {request.requester?.fullName || 'Requester'} ({request.department?.name || 'Department'})
                           </option>
                         ))}
                       </Select>
+                      {issuedRequests?.length === 0 && (
+                        <p className="mt-2 text-xs font-medium text-slate-500">
+                          No issued requests have an outstanding quantity to return.
+                        </p>
+                      )}
                     </div>
+
+                    {returnRequestId && (
+                      <>
+                        <div>
+                          <Label required>Issued Material</Label>
+                          <Select
+                            required
+                            value={returnRequestItemId}
+                            onChange={(e) => {
+                              const itemId = e.target.value;
+                              const item = selectedReturnRequest?.items?.find((row: any) => row.id === itemId);
+                              setReturnRequestItemId(itemId);
+                              setMaterialId(item?.materialId ?? '');
+                              setReturnQuantity(1);
+                            }}
+                          >
+                            <option value="">Choose a material from this request...</option>
+                            {returnableItems.map((item: any) => (
+                              <option key={item.id} value={item.id}>
+                                {item.material?.name} ({item.material?.materialCode}) — {item.quantityIssued - (item.quantityReturned ?? 0)} eligible
+                              </option>
+                            ))}
+                          </Select>
+                          {returnableItems.length === 0 && (
+                            <p className="mt-2 text-xs font-medium text-slate-500">All issued items on this request have already been returned.</p>
+                          )}
+                        </div>
+
+                        {selectedReturnItem && (
+                          <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-950">
+                            <p className="font-semibold">{selectedReturnItem.material?.name}</p>
+                            <p className="mt-1 text-xs">Issued: {selectedReturnItem.quantityIssued} · Returned: {selectedReturnItem.quantityReturned ?? 0} · Still eligible: {returnableQuantity}</p>
+                          </div>
+                        )}
+                      </>
+                    )}
 
                     <div>
                       <Label required>Quantity Returned</Label>
@@ -709,41 +792,11 @@ export default function InventoryPage() {
                         type="number"
                         required
                         min={1}
-                        value={quantity}
-                        onChange={(e) => setQuantity(Number(e.target.value))}
+                        step={1}
+                        max={returnableQuantity}
+                        value={returnQuantity}
+                        onChange={(e) => setReturnQuantity(Number(e.target.value))}
                       />
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      <div>
-                        <Label>Returned By Employee</Label>
-                        <Select
-                          value={employeeId}
-                          onChange={(e) => setEmployeeId(e.target.value)}
-                        >
-                          <option value="">Select Employee...</option>
-                          {employees?.map((emp: any) => (
-                            <option key={emp.id} value={emp.id}>
-                              {emp.fullName}
-                            </option>
-                          ))}
-                        </Select>
-                      </div>
-
-                      <div>
-                        <Label>Returned By Department</Label>
-                        <Select
-                          value={departmentId}
-                          onChange={(e) => setDepartmentId(e.target.value)}
-                        >
-                          <option value="">Select Department...</option>
-                          {departments?.map((d: any) => (
-                            <option key={d.id} value={d.id}>
-                              {d.name}
-                            </option>
-                          ))}
-                        </Select>
-                      </div>
                     </div>
 
                     <div>
@@ -762,7 +815,7 @@ export default function InventoryPage() {
                         variant="primary"
                         size="lg"
                         className="w-full bg-amber-600 hover:bg-amber-700 text-white"
-                        disabled={!isKeeper || returnMutation.isPending}
+                        disabled={!isKeeper || returnMutation.isPending || !selectedReturnItem || returnQuantity < 1 || returnQuantity > returnableQuantity}
                         isLoading={returnMutation.isPending}
                         leftIcon={<RotateCcw className="h-4 w-4" />}
                       >
@@ -1104,7 +1157,7 @@ export default function InventoryPage() {
                         ) : txn.department ? (
                           <span className="inline-flex items-center gap-1 font-semibold text-slate-800">
                             <Building2 className="h-3.5 w-3.5 text-slate-400" />
-                            {txn.department.name}
+                            {txn.department.name}{txn.request?.requestNumber ? ` · ${txn.request.requestNumber}` : ''}
                           </span>
                         ) : (
                           <span className="text-slate-400 italic">Central Store</span>
@@ -1142,7 +1195,9 @@ export default function InventoryPage() {
                       <Badge tone={txn.type === 'STOCK_IN' ? 'success' : txn.type === 'STOCK_OUT' ? 'info' : txn.type === 'RETURN' ? 'warning' : 'purple'}>
                         {txn.type.replace('_', ' ')}
                       </Badge>
-                      <span className="text-xs text-slate-600">{associatedParty}</span>
+                      <span className="text-xs text-slate-600">
+                        {associatedParty}{txn.request?.requestNumber ? ` · ${txn.request.requestNumber}` : ''}
+                      </span>
                     </div>
                     <p className="mt-2 text-[11px] text-slate-500">{new Date(txn.createdAt).toLocaleString()} · {txn.issuedBy?.fullName || 'System'}</p>
                   </li>

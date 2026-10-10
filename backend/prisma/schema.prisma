@@ -235,6 +235,8 @@ model MaterialRequestItem {
   material          Material        @relation(fields: [materialId], references: [id])
   quantityRequested Int             @map("quantity_requested")
   quantityIssued    Int             @default(0) @map("quantity_issued")
+  quantityReturned  Int             @default(0) @map("quantity_returned")
+  transactions      InventoryTransaction[]
 
   @@map("material_request_items")
 }
@@ -262,6 +264,9 @@ model InventoryTransaction {
   requestId String?          @map("request_id")
   request   MaterialRequest? @relation(fields: [requestId], references: [id])
 
+  requestItemId String?             @map("request_item_id")
+  requestItem   MaterialRequestItem? @relation(fields: [requestItemId], references: [id], onDelete: SetNull)
+
   supplierId String?   @map("supplier_id")
   supplier   Supplier? @relation(fields: [supplierId], references: [id])
 
@@ -279,6 +284,7 @@ model InventoryTransaction {
 
   createdAt DateTime @default(now()) @map("created_at")
 
+  @@index([requestItemId])
   @@map("inventory_transactions")
 }
 

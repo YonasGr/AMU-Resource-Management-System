@@ -23,6 +23,8 @@ export interface StockOutDto {
 }
 
 export interface ReturnDto {
+  requestId: string;
+  requestItemId: string;
   materialId: string;
   quantity: number;
   employeeId?: string;
@@ -222,35 +224,72 @@ export class InventoryService {
 
   /** Material Return (Record returned materials back into inventory) */
   async returnMaterial(storekeeperId: string, dto: ReturnDto) {
-    const material = await this.prisma.material.findUnique({
-      where: { id: dto.materialId },
-      include: { stockSummary: true },
-    });
-    if (!material) {
-      throw new NotFoundException(`Material ${dto.materialId} not found`);
+    if (!Number.isInteger(dto.quantity) || dto.quantity < 1) {
+      throw new BadRequestException('Return quantity must be a positive whole number');
     }
+
+    const requestItem = await this.prisma.materialRequestItem.findUnique({
+      where: { id: dto.requestItemId },
+      include: {
+        request: { select: { id: true, requestNumber: true, status: true, departmentId: true } },
+        material: { include: { stockSummary: true } },
+      },
+    });
+    if (!requestItem || requestItem.requestId !== dto.requestId) {
+      throw new NotFoundException('Issued request item was not found');
+    }
+    if (requestItem.request.status !== 'ISSUED') {
+      throw new BadRequestException('Materials can only be returned against an issued request');
+    }
+    if (requestItem.materialId !== dto.materialId) {
+      throw new BadRequestException('Selected material does not match the issued request item');
+    }
+    const outstanding = requestItem.quantityIssued - requestItem.quantityReturned;
+    if (dto.quantity > outstanding) {
+      throw new BadRequestException(`Only ${outstanding} item(s) remain eligible for return on this request`);
+    }
+
+    const material = requestItem.material;
 
     const timeStamp = Date.now().toString().slice(-6);
     const rand = Math.floor(100 + Math.random() * 900);
     const txnCode = `TXN-RET-${timeStamp}-${rand}`;
 
     const transaction = await this.prisma.$transaction(async (tx) => {
+      // Conditional update makes the issued quantity cap safe if two returns race.
+      const updatedItem = await tx.materialRequestItem.updateMany({
+        where: {
+          id: dto.requestItemId,
+          requestId: dto.requestId,
+          materialId: dto.materialId,
+          quantityReturned: { lte: requestItem.quantityIssued - dto.quantity },
+        },
+        data: { quantityReturned: { increment: dto.quantity } },
+      });
+      if (updatedItem.count !== 1) {
+        throw new BadRequestException('Return exceeds the remaining quantity for this request item');
+      }
+
       const txn = await tx.inventoryTransaction.create({
         data: {
           transactionCode: txnCode,
           type: TransactionType.RETURN,
           materialId: dto.materialId,
+          requestId: dto.requestId,
+          requestItemId: dto.requestItemId,
           quantity: dto.quantity,
           employeeId: dto.employeeId || null,
-          departmentId: dto.departmentId || null,
+          departmentId: dto.departmentId || requestItem.request.departmentId,
           issuedById: storekeeperId,
-          purpose: 'Material Return',
-          remarks: dto.remarks || 'Returned to store',
+          purpose: `Material Return for ${requestItem.request.requestNumber}`,
+          remarks: dto.remarks || 'Returned to store against the original request',
         },
         include: {
           material: true,
           employee: true,
           department: true,
+          request: { select: { id: true, requestNumber: true } },
+          requestItem: { select: { id: true, quantityIssued: true, quantityReturned: true } },
           issuedBy: { select: { fullName: true } },
         },
       });
@@ -271,7 +310,7 @@ export class InventoryService {
       storekeeperId,
       'RETURN',
       'INVENTORY',
-      `Accepted return of ${dto.quantity} ${material.unit}(s) of "${material.name}" (${material.materialCode}) [Txn: ${transaction.transactionCode}]`,
+      `Accepted return of ${dto.quantity} ${material.unit}(s) of "${material.name}" (${material.materialCode}) for request ${requestItem.request.requestNumber} [Txn: ${transaction.transactionCode}]`,
     );
 
     return transaction;
@@ -412,6 +451,7 @@ export class InventoryService {
         employee: true,
         department: true,
         request: true,
+        requestItem: { select: { id: true, quantityIssued: true, quantityReturned: true } },
         issuedBy: { select: { id: true, fullName: true } },
         approvedBy: { select: { id: true, fullName: true } },
       },

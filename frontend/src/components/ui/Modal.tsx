@@ -58,7 +58,7 @@ export function Modal({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 overflow-y-auto">
+    <div className="fixed inset-0 z-50 flex items-end justify-center overflow-y-auto p-0 sm:items-center sm:p-6">
       {/* Backdrop */}
       <div
         className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity duration-200"
@@ -72,13 +72,13 @@ export function Modal({
         role="dialog"
         aria-modal="true"
         className={cn(
-          'relative w-full overflow-hidden rounded-2xl bg-white shadow-2xl transition-all duration-200 animate-scale-in border border-slate-200/90 my-8',
+          'relative my-0 max-h-[92dvh] w-full overflow-hidden rounded-t-2xl border border-slate-200/90 bg-white shadow-2xl transition-all duration-200 animate-scale-in sm:my-8 sm:max-h-[85vh] sm:rounded-2xl',
           sizeClasses[size] || sizeClasses.md,
           className,
         )}
       >
         {/* Header */}
-        <div className="flex items-start justify-between border-b border-slate-100 px-6 py-5">
+        <div className="flex items-start justify-between gap-3 border-b border-slate-100 px-4 py-4 sm:px-6 sm:py-5">
           <div>
             <h3 className="text-lg font-bold text-slate-900 tracking-tight">{title}</h3>
             {description && (
@@ -95,7 +95,7 @@ export function Modal({
         </div>
 
         {/* Content Body */}
-        <div className="px-6 py-5 max-h-[calc(85vh-130px)] overflow-y-auto">{children}</div>
+        <div className="max-h-[calc(92dvh-5rem)] overflow-y-auto px-4 py-4 sm:max-h-[calc(85vh-130px)] sm:px-6 sm:py-5">{children}</div>
 
         {/* Optional Footer */}
         {footer && (

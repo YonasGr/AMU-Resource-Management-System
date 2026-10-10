@@ -12,6 +12,7 @@ import {
   LogOut,
   Boxes,
   Sparkles,
+  X,
   type LucideIcon,
 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
@@ -34,7 +35,7 @@ interface NavGroup {
   items: NavItem[];
 }
 
-export function Sidebar() {
+export function Sidebar({ isOpen = false, onNavigate }: { isOpen?: boolean; onNavigate?: () => void }) {
   const user = useAuthStore((state) => state.user);
   const clearSession = useAuthStore((state) => state.clearSession);
   const navigate = useNavigate();
@@ -143,14 +144,21 @@ export function Sidebar() {
     : 'AM';
 
   return (
-    <aside className="flex h-screen w-72 shrink-0 flex-col bg-brand-900 text-slate-200 border-r border-brand-800/80 shadow-xl select-none">
+    <aside
+      id="primary-navigation"
+      aria-label="Primary navigation"
+      className={cn(
+        'invisible fixed inset-y-0 left-0 z-50 flex h-dvh w-[min(19rem,88vw)] shrink-0 -translate-x-full flex-col border-r border-brand-800/80 bg-brand-900 text-slate-200 shadow-xl transition-transform duration-200 select-none lg:visible lg:sticky lg:top-0 lg:z-20 lg:w-72 lg:translate-x-0 lg:transition-none',
+        isOpen && 'visible translate-x-0',
+      )}
+    >
       {/* Brand Header */}
       <div className="p-5 border-b border-brand-800/80">
         <div className="flex items-center gap-3.5">
           <div className="relative flex h-12 w-12 items-center justify-center rounded-2xl bg-white p-1 shadow-md shadow-teal-500/20 ring-2 ring-teal-400/30 overflow-hidden shrink-0">
             <img src="/amu-logo.png" alt="Arba Minch University Logo" className="h-full w-full object-contain" />
           </div>
-          <div>
+          <div className="min-w-0 flex-1">
             <div className="flex items-center gap-1.5">
               <span className="font-extrabold text-base text-white tracking-tight leading-none">
                 AMU STORE
@@ -163,6 +171,9 @@ export function Sidebar() {
               Arba Minch University
             </p>
           </div>
+          <button type="button" aria-label="Close navigation" onClick={onNavigate} className="rounded-xl p-2 text-slate-300 hover:bg-brand-800 lg:hidden">
+            <X className="h-5 w-5" />
+          </button>
         </div>
       </div>
 
@@ -211,6 +222,7 @@ export function Sidebar() {
                         : 'text-slate-300 hover:bg-brand-800/80 hover:text-white',
                     )
                   }
+                  onClick={onNavigate}
                 >
                   <div className="flex items-center gap-3 truncate">
                     <Icon className="h-4 w-4 shrink-0 transition-colors group-hover:text-teal-300" strokeWidth={2} />
@@ -249,4 +261,3 @@ export function Sidebar() {
     </aside>
   );
 }
-

@@ -23,8 +23,8 @@ export function PageHeader({
   className,
 }: PageHeaderProps) {
   return (
-    <div className={cn('mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between', className)}>
-      <div className="space-y-1.5">
+    <div className={cn('mb-6 flex min-w-0 flex-col gap-4 sm:mb-8 sm:flex-row sm:items-center sm:justify-between', className)}>
+      <div className="min-w-0 space-y-1.5">
         {/* Breadcrumbs */}
         {breadcrumbs && breadcrumbs.length > 0 && (
           <nav className="flex items-center gap-1.5 text-xs text-slate-500 mb-1">
@@ -43,24 +43,23 @@ export function PageHeader({
           </nav>
         )}
 
-        <div className="flex items-center gap-3">
+        <div className="flex min-w-0 items-start gap-3 sm:items-center">
           {Icon && (
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-teal-50 text-teal-700 border border-teal-200/60 shadow-xs">
+            <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-teal-200/60 bg-teal-50 text-teal-700 shadow-xs sm:mt-0 sm:h-10 sm:w-10">
               <Icon className="h-5 w-5" strokeWidth={2.2} />
             </div>
           )}
           <div>
             <div className="flex items-center gap-2.5">
-              <h1 className="text-2xl font-bold tracking-tight text-slate-900">{title}</h1>
+              <h1 className="break-words text-xl font-bold tracking-tight text-slate-900 sm:text-2xl">{title}</h1>
               {badge}
             </div>
-            {description && <p className="mt-0.5 text-xs text-slate-500 font-medium">{description}</p>}
+            {description && <p className="mt-1 max-w-3xl text-xs font-medium leading-relaxed text-slate-500 sm:text-sm">{description}</p>}
           </div>
         </div>
       </div>
 
-      {actions && <div className="flex items-center gap-2.5 shrink-0">{actions}</div>}
+      {actions && <div className="flex w-full min-w-0 flex-wrap items-center gap-2.5 sm:w-auto sm:shrink-0">{actions}</div>}
     </div>
   );
 }
-

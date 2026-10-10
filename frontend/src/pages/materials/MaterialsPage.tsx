@@ -171,33 +171,33 @@ export default function MaterialsPage() {
       />
 
       {/* KPI Strip */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <div className="flex items-center justify-between p-4.5 rounded-2xl bg-white border border-slate-200/90 shadow-xs">
+      <div className="grid grid-cols-3 gap-2 sm:gap-4">
+        <div className="flex items-center justify-between rounded-2xl border border-slate-200/90 bg-white p-3 shadow-xs sm:p-4.5">
           <div>
-            <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Total Items</p>
-            <p className="text-2xl font-extrabold text-slate-900 mt-0.5">{totalCount}</p>
+            <p className="text-[9px] font-bold uppercase tracking-wide text-slate-500 sm:text-[11px] sm:tracking-wider">Total Items</p>
+            <p className="mt-0.5 text-xl font-extrabold text-slate-900 sm:text-2xl">{totalCount}</p>
           </div>
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-teal-50 text-teal-600">
+          <div className="hidden h-10 w-10 items-center justify-center rounded-xl bg-teal-50 text-teal-600 sm:flex">
             <Boxes className="h-5 w-5" />
           </div>
         </div>
 
-        <div className="flex items-center justify-between p-4.5 rounded-2xl bg-white border border-slate-200/90 shadow-xs">
+        <div className="flex items-center justify-between rounded-2xl border border-slate-200/90 bg-white p-3 shadow-xs sm:p-4.5">
           <div>
-            <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Categories</p>
-            <p className="text-2xl font-extrabold text-slate-900 mt-0.5">{categories?.length ?? 0}</p>
+            <p className="text-[9px] font-bold uppercase tracking-wide text-slate-500 sm:text-[11px] sm:tracking-wider">Categories</p>
+            <p className="mt-0.5 text-xl font-extrabold text-slate-900 sm:text-2xl">{categories?.length ?? 0}</p>
           </div>
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-cyan-50 text-cyan-600">
+          <div className="hidden h-10 w-10 items-center justify-center rounded-xl bg-cyan-50 text-cyan-600 sm:flex">
             <Tag className="h-5 w-5" />
           </div>
         </div>
 
-        <div className="flex items-center justify-between p-4.5 rounded-2xl bg-white border border-slate-200/90 shadow-xs">
+        <div className="flex items-center justify-between rounded-2xl border border-slate-200/90 bg-white p-3 shadow-xs sm:p-4.5">
           <div>
-            <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Low Stock Alerts</p>
-            <p className="text-2xl font-extrabold text-coral-600 mt-0.5">{lowCount}</p>
+            <p className="text-[9px] font-bold uppercase tracking-wide text-slate-500 sm:text-[11px] sm:tracking-wider">Low Stock</p>
+            <p className="mt-0.5 text-xl font-extrabold text-coral-600 sm:text-2xl">{lowCount}</p>
           </div>
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-coral-50 text-coral-600">
+          <div className="hidden h-10 w-10 items-center justify-center rounded-xl bg-coral-50 text-coral-600 sm:flex">
             <AlertTriangle className="h-5 w-5" />
           </div>
         </div>
@@ -303,7 +303,8 @@ export default function MaterialsPage() {
             />
           </div>
         ) : (
-          <div className="overflow-x-auto">
+          <>
+          <div className="hidden overflow-x-auto sm:block">
             <table className="w-full text-left text-sm text-slate-700">
               <thead className="bg-slate-50/90 text-xs font-bold uppercase tracking-wider text-slate-500 border-b border-slate-200/80">
                 <tr>
@@ -396,6 +397,32 @@ export default function MaterialsPage() {
               </tbody>
             </table>
           </div>
+          <ul className="divide-y divide-slate-100 sm:hidden">
+            {filteredMaterials.map((m: any) => {
+              const remaining = m.stockSummary?.remainingQuantity ?? 0;
+              const isLow = remaining <= m.minimumStock;
+              return (
+                <li key={m.id} className="p-4 first:pt-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="break-words text-sm font-bold text-slate-900">{m.name}</p>
+                      <p className="mt-1 font-mono text-[11px] text-slate-500">{m.materialCode}</p>
+                    </div>
+                    <span className={`shrink-0 rounded-full border px-2.5 py-1 text-[11px] font-bold ${isLow ? 'border-coral-200 bg-coral-50 text-coral-700' : 'border-emerald-200 bg-emerald-50 text-emerald-700'}`}>
+                      {remaining} {m.unit}s left
+                    </span>
+                  </div>
+                  <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-slate-600">
+                    <Badge tone="teal" withDot={false}>{m.category?.name || 'General'}</Badge>
+                    {m.location && <span className="inline-flex items-center gap-1"><MapPin className="h-3 w-3 text-teal-600" />{m.location}</span>}
+                  </div>
+                  <p className="mt-2 text-xs text-slate-500">Received {m.stockSummary?.quantityReceived ?? 0} · Issued {m.stockSummary?.quantityIssued ?? 0} · Minimum {m.minimumStock}</p>
+                  {m.description && <p className="mt-2 line-clamp-2 text-xs leading-relaxed text-slate-500">{m.description}</p>}
+                </li>
+              );
+            })}
+          </ul>
+          </>
         )}
       </Card>
 
@@ -566,4 +593,3 @@ export default function MaterialsPage() {
     </div>
   );
 }
-

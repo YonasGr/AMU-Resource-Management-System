@@ -1009,13 +1009,13 @@ export default function InventoryPage() {
               />
             </div>
 
-            <div className="flex rounded-xl bg-slate-100 p-1 border border-slate-200/80">
+            <div className="-mx-4 flex snap-x gap-1 overflow-x-auto rounded-xl border border-slate-200/80 bg-slate-100 p-1 sm:mx-0 sm:flex-wrap sm:overflow-visible">
               {['ALL', 'STOCK_IN', 'STOCK_OUT', 'RETURN', 'ADJUSTMENT', 'TRANSFER'].map((t) => (
                 <button
                   key={t}
                   type="button"
                   onClick={() => setHistoryTypeFilter(t)}
-                  className={`rounded-lg px-2.5 py-1 text-xs font-bold transition-all ${
+                  className={`min-h-9 shrink-0 snap-start rounded-lg px-2.5 py-1 text-xs font-bold transition-all ${
                     historyTypeFilter === t
                       ? 'bg-white text-slate-900 shadow-xs'
                       : 'text-slate-500 hover:text-slate-900'
@@ -1041,7 +1041,8 @@ export default function InventoryPage() {
               />
             </div>
           ) : (
-            <div className="overflow-x-auto">
+            <>
+            <div className="hidden overflow-x-auto sm:block">
               <table className="w-full text-left text-sm text-slate-700">
                 <thead className="bg-slate-50/90 text-xs font-bold uppercase tracking-wider text-slate-500 border-b border-slate-200/80">
                   <tr>
@@ -1122,10 +1123,36 @@ export default function InventoryPage() {
                 </tbody>
               </table>
             </div>
+            <ul className="divide-y divide-slate-100 sm:hidden" aria-label="Inventory transaction history">
+              {filteredTransactions.map((txn: any) => {
+                const associatedParty = txn.supplier?.name || txn.employee?.fullName || txn.department?.name || 'Central Store';
+                const isIncoming = txn.type === 'STOCK_IN' || txn.type === 'RETURN';
+                return (
+                  <li key={txn.id} className="p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="break-words text-sm font-bold text-slate-900">{txn.material?.name}</p>
+                        <p className="mt-1 font-mono text-[11px] text-slate-500">{txn.material?.materialCode} · {txn.transactionCode}</p>
+                      </div>
+                      <span className={`shrink-0 rounded-lg px-2 py-1 text-xs font-bold ${isIncoming ? 'bg-emerald-50 text-emerald-700' : 'bg-sky-50 text-sky-700'}`}>
+                        {isIncoming ? '+' : '−'}{txn.quantity} {txn.material?.unit || 'unit'}{txn.quantity === 1 ? '' : 's'}
+                      </span>
+                    </div>
+                    <div className="mt-3 flex flex-wrap items-center gap-2">
+                      <Badge tone={txn.type === 'STOCK_IN' ? 'success' : txn.type === 'STOCK_OUT' ? 'info' : txn.type === 'RETURN' ? 'warning' : 'purple'}>
+                        {txn.type.replace('_', ' ')}
+                      </Badge>
+                      <span className="text-xs text-slate-600">{associatedParty}</span>
+                    </div>
+                    <p className="mt-2 text-[11px] text-slate-500">{new Date(txn.createdAt).toLocaleString()} · {txn.issuedBy?.fullName || 'System'}</p>
+                  </li>
+                );
+              })}
+            </ul>
+            </>
           )}
         </Card>
       )}
     </div>
   );
 }
-

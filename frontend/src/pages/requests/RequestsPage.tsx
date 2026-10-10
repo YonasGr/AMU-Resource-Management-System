@@ -257,11 +257,11 @@ export default function RequestsPage() {
       )}
 
       {/* Tabs */}
-      <div className="flex flex-wrap items-center gap-2 border-b border-slate-200/90 pb-3">
+      <div className="-mx-4 flex snap-x items-center gap-2 overflow-x-auto border-b border-slate-200/90 px-4 pb-3 sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0">
         <button
           type="button"
           onClick={() => setActiveTab('all')}
-          className={`flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-bold transition-all ${
+          className={`flex min-h-11 shrink-0 snap-start items-center gap-2 rounded-xl px-3 py-2 text-xs font-bold transition-all sm:px-4 ${
             activeTab === 'all'
               ? 'bg-brand-900 text-white shadow-xs'
               : 'bg-white text-slate-600 border border-slate-200/80 hover:bg-slate-50'
@@ -278,7 +278,7 @@ export default function RequestsPage() {
           <button
             type="button"
             onClick={() => setActiveTab('issue')}
-            className={`flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-bold transition-all ${
+            className={`flex min-h-11 shrink-0 snap-start items-center gap-2 rounded-xl px-3 py-2 text-xs font-bold transition-all sm:px-4 ${
               activeTab === 'issue'
                 ? 'bg-emerald-600 text-white shadow-xs'
                 : 'bg-white text-slate-600 border border-slate-200/80 hover:bg-slate-50'
@@ -298,7 +298,7 @@ export default function RequestsPage() {
           <button
             type="button"
             onClick={() => setActiveTab('approvals')}
-            className={`flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-bold transition-all ${
+            className={`flex min-h-11 shrink-0 snap-start items-center gap-2 rounded-xl px-3 py-2 text-xs font-bold transition-all sm:px-4 ${
               activeTab === 'approvals'
                 ? 'bg-amber-600 text-white shadow-xs'
                 : 'bg-white text-slate-600 border border-slate-200/80 hover:bg-slate-50'
@@ -317,7 +317,7 @@ export default function RequestsPage() {
         <button
           type="button"
           onClick={() => setActiveTab('my')}
-          className={`flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-bold transition-all ${
+          className={`flex min-h-11 shrink-0 snap-start items-center gap-2 rounded-xl px-3 py-2 text-xs font-bold transition-all sm:px-4 ${
             activeTab === 'my'
               ? 'bg-teal-700 text-white shadow-xs'
               : 'bg-white text-slate-600 border border-slate-200/80 hover:bg-slate-50'
@@ -367,8 +367,8 @@ export default function RequestsPage() {
         ) : (
           displayedRequests.map((req: any) => (
             <Card key={req.id} className="overflow-hidden hover:border-slate-300">
-              <CardHeader className="bg-slate-50/60 py-3.5">
-                <div className="flex flex-wrap items-center gap-3">
+              <CardHeader className="gap-3 bg-slate-50/60 py-3.5 sm:gap-2">
+                <div className="flex min-w-0 flex-wrap items-center gap-2 sm:gap-3">
                   <span className="font-mono text-xs font-bold text-slate-900 bg-white px-2.5 py-1 rounded-lg border border-slate-200 shadow-xs">
                     {req.requestNumber}
                   </span>
@@ -377,19 +377,19 @@ export default function RequestsPage() {
                     {req.status}
                   </Badge>
 
-                  <span className="text-xs text-slate-400 font-medium">
+                  <span className="text-[11px] font-medium text-slate-500 sm:text-xs">
                     {new Date(req.createdAt).toLocaleString()}
                   </span>
                 </div>
 
-                <div className="flex items-center gap-2 text-xs text-slate-600 font-semibold">
-                  <span className="inline-flex items-center gap-1 bg-white px-2.5 py-1 rounded-lg border border-slate-200 shadow-xs">
+                <div className="flex min-w-0 flex-wrap items-center gap-2 text-xs font-semibold text-slate-600">
+                  <span className="inline-flex min-w-0 items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1 shadow-xs">
                     <User className="h-3.5 w-3.5 text-teal-600" />
-                    {req.requester?.fullName || 'Requester'}
+                    <span className="truncate">{req.requester?.fullName || 'Requester'}</span>
                   </span>
-                  <span className="inline-flex items-center gap-1 bg-white px-2.5 py-1 rounded-lg border border-slate-200 shadow-xs">
+                  <span className="inline-flex min-w-0 items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1 shadow-xs">
                     <Building2 className="h-3.5 w-3.5 text-slate-500" />
-                    {req.department?.name || 'Department'}
+                    <span className="truncate">{req.department?.name || 'Department'}</span>
                   </span>
                 </div>
               </CardHeader>
@@ -400,12 +400,13 @@ export default function RequestsPage() {
                   <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
                     Purpose / Requisition Justification:
                   </p>
-                  <p className="text-sm font-semibold text-slate-800 mt-0.5">{req.purpose}</p>
+                  <p className="mt-0.5 break-words text-sm font-semibold text-slate-800">{req.purpose}</p>
                 </div>
 
                 {/* Requested Items Table */}
-                <div className="rounded-xl border border-slate-200/80 overflow-hidden">
-                  <table className="w-full text-left text-xs">
+                <div className="hidden overflow-hidden rounded-xl border border-slate-200/80 sm:block">
+                  <div className="overflow-x-auto">
+                  <table className="w-full min-w-[36rem] text-left text-xs">
                     <thead className="bg-slate-50 text-slate-500 font-bold uppercase tracking-wider border-b border-slate-200/80">
                       <tr>
                         <th className="px-4 py-2.5">Material Name & Code</th>
@@ -436,7 +437,24 @@ export default function RequestsPage() {
                       ))}
                     </tbody>
                   </table>
+                  </div>
                 </div>
+                <ul className="space-y-2 sm:hidden" aria-label="Requested materials">
+                  {req.items?.map((item: any) => (
+                    <li key={item.id} className="rounded-xl border border-slate-200 bg-white p-3">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="break-words text-sm font-bold text-slate-900">{item.material?.name}</p>
+                          <p className="mt-0.5 font-mono text-[11px] text-slate-500">{item.material?.materialCode}</p>
+                        </div>
+                        <span className="shrink-0 rounded-lg bg-teal-50 px-2 py-1 text-xs font-bold text-teal-800">
+                          {item.quantityRequested} {item.material?.unit || 'unit'}{item.quantityRequested === 1 ? '' : 's'}
+                        </span>
+                      </div>
+                      <p className="mt-2 text-xs text-slate-600">{item.material?.category?.name || 'General'}</p>
+                    </li>
+                  ))}
+                </ul>
 
                 {/* Action Section for Manager Review */}
                 {isManager && req.status === 'PENDING' && (
@@ -490,7 +508,7 @@ export default function RequestsPage() {
 
                 {/* Action Section for Storekeeper Issuance */}
                 {isKeeper && req.status === 'APPROVED' && (
-                  <div className="flex items-center justify-between pt-3 border-t border-slate-100 bg-emerald-50/30 p-4 rounded-xl border border-emerald-200/60">
+                  <div className="flex flex-col items-stretch justify-between gap-3 rounded-xl border border-emerald-200/60 bg-emerald-50/30 p-3 pt-3 sm:flex-row sm:items-center sm:p-4">
                     <div className="text-xs text-emerald-800 font-medium">
                       Request is approved and ready for stock release to department.
                     </div>

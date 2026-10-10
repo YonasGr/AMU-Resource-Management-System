@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
-import { LogOut, Building2, Shield, Search, ChevronDown, User, Sparkles } from 'lucide-react';
+import { LogOut, Building2, Shield, ChevronDown, Menu } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuthStore } from '../../store/auth.store';
 import { NotificationBell } from '../notifications/NotificationBell';
 
-export function TopBar() {
+export function TopBar({ onMenuClick, navigationOpen = false }: { onMenuClick?: () => void; navigationOpen?: boolean }) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const user = useAuthStore((s) => s.user);
@@ -43,12 +43,15 @@ export function TopBar() {
     : 'U';
 
   return (
-    <header className="sticky top-0 z-30 flex h-16 shrink-0 items-center justify-between border-b border-slate-200/90 bg-white/95 backdrop-blur-md px-8 shadow-xs">
+    <header className="sticky top-0 z-30 flex h-14 shrink-0 items-center justify-between gap-3 border-b border-slate-200/90 bg-white/95 px-3 shadow-xs backdrop-blur-md sm:h-16 sm:px-6 lg:px-8">
       {/* Left side: Context & Badges */}
-      <div className="flex items-center gap-3">
-        <div className="flex items-center gap-2 pr-3 border-r border-slate-200">
+      <div className="flex min-w-0 items-center gap-2 sm:gap-3">
+        <button type="button" aria-label="Open navigation" aria-controls="primary-navigation" aria-expanded={navigationOpen} onClick={onMenuClick} className="-ml-1 rounded-xl p-2 text-slate-700 hover:bg-slate-100 focus-visible:outline-offset-2 lg:hidden">
+          <Menu className="h-5 w-5" />
+        </button>
+        <div className="hidden items-center gap-2 border-r border-slate-200 pr-3 sm:flex">
           <img src="/amu-logo.png" alt="Arba Minch University Logo" className="h-6 w-6 object-contain" />
-          <span className="text-xs font-extrabold text-slate-800 tracking-tight hidden lg:inline">
+          <span className="hidden text-xs font-extrabold tracking-tight text-slate-800 xl:inline">
             Arba Minch University
           </span>
         </div>
@@ -56,7 +59,7 @@ export function TopBar() {
         {/* System Role Badge */}
         {user?.role && (
           <span
-            className={`flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-bold border ${getRoleBadgeStyle(
+            className={`hidden items-center gap-1.5 rounded-full border px-2 py-1 text-[10px] font-bold sm:flex sm:px-3 sm:text-xs ${getRoleBadgeStyle(
               user.role,
             )}`}
           >
@@ -75,17 +78,19 @@ export function TopBar() {
       </div>
 
       {/* Right side: Actions, Notifications, Profile */}
-      <div className="flex items-center gap-4">
+      <div className="flex shrink-0 items-center gap-2 sm:gap-4">
         {/* Notification Bell */}
         <NotificationBell />
 
-        <div className="h-6 w-px bg-slate-200" />
+        <div className="hidden h-6 w-px bg-slate-200 sm:block" />
 
         {/* User Profile Dropdown Pill */}
         <div className="relative">
           <button
             onClick={() => setUserMenuOpen(!userMenuOpen)}
-            className="flex items-center gap-3 rounded-2xl p-1.5 pr-3 hover:bg-slate-100 transition-colors border border-transparent hover:border-slate-200"
+            aria-expanded={userMenuOpen}
+            aria-haspopup="menu"
+            className="flex min-h-11 items-center gap-2 rounded-2xl border border-transparent p-1.5 pr-2 transition-colors hover:border-slate-200 hover:bg-slate-100 sm:gap-3 sm:pr-3"
           >
             <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-tr from-brand-700 to-teal-600 text-white font-bold text-xs shadow-xs">
               {userInitials}
@@ -131,5 +136,3 @@ export function TopBar() {
     </header>
   );
 }
-
-

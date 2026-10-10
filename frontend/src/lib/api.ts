@@ -1,9 +1,18 @@
 import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios';
 import { useAuthStore } from '../store/auth.store';
-const rawApiBase = (import.meta as { env?: Record<string, string | undefined> }).env?.VITE_API_BASE_URL;
-export const apiBase = rawApiBase
-  ? rawApiBase.trim().replace(/\/+$/, '').replace(/\/api$/, '')
-  : '/api';
+function resolveApiBase(): string {
+  const envUrl = (import.meta as { env?: Record<string, string | undefined> }).env?.VITE_API_BASE_URL;
+  if (envUrl && envUrl.trim().length > 0) {
+    return envUrl.trim().replace(/\/+$/, '').replace(/\/api$/, '');
+  }
+  // When running in Railway production environment
+  if (typeof window !== 'undefined' && window.location.hostname.includes('railway.app')) {
+    return 'https://amu-backend-production-65db.up.railway.app';
+  }
+  return '/api';
+}
+
+export const apiBase = resolveApiBase();
 
 export const api = axios.create({
   baseURL: apiBase,

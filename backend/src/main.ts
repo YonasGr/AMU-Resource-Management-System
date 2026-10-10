@@ -1,3 +1,4 @@
+import * as http from 'http';
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
@@ -68,11 +69,25 @@ async function bootstrap() {
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('api/docs', app, document);
 
-  const port = process.env.PORT ? Number(process.env.PORT) : 3000;
-  await app.listen(port, '0.0.0.0');
+  const primaryPort = process.env.PORT ? Number(process.env.PORT) : 3000;
+  await app.listen(primaryPort, '0.0.0.0');
   // eslint-disable-next-line no-console
-  console.log(`University ERP backend running on http://localhost:${port}`);
+  console.log(`University ERP backend running on http://0.0.0.0:${primaryPort}`);
   // eslint-disable-next-line no-console
-  console.log(`Swagger docs at http://localhost:${port}/api/docs`);
+  console.log(`Swagger docs at http://0.0.0.0:${primaryPort}/api/docs`);
+
+  // Secondary fallback port so both 3000 and 8080 always accept traffic
+  const fallbackPort = primaryPort === 3000 ? 8080 : 3000;
+  try {
+    const httpAdapter = app.getHttpAdapter();
+    const server = http.createServer(httpAdapter.getInstance());
+    server.listen(fallbackPort, '0.0.0.0', () => {
+      // eslint-disable-next-line no-console
+      console.log(`University ERP backend also listening on fallback http://0.0.0.0:${fallbackPort}`);
+    });
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.warn(`Could not start fallback listener on ${fallbackPort}:`, err);
+  }
 }
 bootstrap();

@@ -207,6 +207,37 @@ export default function LoginPage() {
             </button>
           </div>
 
+          {/* Quick Demo Login Credentials */}
+          {!isRegister && (
+            <div className="mt-4 pt-4 border-t border-slate-100">
+              <p className="text-[11px] font-bold uppercase tracking-wider text-slate-700 mb-2 text-center">
+                Quick Demo Login (Click to Fill)
+              </p>
+              <div className="flex flex-wrap gap-1.5 justify-center">
+                {[
+                  { label: 'Admin', email: 'admin@store.com', pass: 'Admin#AMU2026!SecureKey' },
+                  { label: 'Manager', email: 'manager@store.com', pass: 'Manager#AMU2026!StoreKey' },
+                  { label: 'Storekeeper', email: 'keeper@store.com', pass: 'Keeper#AMU2026!InventoryKey' },
+                  { label: 'Requester', email: 'requester@store.com', pass: 'Requester#AMU2026!StaffKey' },
+                  { label: 'Auditor', email: 'auditor@store.com', pass: 'Auditor#AMU2026!AuditKey' },
+                ].map((account) => (
+                  <button
+                    key={account.label}
+                    type="button"
+                    onClick={() => {
+                      setEmail(account.email);
+                      setPassword(account.pass);
+                      setError('');
+                    }}
+                    className="px-2.5 py-1 text-xs font-medium rounded-lg bg-teal-50 text-teal-800 border border-teal-200 hover:bg-teal-100 transition-colors"
+                  >
+                    {account.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
         </div>
       </div>
     </div>

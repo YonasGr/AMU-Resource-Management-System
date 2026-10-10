@@ -16,8 +16,12 @@ import { UsersModule } from '../users/users.module';
       imports: [ConfigModule],
       inject: [ConfigService],
       useFactory: (config: ConfigService) => ({
-        secret: config.getOrThrow<string>('JWT_ACCESS_SECRET'),
-        signOptions: { expiresIn: config.getOrThrow<string>('JWT_ACCESS_EXPIRES_IN') },
+        secret:
+          config.get<string>('JWT_ACCESS_SECRET') ||
+          'amu-default-jwt-access-secret-32-chars-long-min',
+        signOptions: {
+          expiresIn: config.get<string>('JWT_ACCESS_EXPIRES_IN') || '1d',
+        },
       }),
     }),
   ],

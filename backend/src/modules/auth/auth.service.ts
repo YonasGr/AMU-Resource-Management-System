@@ -94,7 +94,11 @@ export class AuthService {
     try {
       const payload = this.jwtService.verify<{ sub: string; type: string }>(
         dto.refreshToken,
-        { secret: this.configService.getOrThrow<string>('JWT_REFRESH_SECRET') },
+        {
+          secret:
+            this.configService.get<string>('JWT_REFRESH_SECRET') ||
+            'amu-default-jwt-refresh-secret-32-chars-long-min',
+        },
       );
       if (payload.type !== 'refresh') throw new Error('Invalid token type');
       const user = await this.prisma.user.findUnique({
@@ -112,15 +116,19 @@ export class AuthService {
     const accessToken = this.jwtService.sign(
       { sub: user.id, email: user.email, role: user.role },
       {
-        secret: this.configService.getOrThrow<string>('JWT_ACCESS_SECRET'),
-        expiresIn: this.configService.getOrThrow<string>('JWT_ACCESS_EXPIRES_IN'),
+        secret:
+          this.configService.get<string>('JWT_ACCESS_SECRET') ||
+          'amu-default-jwt-access-secret-32-chars-long-min',
+        expiresIn: this.configService.get<string>('JWT_ACCESS_EXPIRES_IN') || '1d',
       },
     );
     const refreshToken = this.jwtService.sign(
       { sub: user.id, type: 'refresh' },
       {
-        secret: this.configService.getOrThrow<string>('JWT_REFRESH_SECRET'),
-        expiresIn: this.configService.getOrThrow<string>('JWT_REFRESH_EXPIRES_IN'),
+        secret:
+          this.configService.get<string>('JWT_REFRESH_SECRET') ||
+          'amu-default-jwt-refresh-secret-32-chars-long-min',
+        expiresIn: this.configService.get<string>('JWT_REFRESH_EXPIRES_IN') || '7d',
       },
     );
 

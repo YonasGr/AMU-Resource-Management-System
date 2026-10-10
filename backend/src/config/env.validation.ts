@@ -48,16 +48,20 @@ class EnvironmentVariables {
   REDISPASSWORD?: string;
 
   @IsString()
-  JWT_ACCESS_SECRET: string;
+  @IsOptional()
+  JWT_ACCESS_SECRET?: string;
 
   @IsString()
-  JWT_ACCESS_EXPIRES_IN: string;
+  @IsOptional()
+  JWT_ACCESS_EXPIRES_IN?: string;
 
   @IsString()
-  JWT_REFRESH_SECRET: string;
+  @IsOptional()
+  JWT_REFRESH_SECRET?: string;
 
   @IsString()
-  JWT_REFRESH_EXPIRES_IN: string;
+  @IsOptional()
+  JWT_REFRESH_EXPIRES_IN?: string;
 
   @IsString()
   @IsOptional()

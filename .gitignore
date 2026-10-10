@@ -30,3 +30,6 @@ PROJECT.md
 
 # Generated knowledge graphs
 graphify-out/
+
+# Untracked tools/work
+packettracer/

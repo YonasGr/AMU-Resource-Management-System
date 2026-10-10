@@ -68,8 +68,8 @@ async function bootstrap() {
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('api/docs', app, document);
 
-  const port = process.env.PORT ?? 3000;
-  await app.listen(port);
+  const port = process.env.PORT ? Number(process.env.PORT) : 3000;
+  await app.listen(port, '0.0.0.0');
   // eslint-disable-next-line no-console
   console.log(`University ERP backend running on http://localhost:${port}`);
   // eslint-disable-next-line no-console

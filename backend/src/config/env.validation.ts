@@ -13,7 +13,8 @@ class EnvironmentVariables {
 
   @IsNumber()
   @Min(1)
-  PORT: number;
+  @IsOptional()
+  PORT?: number;
 
   @IsString()
   DATABASE_URL: string;

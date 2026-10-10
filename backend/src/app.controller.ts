@@ -9,6 +9,17 @@ export class AppController {
   constructor(private readonly appService: AppService) {}
 
   @Public()
+  @Get()
+  @ApiOperation({ summary: 'Root status check' })
+  getRoot() {
+    return {
+      status: 'ok',
+      service: 'AMU Dedicated Store & Resource Management System API',
+      documentation: '/api/docs',
+    };
+  }
+
+  @Public()
   @Get('health')
   @ApiOperation({ summary: 'Health check endpoint used by Docker/monitoring' })
   getHealth() {

@@ -19,10 +19,32 @@ class EnvironmentVariables {
   DATABASE_URL: string;
 
   @IsString()
-  REDIS_HOST: string;
+  @IsOptional()
+  REDIS_URL?: string;
+
+  @IsString()
+  @IsOptional()
+  REDIS_HOST?: string;
+
+  @IsString()
+  @IsOptional()
+  REDISHOST?: string;
 
   @IsNumber()
-  REDIS_PORT: number;
+  @IsOptional()
+  REDIS_PORT?: number;
+
+  @IsNumber()
+  @IsOptional()
+  REDISPORT?: number;
+
+  @IsString()
+  @IsOptional()
+  REDIS_PASSWORD?: string;
+
+  @IsString()
+  @IsOptional()
+  REDISPASSWORD?: string;
 
   @IsString()
   JWT_ACCESS_SECRET: string;

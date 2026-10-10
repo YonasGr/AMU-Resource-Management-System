@@ -79,15 +79,16 @@ async function main() {
 
   // 3. Users (5 Core System Users with Locked-Down Role Credentials)
   const isProd = process.env.NODE_ENV === 'production';
-  const adminPassword = process.env.SEED_ADMIN_PASSWORD || (!isProd ? 'Admin#AMU2026!SecureKey' : '');
-  const managerPassword = process.env.SEED_MANAGER_PASSWORD || (!isProd ? 'Manager#AMU2026!StoreKey' : '');
-  const keeperPassword = process.env.SEED_KEEPER_PASSWORD || (!isProd ? 'Keeper#AMU2026!InventoryKey' : '');
-  const auditorPassword = process.env.SEED_AUDITOR_PASSWORD || (!isProd ? 'Auditor#AMU2026!AuditKey' : '');
-  const requesterPassword = process.env.SEED_REQUESTER_PASSWORD || (!isProd ? 'Requester#AMU2026!StaffKey' : '');
+  const allowDefaultSeed = process.env.ALLOW_DEFAULT_SEED_PASSWORDS === 'true' || !isProd;
+  const adminPassword = process.env.SEED_ADMIN_PASSWORD || (allowDefaultSeed ? 'Admin#AMU2026!SecureKey' : '');
+  const managerPassword = process.env.SEED_MANAGER_PASSWORD || (allowDefaultSeed ? 'Manager#AMU2026!StoreKey' : '');
+  const keeperPassword = process.env.SEED_KEEPER_PASSWORD || (allowDefaultSeed ? 'Keeper#AMU2026!InventoryKey' : '');
+  const auditorPassword = process.env.SEED_AUDITOR_PASSWORD || (allowDefaultSeed ? 'Auditor#AMU2026!AuditKey' : '');
+  const requesterPassword = process.env.SEED_REQUESTER_PASSWORD || (allowDefaultSeed ? 'Requester#AMU2026!StaffKey' : '');
 
-  if (isProd && (!adminPassword || !managerPassword || !keeperPassword || !auditorPassword || !requesterPassword)) {
+  if (isProd && !allowDefaultSeed && (!adminPassword || !managerPassword || !keeperPassword || !auditorPassword || !requesterPassword)) {
     throw new Error(
-      'Production Security Error: In production, explicit SEED_*_PASSWORD environment variables must be defined for all 5 accounts.',
+      'Production Security Error: In production, explicit SEED_*_PASSWORD environment variables must be defined for all 5 accounts (or set ALLOW_DEFAULT_SEED_PASSWORDS=true for testing/staging environments).',
     );
   }
 

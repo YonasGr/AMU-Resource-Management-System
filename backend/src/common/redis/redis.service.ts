@@ -20,28 +20,40 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
   constructor(private readonly configService: ConfigService) {}
 
   async onModuleInit() {
-    const host = this.configService.get<string>('REDIS_HOST') || 'localhost';
-    const port = Number(this.configService.get<number>('REDIS_PORT')) || 6379;
-    const password = this.configService.get<string>('REDIS_PASSWORD') || undefined;
+    const redisUrl = this.configService.get<string>('REDIS_URL');
+    const host = this.configService.get<string>('REDIS_HOST') || this.configService.get<string>('REDISHOST') || 'localhost';
+    const port = Number(this.configService.get<number>('REDIS_PORT') || this.configService.get<number>('REDISPORT')) || 6379;
+    const password = this.configService.get<string>('REDIS_PASSWORD') || this.configService.get<string>('REDISPASSWORD') || undefined;
 
     try {
-      this.client = new Redis({
-        host,
-        port,
-        password,
-        lazyConnect: true,
-        maxRetriesPerRequest: 1,
-        retryStrategy: (times) => {
-          if (times > 3) {
-            return null; // stop retrying after 3 attempts, fallback to memory store
-          }
-          return Math.min(times * 100, 1000);
-        },
-      });
+      this.client = redisUrl
+        ? new Redis(redisUrl, {
+            lazyConnect: true,
+            maxRetriesPerRequest: 1,
+            retryStrategy: (times) => {
+              if (times > 3) {
+                return null; // stop retrying after 3 attempts, fallback to memory store
+              }
+              return Math.min(times * 100, 1000);
+            },
+          })
+        : new Redis({
+            host,
+            port,
+            password,
+            lazyConnect: true,
+            maxRetriesPerRequest: 1,
+            retryStrategy: (times) => {
+              if (times > 3) {
+                return null; // stop retrying after 3 attempts, fallback to memory store
+              }
+              return Math.min(times * 100, 1000);
+            },
+          });
 
       this.client.on('connect', () => {
         this.isConnected = true;
-        this.logger.log(`Connected to Redis at ${host}:${port}`);
+        this.logger.log(`Connected to Redis ${redisUrl ? '(via REDIS_URL)' : `at ${host}:${port}`}`);
       });
 
       this.client.on('error', (err) => {

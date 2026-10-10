@@ -3,9 +3,12 @@ FROM node:20-alpine AS builder
 
 WORKDIR /app
 
+ARG VITE_API_BASE_URL
+ENV VITE_API_BASE_URL=$VITE_API_BASE_URL
+
 RUN npm install -g pnpm
 
-COPY package.json ./
+COPY package.json pnpm-lock.yaml* ./
 RUN pnpm install
 
 COPY . .
@@ -16,7 +19,17 @@ FROM nginx:alpine AS runner
 
 COPY --from=builder /app/dist /usr/share/nginx/html
 
-# Custom SPA Nginx config for routing
+# Support dynamic $PORT assigned by Railway (or fallback to 80)
+RUN mkdir -p /etc/nginx/templates && echo 'server { \
+    listen ${PORT:-80}; \
+    location / { \
+        root /usr/share/nginx/html; \
+        index index.html index.htm; \
+        try_files $uri $uri/ /index.html; \
+    } \
+}' > /etc/nginx/templates/default.conf.template
+
+# Default configuration if envsubst is not triggered
 RUN echo 'server { \
     listen 80; \
     location / { \

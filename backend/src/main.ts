@@ -10,7 +10,7 @@ async function bootstrap() {
 
   const allowedOrigins = (process.env.CORS_ORIGIN || process.env.CORS_ORIGINS || '')
     .split(',')
-    .map((origin) => origin.trim())
+    .map((origin) => origin.trim().replace(/\/+$/, ''))
     .filter(Boolean);
 
   const defaultOrigins = [
@@ -27,7 +27,16 @@ async function bootstrap() {
   app.enableCors({
     origin: (origin, callback) => {
       // Allow requests with no origin (like mobile apps, curl, or server-to-server calls)
-      if (!origin || origins.includes(origin)) {
+      if (!origin) {
+        return callback(null, true);
+      }
+      const normalizedOrigin = origin.replace(/\/+$/, '');
+      if (
+        allowedOrigins.includes('*') ||
+        origins.includes(normalizedOrigin) ||
+        normalizedOrigin.endsWith('.up.railway.app') ||
+        normalizedOrigin.endsWith('.railway.app')
+      ) {
         return callback(null, true);
       }
       return callback(new Error(`Blocked by CORS: origin ${origin} is not allowed`), false);

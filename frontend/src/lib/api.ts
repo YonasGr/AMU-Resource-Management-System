@@ -1,8 +1,13 @@
 import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios';
 import { useAuthStore } from '../store/auth.store';
 
+const rawApiBase = import.meta.env.VITE_API_BASE_URL;
+export const apiBase = rawApiBase
+  ? rawApiBase.trim().replace(/\/+$/, '').replace(/\/api$/, '')
+  : '/api';
+
 export const api = axios.create({
-  baseURL: '/api',
+  baseURL: apiBase,
 });
 
 // Attach the current access token to every outgoing request.
@@ -29,7 +34,8 @@ api.interceptors.response.use(
     }
     original._retried = true;
     try {
-      const response = await axios.post('/api/auth/refresh', { refreshToken });
+      const refreshUrl = `${apiBase}/auth/refresh`.replace(/([^:]\/)\/+/g, '$1');
+      const response = await axios.post(refreshUrl, { refreshToken });
       const data = response.data.data ?? response.data;
       setSession({ ...data, user: useAuthStore.getState().user });
       original.headers.Authorization = `Bearer ${data.accessToken}`;

@@ -177,11 +177,11 @@ export default function EmployeesPage() {
       />
 
       {/* Tabs */}
-      <div className="flex flex-wrap items-center gap-2 border-b border-slate-200/90 pb-3">
+      <div className="-mx-4 flex snap-x items-center gap-2 overflow-x-auto border-b border-slate-200/90 px-4 pb-3 sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0">
         <button
           type="button"
           onClick={() => setActiveTab('employees')}
-          className={`flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-bold transition-all ${
+          className={`flex min-h-11 shrink-0 snap-start items-center gap-2 rounded-xl px-3 py-2 text-xs font-bold transition-all sm:px-4 ${
             activeTab === 'employees'
               ? 'bg-brand-900 text-white shadow-xs'
               : 'bg-white text-slate-600 border border-slate-200/80 hover:bg-slate-50'
@@ -197,7 +197,7 @@ export default function EmployeesPage() {
         <button
           type="button"
           onClick={() => setActiveTab('departments')}
-          className={`flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-bold transition-all ${
+          className={`flex min-h-11 shrink-0 snap-start items-center gap-2 rounded-xl px-3 py-2 text-xs font-bold transition-all sm:px-4 ${
             activeTab === 'departments'
               ? 'bg-brand-900 text-white shadow-xs'
               : 'bg-white text-slate-600 border border-slate-200/80 hover:bg-slate-50'
@@ -214,7 +214,7 @@ export default function EmployeesPage() {
           <button
             type="button"
             onClick={() => setActiveTab('history')}
-            className={`flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-bold transition-all ${
+            className={`flex min-h-11 shrink-0 snap-start items-center gap-2 rounded-xl px-3 py-2 text-xs font-bold transition-all sm:px-4 ${
               activeTab === 'history'
                 ? 'bg-teal-700 text-white shadow-xs'
                 : 'bg-white text-slate-600 border border-slate-200/80 hover:bg-slate-50'
@@ -268,7 +268,8 @@ export default function EmployeesPage() {
               />
             </div>
           ) : (
-            <div className="overflow-x-auto">
+            <>
+            <div className="hidden overflow-x-auto sm:block">
               <table className="w-full text-left text-sm text-slate-700">
                 <thead className="bg-slate-50/90 text-xs font-bold uppercase tracking-wider text-slate-500 border-b border-slate-200/80">
                   <tr>
@@ -325,6 +326,30 @@ export default function EmployeesPage() {
                 </tbody>
               </table>
             </div>
+            <ul className="divide-y divide-slate-100 sm:hidden" aria-label="Employee directory">
+              {filteredEmployees.map((emp: any) => (
+                <li key={emp.id} className="p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="break-words text-sm font-bold text-slate-900">{emp.fullName}</p>
+                      <p className="mt-1 font-mono text-[11px] text-slate-500">{emp.employeeCode}</p>
+                    </div>
+                    <Badge tone="teal" withDot={false}>{emp.department?.name || 'Unassigned'}</Badge>
+                  </div>
+                  <p className="mt-3 flex items-center gap-1.5 text-xs text-slate-600">
+                    <Briefcase className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+                    {emp.position || 'Academic / Support Staff'}
+                  </p>
+                  {(emp.email || emp.phone) && (
+                    <div className="mt-2 space-y-1 text-xs text-slate-500">
+                      {emp.email && <p className="break-all">{emp.email}</p>}
+                      {emp.phone && <p>{emp.phone}</p>}
+                    </div>
+                  )}
+                </li>
+              ))}
+            </ul>
+            </>
           )}
         </Card>
       )}
@@ -414,7 +439,8 @@ export default function EmployeesPage() {
                 />
               </div>
             ) : (
-              <div className="overflow-x-auto">
+              <>
+              <div className="hidden overflow-x-auto sm:block">
                 <table className="w-full text-left text-sm text-slate-700">
                   <thead className="bg-slate-50/90 text-xs font-bold uppercase tracking-wider text-slate-500 border-b border-slate-200/80">
                     <tr>
@@ -450,6 +476,22 @@ export default function EmployeesPage() {
                   </tbody>
                 </table>
               </div>
+              <ul className="divide-y divide-slate-100 sm:hidden" aria-label="Department issue history">
+                {deptHistory?.transactions?.map((txn: any) => (
+                  <li key={txn.id} className="p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="break-words text-sm font-bold text-slate-900">{txn.material?.name}</p>
+                        <p className="mt-1 font-mono text-[11px] text-slate-500">{txn.transactionCode}</p>
+                      </div>
+                      <span className="shrink-0 rounded-lg bg-teal-50 px-2 py-1 text-xs font-bold text-teal-800">{txn.quantity} {txn.material?.unit}s</span>
+                    </div>
+                    <p className="mt-2 text-xs text-slate-600">Recipient: {txn.employee?.fullName || 'Department Stock'}</p>
+                    <p className="mt-1 text-[11px] text-slate-500">Issued by {txn.issuedBy?.fullName || 'Storekeeper'} · {new Date(txn.createdAt).toLocaleDateString()}</p>
+                  </li>
+                ))}
+              </ul>
+              </>
             )}
           </CardBody>
         </Card>
@@ -464,7 +506,7 @@ export default function EmployeesPage() {
         size="md"
       >
         <form onSubmit={handleCreateEmp} className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div>
               <Label required>Employee Code</Label>
               <Input
@@ -501,7 +543,7 @@ export default function EmployeesPage() {
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div>
               <Label>Email</Label>
               <Input
@@ -598,4 +640,3 @@ export default function EmployeesPage() {
     </div>
   );
 }
-

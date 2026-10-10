@@ -348,13 +348,13 @@ export default function InventoryPage() {
       />
 
       {/* Action Tabs Toolbar */}
-      <div className="flex flex-wrap items-center gap-2 border-b border-slate-200/90 pb-3">
+      <div className="-mx-4 flex snap-x items-center gap-2 overflow-x-auto border-b border-slate-200/90 px-4 pb-3 sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0">
         {!isAuditor && canMutateStock && (
           <>
             <button
               type="button"
               onClick={() => handleTabChange('in')}
-              className={`flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-bold transition-all ${
+              className={`flex min-h-11 shrink-0 snap-start items-center gap-2 rounded-xl px-3 py-2 text-xs font-bold transition-all sm:px-4 ${
                 activeTab === 'in'
                   ? 'bg-emerald-600 text-white shadow-xs'
                   : 'bg-white text-slate-600 border border-slate-200/80 hover:bg-slate-50'
@@ -367,7 +367,7 @@ export default function InventoryPage() {
             <button
               type="button"
               onClick={() => handleTabChange('out')}
-              className={`flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-bold transition-all ${
+              className={`flex min-h-11 shrink-0 snap-start items-center gap-2 rounded-xl px-3 py-2 text-xs font-bold transition-all sm:px-4 ${
                 activeTab === 'out'
                   ? 'bg-cyan-600 text-white shadow-xs'
                   : 'bg-white text-slate-600 border border-slate-200/80 hover:bg-slate-50'
@@ -380,7 +380,7 @@ export default function InventoryPage() {
             <button
               type="button"
               onClick={() => handleTabChange('return')}
-              className={`flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-bold transition-all ${
+              className={`flex min-h-11 shrink-0 snap-start items-center gap-2 rounded-xl px-3 py-2 text-xs font-bold transition-all sm:px-4 ${
                 activeTab === 'return'
                   ? 'bg-amber-600 text-white shadow-xs'
                   : 'bg-white text-slate-600 border border-slate-200/80 hover:bg-slate-50'
@@ -393,7 +393,7 @@ export default function InventoryPage() {
             <button
               type="button"
               onClick={() => handleTabChange('adjust')}
-              className={`flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-bold transition-all ${
+              className={`flex min-h-11 shrink-0 snap-start items-center gap-2 rounded-xl px-3 py-2 text-xs font-bold transition-all sm:px-4 ${
                 activeTab === 'adjust'
                   ? 'bg-purple-600 text-white shadow-xs'
                   : 'bg-white text-slate-600 border border-slate-200/80 hover:bg-slate-50'
@@ -406,7 +406,7 @@ export default function InventoryPage() {
             <button
               type="button"
               onClick={() => handleTabChange('transfer')}
-              className={`flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-bold transition-all ${
+              className={`flex min-h-11 shrink-0 snap-start items-center gap-2 rounded-xl px-3 py-2 text-xs font-bold transition-all sm:px-4 ${
                 activeTab === 'transfer'
                   ? 'bg-teal-700 text-white shadow-xs'
                   : 'bg-white text-slate-600 border border-slate-200/80 hover:bg-slate-50'
@@ -421,7 +421,7 @@ export default function InventoryPage() {
         <button
           type="button"
           onClick={() => handleTabChange('history')}
-          className={`flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-bold transition-all ${
+          className={`flex min-h-11 shrink-0 snap-start items-center gap-2 rounded-xl px-3 py-2 text-xs font-bold transition-all sm:px-4 ${
             activeTab === 'history'
               ? 'bg-brand-900 text-white shadow-xs'
               : 'bg-white text-slate-600 border border-slate-200/80 hover:bg-slate-50'

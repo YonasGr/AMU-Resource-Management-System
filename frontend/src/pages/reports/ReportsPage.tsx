@@ -59,6 +59,17 @@ const REPORT_KEYS: ReportType[] = [
   'transaction-history',
 ];
 
+const REPORT_LABELS: Record<ReportType, string> = {
+  'current-stock': 'Current Stock',
+  'stock-in': 'Stock In',
+  'stock-out': 'Stock Out',
+  'material-balance': 'Material Balance',
+  'low-stock': 'Low Stock',
+  'employee-issue': 'Employee Issues',
+  supplier: 'Suppliers',
+  'transaction-history': 'Transactions',
+};
+
 export default function ReportsPage() {
   const user = useAuthStore((s) => s.user);
   const isRequester = user?.role === 'REQUESTER';
@@ -257,29 +268,35 @@ export default function ReportsPage() {
           icon={BarChart3}
           breadcrumbs={[{ label: 'Home', to: '/' }, { label: 'Reports Hub' }]}
           actions={
-            <div className="flex flex-wrap items-center gap-3">
+            <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:flex-wrap sm:gap-3">
               <Button
                 variant="secondary"
                 onClick={() => setIsColumnModalOpen(true)}
                 leftIcon={<SlidersHorizontal className="h-4 w-4 text-teal-600" />}
+                className="w-full justify-center sm:w-auto"
               >
-                Columns ({activeColumns.length}/{currentConfig.columns.length})
+                <span className="sm:hidden">Columns</span>
+                <span className="hidden sm:inline">Columns ({activeColumns.length}/{currentConfig.columns.length})</span>
               </Button>
               <Button
                 variant="secondary"
                 onClick={handleExportCSV}
                 disabled={filteredRows.length === 0}
                 leftIcon={<FileSpreadsheet className="h-4 w-4 text-emerald-600" />}
+                className="w-full justify-center sm:w-auto"
               >
-                Export CSV
+                <span className="sm:hidden">CSV</span>
+                <span className="hidden sm:inline">Export CSV</span>
               </Button>
               <Button
                 variant="primary"
                 onClick={handlePrint}
                 disabled={isLoading || filteredRows.length === 0}
                 leftIcon={<Printer className="h-4 w-4" />}
+                className="col-span-2 w-full justify-center sm:col-span-1 sm:w-auto"
               >
-                Print / Export PDF
+                <span className="sm:hidden">Print / Save PDF</span>
+                <span className="hidden sm:inline">Print / Export PDF</span>
               </Button>
             </div>
           }
@@ -287,7 +304,7 @@ export default function ReportsPage() {
       </div>
 
       {/* Report Selector Pill Bar */}
-      <div className="flex gap-2 overflow-x-auto rounded-2xl bg-white p-2 shadow-xs border border-slate-200/90 print:hidden">
+      <div className="-mx-4 flex snap-x gap-2 overflow-x-auto border-y border-slate-200/90 bg-white px-4 py-2 shadow-xs print:hidden sm:mx-0 sm:rounded-2xl sm:border sm:p-2">
         {REPORT_KEYS.map((key) => {
           const config = REPORT_CONFIGS[key];
           const Icon = REPORT_ICONS[key] || Package;
@@ -300,14 +317,15 @@ export default function ReportsPage() {
                 setReportType(key);
                 setSearchQuery('');
               }}
-              className={`flex items-center gap-2 whitespace-nowrap rounded-xl px-3.5 py-2 text-xs font-bold transition-all cursor-pointer ${
+              aria-pressed={isSelected}
+              className={`flex min-h-11 shrink-0 snap-start items-center gap-2 whitespace-nowrap rounded-xl px-3.5 py-2 text-xs font-bold transition-all cursor-pointer ${
                 isSelected
                   ? 'bg-brand-900 text-white shadow-xs'
                   : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
               }`}
             >
               <Icon className={`h-3.5 w-3.5 ${isSelected ? 'text-teal-400' : 'text-slate-400'}`} />
-              <span>{config.title.split(' ')[0]} {config.title.includes('Stock In') ? 'Stock In' : config.title.includes('Stock Out') ? 'Stock Out' : ''}</span>
+              <span>{REPORT_LABELS[key]}</span>
             </button>
           );
         })}
@@ -370,7 +388,7 @@ export default function ReportsPage() {
       )}
 
       {/* Official Report Document Paper (Screen Card + Print Canvas) */}
-      <Card id="print-report" className="report-paper p-8 space-y-6">
+      <Card id="print-report" className="report-paper space-y-4 p-4 sm:space-y-6 sm:p-8 print:p-0">
         {/* Arba Minch University Official Letterhead Header */}
         <div className="print-letterhead border-b-2 border-slate-900 pb-5">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -490,7 +508,8 @@ export default function ReportsPage() {
             }
           />
         ) : (
-          <div className="overflow-x-auto rounded-xl border border-slate-200/90 bg-white">
+          <>
+          <div className="hidden overflow-x-auto rounded-xl border border-slate-200/90 bg-white sm:block print:block">
             <table className="report-printable-table min-w-full divide-y divide-slate-200 text-xs">
               <thead className="bg-slate-50 text-slate-700 font-bold uppercase tracking-wider">
                 <tr>
@@ -538,6 +557,22 @@ export default function ReportsPage() {
               </tbody>
             </table>
           </div>
+          <ul className="divide-y divide-slate-200 rounded-xl border border-slate-200 bg-white sm:hidden print:hidden" aria-label={`${currentConfig.title} report records`}>
+            {filteredRows.map((row, rowIdx) => (
+              <li key={rowIdx} className="p-3.5">
+                <p className="mb-2 text-[10px] font-bold uppercase tracking-wide text-slate-400">Record {rowIdx + 1}</p>
+                <dl className="space-y-2">
+                  {activeColumns.map((col) => (
+                    <div key={col.id} className="grid grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)] gap-3 text-xs">
+                      <dt className="font-semibold text-slate-500">{col.label}</dt>
+                      <dd className="min-w-0 break-words text-right font-medium text-slate-800">{renderCellContent(col, row)}</dd>
+                    </div>
+                  ))}
+                </dl>
+              </li>
+            ))}
+          </ul>
+          </>
         )}
 
         {/* 3-Tier Formal Institutional Sign-off Block */}
@@ -653,20 +688,20 @@ export default function ReportsPage() {
         description={`Select which data fields to display on screen, include in printouts, and export to CSV for ${currentConfig.title}.`}
         size="lg"
         footer={
-          <div className="flex w-full items-center justify-between">
+          <div className="flex w-full flex-col items-stretch gap-3 sm:flex-row sm:items-center sm:justify-between">
             <span className="text-xs font-semibold text-slate-500">
               {activeColumns.length} of {currentConfig.columns.length} columns active
             </span>
-            <Button variant="primary" onClick={() => setIsColumnModalOpen(false)}>
+            <Button variant="primary" className="w-full sm:w-auto" onClick={() => setIsColumnModalOpen(false)}>
               Apply Columns
             </Button>
           </div>
         }
       >
         <div className="space-y-4">
-          <div className="flex items-center justify-between rounded-xl bg-slate-50 p-3 border border-slate-200/80">
+          <div className="flex flex-col gap-3 rounded-xl border border-slate-200/80 bg-slate-50 p-3 sm:flex-row sm:items-center sm:justify-between">
             <span className="text-xs font-bold text-slate-700">Quick Selection</span>
-            <div className="flex items-center gap-2">
+            <div className="grid grid-cols-2 gap-2">
               <Button
                 variant="secondary"
                 size="xs"

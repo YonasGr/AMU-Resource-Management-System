@@ -196,11 +196,11 @@ export default function UsersPage() {
       />
 
       {/* Navigation Tabs */}
-      <div className="flex flex-wrap items-center gap-2 border-b border-slate-200/90 pb-3">
+      <div className="-mx-4 flex snap-x items-center gap-2 overflow-x-auto border-b border-slate-200/90 px-4 pb-3 sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0">
         <button
           type="button"
           onClick={() => setActiveTab('users')}
-          className={`flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-bold transition-all ${
+          className={`flex min-h-11 shrink-0 snap-start items-center gap-2 rounded-xl px-3 py-2 text-xs font-bold transition-all sm:px-4 ${
             activeTab === 'users'
               ? 'bg-brand-900 text-white shadow-xs'
               : 'bg-white text-slate-600 border border-slate-200/80 hover:bg-slate-50'
@@ -216,7 +216,7 @@ export default function UsersPage() {
         <button
           type="button"
           onClick={() => setActiveTab('audit')}
-          className={`flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-bold transition-all ${
+          className={`flex min-h-11 shrink-0 snap-start items-center gap-2 rounded-xl px-3 py-2 text-xs font-bold transition-all sm:px-4 ${
             activeTab === 'audit'
               ? 'bg-brand-900 text-white shadow-xs'
               : 'bg-white text-slate-600 border border-slate-200/80 hover:bg-slate-50'
@@ -232,7 +232,7 @@ export default function UsersPage() {
         <button
           type="button"
           onClick={() => setActiveTab('settings')}
-          className={`flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-bold transition-all ${
+          className={`flex min-h-11 shrink-0 snap-start items-center gap-2 rounded-xl px-3 py-2 text-xs font-bold transition-all sm:px-4 ${
             activeTab === 'settings'
               ? 'bg-brand-900 text-white shadow-xs'
               : 'bg-white text-slate-600 border border-slate-200/80 hover:bg-slate-50'
@@ -273,7 +273,8 @@ export default function UsersPage() {
               />
             </div>
           ) : (
-            <div className="overflow-x-auto">
+            <>
+            <div className="hidden overflow-x-auto sm:block">
               <table className="w-full text-left text-sm text-slate-700">
                 <thead className="bg-slate-50/90 text-xs font-bold uppercase tracking-wider text-slate-500 border-b border-slate-200/80">
                   <tr>
@@ -336,6 +337,38 @@ export default function UsersPage() {
                 </tbody>
               </table>
             </div>
+            <ul className="divide-y divide-slate-100 sm:hidden" aria-label="System users">
+              {filteredUsers.map((u: any) => (
+                <li key={u.id} className="p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="break-words text-sm font-bold text-slate-900">{u.fullName}</p>
+                      <p className="mt-1 break-all text-xs text-slate-500">{u.email}</p>
+                    </div>
+                    <Badge tone={u.role === 'ADMINISTRATOR' ? 'purple' : u.role === 'STORE_MANAGER' ? 'teal' : u.role === 'STOREKEEPER' ? 'success' : u.role === 'AUDITOR' ? 'amber' : 'neutral'}>
+                      {u.role.replace('_', ' ')}
+                    </Badge>
+                  </div>
+                  <p className="mt-2 text-xs text-slate-500">{u.department?.name || 'General Inventory Ops'}{u.phone ? ` · ${u.phone}` : ''}</p>
+                  <label className="mt-3 block">
+                    <span className="mb-1 block text-[11px] font-semibold text-slate-500">Assign role</span>
+                    <select
+                      aria-label={`Assign role for ${u.fullName}`}
+                      value={u.role}
+                      onChange={(e) => updateRoleMutation.mutate({ id: u.id, role: e.target.value })}
+                      className="min-h-11 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-800 shadow-2xs focus:border-teal-500 focus:outline-none"
+                    >
+                      <option value="ADMINISTRATOR">ADMINISTRATOR</option>
+                      <option value="STORE_MANAGER">STORE_MANAGER</option>
+                      <option value="STOREKEEPER">STOREKEEPER</option>
+                      <option value="AUDITOR">AUDITOR</option>
+                      <option value="REQUESTER">REQUESTER</option>
+                    </select>
+                  </label>
+                </li>
+              ))}
+            </ul>
+            </>
           )}
         </Card>
       )}
@@ -365,7 +398,8 @@ export default function UsersPage() {
                 />
               </div>
             ) : (
-              <div className="overflow-x-auto">
+              <>
+              <div className="hidden overflow-x-auto sm:block">
                 <table className="w-full text-left text-xs text-slate-700">
                   <thead className="bg-slate-50/90 font-bold uppercase tracking-wider text-slate-500 border-b border-slate-200/80">
                     <tr>
@@ -399,6 +433,22 @@ export default function UsersPage() {
                   </tbody>
                 </table>
               </div>
+              <ul className="divide-y divide-slate-100 sm:hidden" aria-label="System audit log">
+                {auditLogs?.map((log: any) => (
+                  <li key={log.id} className="space-y-2 p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="break-words text-sm font-bold text-slate-900">{log.action}</p>
+                        <p className="mt-1 text-xs text-slate-600">{log.user?.fullName || 'System Automated'}</p>
+                      </div>
+                      <span className="shrink-0 rounded-md border border-teal-200 bg-teal-50 px-2 py-1 font-mono text-[10px] font-bold text-teal-800">{log.module}</span>
+                    </div>
+                    <p className="break-words text-xs leading-relaxed text-slate-600">{log.details || 'N/A'}</p>
+                    <p className="font-mono text-[10px] text-slate-500">{new Date(log.createdAt).toLocaleString()}</p>
+                  </li>
+                ))}
+              </ul>
+              </>
             )}
           </CardBody>
         </Card>
@@ -429,7 +479,7 @@ export default function UsersPage() {
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div>
                   <Label>Default Minimum Stock Limit</Label>
                   <Input
@@ -519,7 +569,7 @@ export default function UsersPage() {
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div>
               <Label>Phone Number</Label>
               <Input

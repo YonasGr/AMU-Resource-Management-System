@@ -123,6 +123,10 @@
     background: #fff !important;
   }
 
+  .modal-root {
+    display: none !important;
+  }
+
   #root > div {
     display: block !important;
   }

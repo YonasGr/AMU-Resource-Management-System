@@ -1,4 +1,5 @@
 import React, { useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import {
   X,
@@ -185,6 +186,14 @@ export function NotificationDrawer() {
 
   // Close on outside click
   const panelRef = useRef<HTMLDivElement>(null);
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (!isOpen) return;
+    const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    closeButtonRef.current?.focus();
+    return () => previousFocus?.focus();
+  }, [isOpen]);
+
   useEffect(() => {
     if (!isOpen) return;
     function onPointerDown(e: MouseEvent) {
@@ -196,11 +205,40 @@ export function NotificationDrawer() {
     return () => document.removeEventListener('pointerdown', onPointerDown);
   }, [isOpen, closeDrawer]);
 
+  useEffect(() => {
+    if (!isOpen) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [isOpen]);
+
   // Close on Escape
   useEffect(() => {
     if (!isOpen) return;
     function onKey(e: KeyboardEvent) {
-      if (e.key === 'Escape') closeDrawer();
+      if (e.key === 'Escape') {
+        closeDrawer();
+        return;
+      }
+      if (e.key !== 'Tab' || !panelRef.current) return;
+      const focusable = panelRef.current.querySelectorAll<HTMLElement>(
+        'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+      );
+      if (focusable.length === 0) {
+        e.preventDefault();
+        return;
+      }
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
     }
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
@@ -208,13 +246,13 @@ export function NotificationDrawer() {
 
   const unreadCount = (notifications ?? []).filter((n) => !n.isRead).length;
 
-  return (
+  return createPortal((
     <>
       {/* Backdrop */}
       <div
         className={cn(
-          'fixed inset-0 z-40 bg-slate-900/50 backdrop-blur-xs transition-opacity duration-200',
-          isOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none',
+          'invisible fixed inset-0 z-40 bg-slate-900/50 backdrop-blur-xs transition-opacity duration-200',
+          isOpen ? 'visible opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none',
         )}
         aria-hidden="true"
       />
@@ -223,15 +261,16 @@ export function NotificationDrawer() {
       <div
         ref={panelRef}
         role="dialog"
+        aria-modal={isOpen}
+        aria-hidden={!isOpen}
         aria-label="Notifications"
         className={cn(
-          'fixed top-0 right-0 z-50 h-full w-[400px] max-w-full bg-white shadow-2xl',
-          'flex flex-col transition-transform duration-300 ease-out border-l border-slate-200',
-          isOpen ? 'translate-x-0' : 'translate-x-full',
+          'invisible fixed inset-y-0 right-0 z-[100] flex h-dvh w-[min(25rem,100vw)] flex-col border-l border-slate-200 bg-white shadow-2xl transition-transform duration-300 ease-out',
+          isOpen ? 'visible translate-x-0' : 'translate-x-full',
         )}
       >
         {/* Header */}
-        <div className="flex shrink-0 items-center justify-between border-b border-slate-200/90 px-6 py-4.5 bg-white">
+        <div className="flex shrink-0 items-center justify-between gap-2 border-b border-slate-200/90 bg-white px-4 py-4 sm:px-6">
           <div className="flex items-center gap-2.5">
             <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-teal-50 text-teal-700">
               <Bell className="h-4.5 w-4.5" strokeWidth={2.2} />
@@ -244,15 +283,18 @@ export function NotificationDrawer() {
             )}
           </div>
           <button
+            ref={closeButtonRef}
+            type="button"
+            aria-label="Close notifications"
             onClick={closeDrawer}
-            className="flex h-8 w-8 items-center justify-center rounded-xl text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-colors"
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-700"
           >
             <X className="h-4 w-4" />
           </button>
         </div>
 
         {/* Action buttons */}
-        <div className="flex shrink-0 items-center justify-between border-b border-slate-100 bg-slate-50/70 px-6 py-2.5">
+        <div className="flex shrink-0 items-center justify-between gap-2 border-b border-slate-100 bg-slate-50/70 px-3 py-2.5 sm:px-6">
           <button
             onClick={() => markAllRead.mutate()}
             disabled={markAllRead.isPending || unreadCount === 0}
@@ -318,6 +360,5 @@ export function NotificationDrawer() {
         )}
       </div>
     </>
-  );
+  ), document.body);
 }
-

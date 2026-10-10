@@ -17,27 +17,19 @@ RUN pnpm build
 # Stage 2: Serve static files with Nginx
 FROM nginx:alpine AS runner
 
+ENV PORT=80
+
 COPY --from=builder /app/dist /usr/share/nginx/html
 
-# Support dynamic $PORT assigned by Railway (or fallback to 80)
+# Support dynamic $PORT assigned by Railway
 RUN mkdir -p /etc/nginx/templates && echo 'server { \
-    listen ${PORT:-80}; \
+    listen ${PORT}; \
     location / { \
         root /usr/share/nginx/html; \
         index index.html index.htm; \
         try_files $uri $uri/ /index.html; \
     } \
 }' > /etc/nginx/templates/default.conf.template
-
-# Default configuration if envsubst is not triggered
-RUN echo 'server { \
-    listen 80; \
-    location / { \
-        root /usr/share/nginx/html; \
-        index index.html index.htm; \
-        try_files $uri $uri/ /index.html; \
-    } \
-}' > /etc/nginx/conf.d/default.conf
 
 EXPOSE 80
 

@@ -21,16 +21,9 @@ ENV PORT=80
 
 COPY --from=builder /app/dist /usr/share/nginx/html
 
-# Support dynamic $PORT assigned by Railway
-RUN mkdir -p /etc/nginx/templates && echo 'server { \
-    listen ${PORT}; \
-    location / { \
-        root /usr/share/nginx/html; \
-        index index.html index.htm; \
-        try_files $uri $uri/ /index.html; \
-    } \
-}' > /etc/nginx/templates/default.conf.template
+COPY docker-entrypoint.sh /docker-entrypoint-fe.sh
+RUN chmod +x /docker-entrypoint-fe.sh
 
-EXPOSE 80
+EXPOSE 80 3000 8080
 
-CMD ["nginx", "-g", "daemon off;"]
+CMD ["/docker-entrypoint-fe.sh"]

@@ -24,28 +24,28 @@ export class InventoryController {
   @Roles(Role.STOREKEEPER, Role.STORE_MANAGER, Role.ADMINISTRATOR)
   @ApiOperation({ summary: 'Receive Stock / Stock In (Storekeeper / Manager / Admin - UC8)' })
   stockIn(@Req() req: any, @Body() dto: StockInDto) {
-    return this.inventoryService.stockIn(req.user.id, dto);
+    return this.inventoryService.stockIn(req.user, dto);
   }
 
   @Post('stock-out')
   @Roles(Role.STOREKEEPER, Role.STORE_MANAGER, Role.ADMINISTRATOR)
   @ApiOperation({ summary: 'Issue Materials / Stock Out Direct (Storekeeper / Manager / Admin - UC9)' })
   stockOut(@Req() req: any, @Body() dto: StockOutDto) {
-    return this.inventoryService.stockOut(req.user.id, dto);
+    return this.inventoryService.stockOut(req.user, dto);
   }
 
   @Post('return')
   @Roles(Role.STOREKEEPER, Role.STORE_MANAGER, Role.ADMINISTRATOR)
   @ApiOperation({ summary: 'Return materials against an issued request item (Storekeeper / Manager / Admin - UC10)' })
   returnMaterial(@Req() req: any, @Body() dto: ReturnDto) {
-    return this.inventoryService.returnMaterial(req.user.id, dto);
+    return this.inventoryService.returnMaterial(req.user, dto);
   }
 
   @Post('adjustment')
   @Roles(Role.STOREKEEPER, Role.STORE_MANAGER, Role.ADMINISTRATOR)
   @ApiOperation({ summary: 'Stock Adjustment Audit (Storekeeper / Manager / Admin - UC11)' })
   adjustStock(@Req() req: any, @Body() dto: AdjustmentDto) {
-    return this.inventoryService.adjustStock(req.user.id, dto);
+    return this.inventoryService.adjustStock(req.user, dto);
   }
 
   @Post('transfer')

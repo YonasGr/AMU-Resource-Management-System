@@ -13,6 +13,10 @@ export class StockInDto {
   @IsUUID()
   materialId!: string;
 
+  @IsUUID()
+  @IsOptional()
+  storeId?: string;
+
   @Type(() => Number)
   @IsInt()
   @Min(1)
@@ -41,6 +45,10 @@ export class StockInDto {
 export class StockOutDto {
   @IsUUID()
   materialId!: string;
+
+  @IsUUID()
+  @IsOptional()
+  storeId?: string;
 
   @Type(() => Number)
   @IsInt()
@@ -96,6 +104,10 @@ export class ReturnDto {
 export class AdjustmentDto {
   @IsUUID()
   materialId!: string;
+
+  @IsUUID()
+  @IsOptional()
+  storeId?: string;
 
   @Type(() => Number)
   @IsInt()

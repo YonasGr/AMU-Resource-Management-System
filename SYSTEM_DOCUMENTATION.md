@@ -133,7 +133,9 @@ The frontend provides report views and export/print actions. These are operation
 
 ## Data model
 
-Primary Prisma models are `Department`, `Store`, `User`, `Employee`, `Supplier`, `MaterialCategory`, `Material`, `StockSummary`, `MaterialRequest`, `MaterialRequestItem`, `InventoryTransaction`, `AuditLog`, and `Notification`.
+Primary Prisma models are `Department`, `Store`, `User`, `Employee`, `Supplier`, `MaterialCategory`, `Material`, `StockSummary`, `StockBalance`, `MaterialRequest`, `MaterialRequestItem`, `InventoryTransaction`, `AuditLog`, and `Notification`.
+
+`StockSummary` remains the aggregate compatibility balance while `StockBalance` records the authoritative material balance for a specific store. Inventory mutations use the authenticated user's assigned store; global administrators must provide an explicit store. Existing aggregate reporting will be migrated to store-aware queries in the next increment.
 
 For exact fields, relations, and enum values, see [`backend/prisma/schema.prisma`](backend/prisma/schema.prisma). The schema and migrations define persisted behavior; this summary is intentionally compact.
 

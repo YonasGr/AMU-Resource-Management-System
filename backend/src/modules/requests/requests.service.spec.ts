@@ -28,6 +28,26 @@ describe('RequestsService Store-Scope Enforcement Verification', () => {
           department: { name: 'Computer Science' },
           items: [],
         }),
+        update: jest.fn().mockResolvedValue({
+          id: 'req-issue-1',
+          status: RequestStatus.ISSUED,
+          requester: { id: 'requester-1', fullName: 'Requester User', email: 'requester@example.com' },
+          department: { id: 'dept-1', name: 'Computer Science' },
+          approvedBy: { id: 'manager-1', fullName: 'Store Manager' },
+          items: [],
+        }),
+      },
+      stockBalance: {
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+      },
+      stockSummary: {
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+      },
+      inventoryTransaction: {
+        create: jest.fn().mockResolvedValue({}),
+      },
+      materialRequestItem: {
+        update: jest.fn(),
       },
     };
 
@@ -207,6 +227,41 @@ describe('RequestsService Store-Scope Enforcement Verification', () => {
       await expect(service.approveOrReject('req-1', user, 'APPROVE')).rejects.toThrow(
         BadRequestException,
       );
+    });
+
+    describe('issueItems() store balance enforcement', () => {
+      it('decrements the selected store balance and compatibility aggregate', async () => {
+        prisma.materialRequest.findUnique.mockResolvedValue({
+          id: 'req-issue-1',
+          requestNumber: 'REQ-2026-0005',
+          purpose: 'Issue paper',
+          status: RequestStatus.APPROVED,
+          storeId: 'store-a',
+          requesterId: 'requester-1',
+          departmentId: 'dept-1',
+          approvedById: 'manager-1',
+          items: [
+            {
+              id: 'item-1',
+              materialId: 'material-1',
+              quantityRequested: 2,
+              material: {
+                name: 'Paper',
+                stockSummary: { remainingQuantity: 10 },
+              },
+            },
+          ],
+        });
+
+        const result = await service.issueItems('req-issue-1', createMockUser({
+          role: Role.STOREKEEPER,
+          scopeType: ScopeType.STORE,
+          storeId: 'store-a',
+        }));
+
+        expect(result.status).toBe(RequestStatus.ISSUED);
+        expect(prisma.$transaction).toHaveBeenCalled();
+      });
     });
   });
 });

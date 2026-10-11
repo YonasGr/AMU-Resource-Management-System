@@ -1,6 +1,6 @@
-import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
-import { TransactionType } from '@prisma/client';
+import { Role, ScopeType, TransactionType } from '@prisma/client';
 import { NotificationsService } from '../notifications/notifications.service';
 import { AuditService } from '../audit/audit.service';
 import { AccessControlService } from '../auth/access-control.service';
@@ -13,6 +13,8 @@ import {
   TransferDto,
 } from './dto/inventory.dto';
 
+type InventoryActor = Pick<SafeUser, 'id' | 'storeId' | 'scopeType' | 'role'>;
+
 @Injectable()
 export class InventoryService {
   constructor(
@@ -21,6 +23,34 @@ export class InventoryService {
     private readonly auditService: AuditService,
     private readonly accessControlService: AccessControlService,
   ) {}
+
+  private normalizeActor(actor: SafeUser | InventoryActor | string): InventoryActor {
+    if (typeof actor === 'string') {
+      return { id: actor, storeId: 'legacy-store', scopeType: ScopeType.STORE, role: Role.STOREKEEPER };
+    }
+    return actor;
+  }
+
+  private resolveStoreId(actor: SafeUser | InventoryActor | string, requestedStoreId?: string): string {
+    const user = this.normalizeActor(actor);
+    if (
+      requestedStoreId &&
+      user.scopeType === ScopeType.STORE &&
+      user.storeId &&
+      requestedStoreId !== user.storeId
+    ) {
+      throw new ForbiddenException('You cannot mutate inventory for another store');
+    }
+
+    const storeId = requestedStoreId || user.storeId;
+    if (!storeId && (user.role === Role.ADMINISTRATOR || user.scopeType === ScopeType.GLOBAL)) {
+      throw new BadRequestException('A storeId is required for global inventory operations');
+    }
+    if (!storeId) {
+      throw new ForbiddenException('Your account is not assigned to an inventory store');
+    }
+    return storeId;
+  }
 
   /** Emit a low-stock alert if stock has fallen below minimum */
   private async maybeAlertLowStock(materialId: string) {
@@ -48,7 +78,9 @@ export class InventoryService {
   }
 
   /** Stock In (Receive materials from supplier or internal source) */
-  async stockIn(storekeeperId: string, dto: StockInDto) {
+  async stockIn(actor: SafeUser | string, dto: StockInDto) {
+    const user = this.normalizeActor(actor);
+    const storeId = this.resolveStoreId(user, dto.storeId);
     const material = await this.prisma.material.findUnique({
       where: { id: dto.materialId },
       include: { stockSummary: true },
@@ -67,10 +99,11 @@ export class InventoryService {
           transactionCode: txnCode,
           type: TransactionType.STOCK_IN,
           materialId: dto.materialId,
+          storeId,
           quantity: dto.quantity,
           unitPrice: dto.unitPrice,
           supplierId: dto.supplierId || null,
-          issuedById: storekeeperId,
+          issuedById: user.id,
           purpose: dto.purpose || 'Stock Received',
           remarks: dto.remarks,
         },
@@ -95,6 +128,20 @@ export class InventoryService {
         },
       });
 
+      await tx.stockBalance.upsert({
+        where: { storeId_materialId: { storeId, materialId: dto.materialId } },
+        update: {
+          quantityReceived: { increment: dto.quantity },
+          remainingQuantity: { increment: dto.quantity },
+        },
+        create: {
+          storeId,
+          materialId: dto.materialId,
+          quantityReceived: dto.quantity,
+          remainingQuantity: dto.quantity,
+        },
+      });
+
       return txn;
     });
 
@@ -114,7 +161,7 @@ export class InventoryService {
 
     // Audit Log
     await this.auditService.log(
-      storekeeperId,
+      user.id,
       'STOCK_IN',
       'INVENTORY',
       `Received ${dto.quantity} ${material.unit}(s) of "${material.name}" (${material.materialCode}) [Txn: ${transaction.transactionCode}]`,
@@ -124,7 +171,9 @@ export class InventoryService {
   }
 
   /** Direct Stock Out (Issue materials directly to employee / department) */
-  async stockOut(storekeeperId: string, dto: StockOutDto) {
+  async stockOut(actor: SafeUser | string, dto: StockOutDto) {
+    const user = this.normalizeActor(actor);
+    const storeId = this.resolveStoreId(user, dto.storeId);
     const material = await this.prisma.material.findUnique({
       where: { id: dto.materialId },
       include: { stockSummary: true },
@@ -138,9 +187,10 @@ export class InventoryService {
     const txnCode = `TXN-OUT-${timeStamp}-${rand}`;
 
     const transaction = await this.prisma.$transaction(async (tx) => {
-      const decremented = await tx.stockSummary.updateMany({
+      const decremented = await tx.stockBalance.updateMany({
         where: {
           materialId: dto.materialId,
+          storeId,
           remainingQuantity: { gte: dto.quantity },
         },
         data: {
@@ -154,16 +204,27 @@ export class InventoryService {
           `Insufficient stock for "${material.name}". Requested: ${dto.quantity}, Available: ${available}`,
         );
       }
+      await tx.stockSummary.updateMany({
+        where: {
+          materialId: dto.materialId,
+          remainingQuantity: { gte: dto.quantity },
+        },
+        data: {
+          quantityIssued: { increment: dto.quantity },
+          remainingQuantity: { decrement: dto.quantity },
+        },
+      });
 
       const txn = await tx.inventoryTransaction.create({
         data: {
           transactionCode: txnCode,
           type: TransactionType.STOCK_OUT,
           materialId: dto.materialId,
+          storeId,
           quantity: dto.quantity,
           employeeId: dto.employeeId || null,
           departmentId: dto.departmentId || null,
-          issuedById: storekeeperId,
+          issuedById: user.id,
           purpose: dto.purpose || 'Direct Material Issue',
           remarks: dto.remarks,
         },
@@ -183,7 +244,7 @@ export class InventoryService {
 
     // Audit Log
     await this.auditService.log(
-      storekeeperId,
+      user.id,
       'STOCK_OUT',
       'INVENTORY',
       `Issued ${dto.quantity} ${material.unit}(s) of "${material.name}" (${material.materialCode}) [Txn: ${transaction.transactionCode}]`,
@@ -193,7 +254,8 @@ export class InventoryService {
   }
 
   /** Material Return (Record returned materials back into inventory) */
-  async returnMaterial(storekeeperId: string, dto: ReturnDto) {
+  async returnMaterial(actor: SafeUser | string, dto: ReturnDto) {
+    const user = this.normalizeActor(actor);
     if (!Number.isInteger(dto.quantity) || dto.quantity < 1) {
       throw new BadRequestException('Return quantity must be a positive whole number');
     }
@@ -201,7 +263,7 @@ export class InventoryService {
     const requestItem = await this.prisma.materialRequestItem.findUnique({
       where: { id: dto.requestItemId },
       include: {
-        request: { select: { id: true, requestNumber: true, status: true, departmentId: true } },
+        request: { select: { id: true, requestNumber: true, status: true, departmentId: true, storeId: true } },
         material: { include: { stockSummary: true } },
       },
     });
@@ -245,12 +307,13 @@ export class InventoryService {
           transactionCode: txnCode,
           type: TransactionType.RETURN,
           materialId: dto.materialId,
+          storeId: requestItem.request.storeId,
           requestId: dto.requestId,
           requestItemId: dto.requestItemId,
           quantity: dto.quantity,
           employeeId: dto.employeeId || null,
           departmentId: dto.departmentId || requestItem.request.departmentId,
-          issuedById: storekeeperId,
+          issuedById: user.id,
           purpose: `Material Return for ${requestItem.request.requestNumber}`,
           remarks: dto.remarks || 'Returned to store against the original request',
         },
@@ -261,6 +324,23 @@ export class InventoryService {
           request: { select: { id: true, requestNumber: true } },
           requestItem: { select: { id: true, quantityIssued: true, quantityReturned: true } },
           issuedBy: { select: { fullName: true } },
+        },
+      });
+
+      if (!requestItem.request.storeId) {
+        throw new BadRequestException('The issued request is not assigned to a store');
+      }
+
+      await tx.stockBalance.update({
+        where: {
+          storeId_materialId: {
+            storeId: requestItem.request.storeId,
+            materialId: dto.materialId,
+          },
+        },
+        data: {
+          quantityIssued: { decrement: dto.quantity },
+          remainingQuantity: { increment: dto.quantity },
         },
       });
 
@@ -277,7 +357,7 @@ export class InventoryService {
 
     // Audit Log
     await this.auditService.log(
-      storekeeperId,
+      user.id,
       'RETURN',
       'INVENTORY',
       `Accepted return of ${dto.quantity} ${material.unit}(s) of "${material.name}" (${material.materialCode}) for request ${requestItem.request.requestNumber} [Txn: ${transaction.transactionCode}]`,
@@ -287,7 +367,9 @@ export class InventoryService {
   }
 
   /** Stock Adjustment (Manual stock audit count adjustment) */
-  async adjustStock(storekeeperId: string, dto: AdjustmentDto) {
+  async adjustStock(actor: SafeUser | string, dto: AdjustmentDto) {
+    const user = this.normalizeActor(actor);
+    const storeId = this.resolveStoreId(user, dto.storeId);
     const material = await this.prisma.material.findUnique({
       where: { id: dto.materialId },
       include: { stockSummary: true },
@@ -296,7 +378,10 @@ export class InventoryService {
       throw new NotFoundException(`Material ${dto.materialId} not found`);
     }
 
-    const currentRemaining = material.stockSummary?.remainingQuantity ?? 0;
+    const storeBalance = await this.prisma.stockBalance.findUnique({
+      where: { storeId_materialId: { storeId, materialId: dto.materialId } },
+    });
+    const currentRemaining = storeBalance?.remainingQuantity ?? 0;
     const diff = dto.newQuantity - currentRemaining;
 
     const timeStamp = Date.now().toString().slice(-6);
@@ -309,14 +394,25 @@ export class InventoryService {
           transactionCode: txnCode,
           type: TransactionType.ADJUSTMENT,
           materialId: dto.materialId,
+          storeId,
           quantity: Math.abs(diff),
-          issuedById: storekeeperId,
+          issuedById: user.id,
           purpose: 'Stock Audit Adjustment',
           remarks: `Adjusted from ${currentRemaining} to ${dto.newQuantity}. Reason: ${dto.reason}`,
         },
         include: {
           material: true,
           issuedBy: { select: { fullName: true } },
+        },
+      });
+
+      await tx.stockBalance.upsert({
+        where: { storeId_materialId: { storeId, materialId: dto.materialId } },
+        update: { remainingQuantity: dto.newQuantity },
+        create: {
+          storeId,
+          materialId: dto.materialId,
+          remainingQuantity: dto.newQuantity,
         },
       });
 
@@ -335,7 +431,7 @@ export class InventoryService {
 
     // Audit Log
     await this.auditService.log(
-      storekeeperId,
+      user.id,
       'STOCK_ADJUSTMENT',
       'INVENTORY',
       `Stock audit adjusted "${material.name}" (${material.materialCode}) from ${currentRemaining} to ${dto.newQuantity} (Delta: ${diff >= 0 ? '+' : ''}${diff}). Reason: "${dto.reason}" [Txn: ${transaction.transactionCode}]`,

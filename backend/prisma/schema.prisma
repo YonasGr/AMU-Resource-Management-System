@@ -59,6 +59,8 @@ model Store {
   department   Department?     @relation(fields: [departmentId], references: [id])
   users        User[]
   requests     MaterialRequest[]
+  stockBalances StockBalance[]
+  transactions InventoryTransaction[] @relation("TransactionStore")
   createdAt    DateTime        @default(now()) @map("created_at")
   updatedAt    DateTime        @updatedAt @map("updated_at")
 
@@ -168,6 +170,7 @@ model Material {
   category   MaterialCategory @relation(fields: [categoryId], references: [id])
 
   stockSummary StockSummary?
+  stockBalances StockBalance[]
   requestItems MaterialRequestItem[]
   transactions InventoryTransaction[]
 
@@ -188,6 +191,22 @@ model StockSummary {
   updatedAt         DateTime @updatedAt @map("updated_at")
 
   @@map("stock_summaries")
+}
+
+model StockBalance {
+  id                String   @id @default(uuid())
+  storeId           String   @map("store_id")
+  store             Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  materialId        String   @map("material_id")
+  material          Material @relation(fields: [materialId], references: [id], onDelete: Cascade)
+  quantityReceived  Int      @default(0) @map("quantity_received")
+  quantityIssued    Int      @default(0) @map("quantity_issued")
+  remainingQuantity Int      @default(0) @map("remaining_quantity")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  @@unique([storeId, materialId])
+  @@index([materialId])
+  @@map("stock_balances")
 }
 
 enum RequestStatus {
@@ -268,6 +287,9 @@ model InventoryTransaction {
 
   materialId String   @map("material_id")
   material   Material @relation(fields: [materialId], references: [id])
+
+  storeId String? @map("store_id")
+  store   Store?  @relation("TransactionStore", fields: [storeId], references: [id])
 
   requestId String?          @map("request_id")
   request   MaterialRequest? @relation(fields: [requestId], references: [id])

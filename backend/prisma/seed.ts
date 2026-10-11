@@ -478,9 +478,9 @@ async function main() {
   });
 
   // 10. Sample Material Requests Targeting Central ICT Store
-  // REQ-2026-001: Pending request
+  // REQ-2026-0001: Pending request
   const req1 = await prisma.materialRequest.upsert({
-    where: { requestNumber: 'REQ-2026-001' },
+    where: { requestNumber: 'REQ-2026-0001' },
     update: {
       storeId: storeMain.id,
       status: RequestStatus.PENDING,
@@ -488,7 +488,7 @@ async function main() {
       requesterId: requester.id,
     },
     create: {
-      requestNumber: 'REQ-2026-001',
+      requestNumber: 'REQ-2026-0001',
       purpose: 'End of Semester Examinations Printing',
       status: RequestStatus.PENDING,
       requesterId: requester.id,
@@ -503,9 +503,9 @@ async function main() {
     },
   });
 
-  // REQ-2026-002: Pending request
+  // REQ-2026-0002: Pending request
   const req2 = await prisma.materialRequest.upsert({
-    where: { requestNumber: 'REQ-2026-002' },
+    where: { requestNumber: 'REQ-2026-0002' },
     update: {
       storeId: storeMain.id,
       status: RequestStatus.PENDING,
@@ -513,7 +513,7 @@ async function main() {
       requesterId: requester.id,
     },
     create: {
-      requestNumber: 'REQ-2026-002',
+      requestNumber: 'REQ-2026-0002',
       purpose: 'Lab Setup & Printer Maintenance',
       status: RequestStatus.PENDING,
       requesterId: requester.id,
@@ -527,9 +527,9 @@ async function main() {
     },
   });
 
-  // REQ-2026-003: Approved request
+  // REQ-2026-0003: Approved request
   const req3 = await prisma.materialRequest.upsert({
-    where: { requestNumber: 'REQ-2026-003' },
+    where: { requestNumber: 'REQ-2026-0003' },
     update: {
       storeId: storeMain.id,
       status: RequestStatus.APPROVED,
@@ -539,7 +539,7 @@ async function main() {
       approvedAt: new Date(),
     },
     create: {
-      requestNumber: 'REQ-2026-003',
+      requestNumber: 'REQ-2026-0003',
       purpose: 'Faculty Office Setup',
       status: RequestStatus.APPROVED,
       managerRemarks: 'Approved for Faculty Offices',
@@ -556,9 +556,9 @@ async function main() {
     },
   });
 
-  // REQ-2026-004: Issued request
+  // REQ-2026-0004: Issued request
   const req4 = await prisma.materialRequest.upsert({
-    where: { requestNumber: 'REQ-2026-004' },
+    where: { requestNumber: 'REQ-2026-0004' },
     update: {
       storeId: storeMain.id,
       status: RequestStatus.ISSUED,
@@ -568,7 +568,7 @@ async function main() {
       approvedAt: new Date(Date.now() - 86400000),
     },
     create: {
-      requestNumber: 'REQ-2026-004',
+      requestNumber: 'REQ-2026-0004',
       purpose: 'Network Lab Cabling Deployment',
       status: RequestStatus.ISSUED,
       managerRemarks: 'Approved and issued for network upgrade',
@@ -585,7 +585,15 @@ async function main() {
     },
   });
 
-  // Stock Out transaction for Issued Request (REQ-2026-004)
+  await prisma.$executeRaw`
+    INSERT INTO "request_number_counters" ("year", "next_number")
+    VALUES (2026, 5)
+    ON CONFLICT ("year") DO UPDATE
+    SET "next_number" = GREATEST("request_number_counters"."next_number", 5),
+        "updated_at" = CURRENT_TIMESTAMP
+  `;
+
+  // Stock Out transaction for Issued Request (REQ-2026-0004)
   await prisma.inventoryTransaction.upsert({
     where: { transactionCode: 'TXN-OUT-001' },
     update: {
@@ -606,7 +614,7 @@ async function main() {
     },
   });
 
-  console.log('✅ Sample Material Requests (REQ-2026-001 to 004) & Transactions seeded');
+  console.log('✅ Sample Material Requests (REQ-2026-0001 to 0004) & Transactions seeded');
   console.log('🎉 Seed completed successfully!');
 }
 

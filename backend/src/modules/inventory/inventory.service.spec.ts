@@ -47,7 +47,9 @@ describe('InventoryService', () => {
         updateMany: jest.fn().mockResolvedValue({ count: 1 }),
         update: jest.fn().mockResolvedValue({}),
         findUnique: jest.fn().mockResolvedValue({
+          id: 'balance-uuid-1',
           remainingQuantity: 30,
+          reservedQuantity: 0,
         }),
       },
       stockSummary: {
@@ -81,7 +83,11 @@ describe('InventoryService', () => {
               findUnique: jest.fn(),
             },
             stockBalance: {
-              findUnique: jest.fn().mockResolvedValue({ remainingQuantity: 30 }),
+              findUnique: jest.fn().mockResolvedValue({
+                id: 'balance-uuid-1',
+                remainingQuantity: 30,
+                reservedQuantity: 0,
+              }),
             },
             inventoryTransaction: {
               findMany: jest.fn(),

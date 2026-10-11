@@ -202,6 +202,7 @@ model StockBalance {
   quantityReceived  Int      @default(0) @map("quantity_received")
   quantityIssued    Int      @default(0) @map("quantity_issued")
   remainingQuantity Int      @default(0) @map("remaining_quantity")
+  reservedQuantity  Int      @default(0) @map("reserved_quantity")
   updatedAt         DateTime @updatedAt @map("updated_at")
 
   @@unique([storeId, materialId])
@@ -263,6 +264,7 @@ model MaterialRequestItem {
   material          Material        @relation(fields: [materialId], references: [id])
   quantityRequested Int             @map("quantity_requested")
   quantityIssued    Int             @default(0) @map("quantity_issued")
+  quantityReserved  Int             @default(0) @map("quantity_reserved")
   quantityReturned  Int             @default(0) @map("quantity_returned")
   transactions      InventoryTransaction[]
 

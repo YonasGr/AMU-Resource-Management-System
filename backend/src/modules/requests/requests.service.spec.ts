@@ -30,7 +30,7 @@ describe('RequestsService Store-Scope Enforcement Verification', () => {
         }),
         update: jest.fn().mockResolvedValue({
           id: 'req-issue-1',
-          status: RequestStatus.ISSUED,
+          status: RequestStatus.APPROVED,
           requester: { id: 'requester-1', fullName: 'Requester User', email: 'requester@example.com' },
           department: { id: 'dept-1', name: 'Computer Science' },
           approvedBy: { id: 'manager-1', fullName: 'Store Manager' },
@@ -38,6 +38,11 @@ describe('RequestsService Store-Scope Enforcement Verification', () => {
         }),
       },
       stockBalance: {
+        findUnique: jest.fn().mockResolvedValue({
+          id: 'balance-1',
+          remainingQuantity: 10,
+          reservedQuantity: 0,
+        }),
         updateMany: jest.fn().mockResolvedValue({ count: 1 }),
       },
       stockSummary: {
@@ -147,7 +152,7 @@ describe('RequestsService Store-Scope Enforcement Verification', () => {
       const result = await service.approveOrReject('req-1', user, 'APPROVE', 'Looks good');
 
       expect(result.status).toBe(RequestStatus.APPROVED);
-      expect(prisma.materialRequest.update).toHaveBeenCalled();
+      expect(prisma._mockTx.materialRequest.update).toHaveBeenCalled();
     });
 
     it('should REJECT (ForbiddenException) STORE_MANAGER assigned to Store A when approving request for Store B', async () => {
@@ -208,6 +213,40 @@ describe('RequestsService Store-Scope Enforcement Verification', () => {
       expect(result.status).toBe(RequestStatus.APPROVED);
     });
 
+    it('reserves each requested line from available store stock when approving', async () => {
+      prisma.materialRequest.findUnique.mockResolvedValue({
+        ...mockPendingRequest,
+        items: [
+          {
+            id: 'item-approval-1',
+            materialId: 'material-1',
+            quantityRequested: 4,
+            material: { name: 'Paper' },
+          },
+        ],
+      });
+      prisma._mockTx.stockBalance.findUnique.mockResolvedValue({
+        id: 'balance-1',
+        remainingQuantity: 10,
+        reservedQuantity: 2,
+      });
+
+      await service.approveOrReject('req-1', createMockUser(), 'APPROVE');
+
+      expect(prisma._mockTx.stockBalance.updateMany).toHaveBeenCalledWith({
+        where: {
+          id: 'balance-1',
+          remainingQuantity: { gte: 4 },
+          reservedQuantity: 2,
+        },
+        data: { reservedQuantity: { increment: 4 } },
+      });
+      expect(prisma._mockTx.materialRequestItem.update).toHaveBeenCalledWith({
+        where: { id: 'item-approval-1' },
+        data: { quantityReserved: 4 },
+      });
+    });
+
     it('should throw NotFoundException if request does not exist', async () => {
       prisma.materialRequest.findUnique.mockResolvedValue(null);
       const user = createMockUser();
@@ -251,6 +290,12 @@ describe('RequestsService Store-Scope Enforcement Verification', () => {
               },
             },
           ],
+        });
+        prisma._mockTx.materialRequest.update.mockResolvedValue({
+          id: 'req-issue-1',
+          status: RequestStatus.ISSUED,
+          requester: { id: 'requester-1' },
+          approvedBy: null,
         });
 
         const result = await service.issueItems('req-issue-1', createMockUser({

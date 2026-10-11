@@ -449,7 +449,7 @@ async function main() {
     { materialId: matPen.id, quantityReceived: 50, quantityIssued: 10, remainingQuantity: 40 },
     { materialId: matCable.id, quantityReceived: 10, quantityIssued: 8, remainingQuantity: 2 },
     { materialId: matToner.id, quantityReceived: 25, quantityIssued: 5, remainingQuantity: 20 },
-    { materialId: matChair.id, quantityReceived: 15, quantityIssued: 12, remainingQuantity: 3 },
+    { materialId: matChair.id, quantityReceived: 15, quantityIssued: 12, remainingQuantity: 3, reservedQuantity: 2 },
   ];
   for (const balance of seededBalances) {
     await prisma.stockBalance.upsert({
@@ -572,10 +572,14 @@ async function main() {
       approvedAt: new Date(),
       items: {
         create: [
-          { materialId: matChair.id, quantityRequested: 2, quantityIssued: 0 },
+          { materialId: matChair.id, quantityRequested: 2, quantityIssued: 0, quantityReserved: 2 },
         ],
       },
     },
+  });
+  await prisma.materialRequestItem.updateMany({
+    where: { requestId: req3.id },
+    data: { quantityReserved: 2 },
   });
 
   // REQ-2026-0004: Issued request

@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Post, Query, Req } from '@nestjs/common';
+import { Body, Controller, Get, Param, ParseUUIDPipe, Post, Query, Req } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Role } from '@prisma/client';
 import {
@@ -52,7 +52,19 @@ export class InventoryController {
   @Roles(Role.STOREKEEPER, Role.STORE_MANAGER, Role.ADMINISTRATOR)
   @ApiOperation({ summary: 'Transfer Materials (Storekeeper / Manager / Admin - UC12)' })
   transferMaterial(@Req() req: any, @Body() dto: TransferDto) {
-    return this.inventoryService.transferMaterial(req.user.id, dto);
+    return this.inventoryService.transferMaterial(req.user, dto);
+  }
+
+  @Post('transfer/:id/dispatch')
+  @Roles(Role.STOREKEEPER, Role.STORE_MANAGER, Role.ADMINISTRATOR)
+  dispatchTransfer(@Req() req: any, @Param('id', ParseUUIDPipe) id: string) {
+    return this.inventoryService.dispatchTransfer(id, req.user);
+  }
+
+  @Post('transfer/:id/receive')
+  @Roles(Role.STOREKEEPER, Role.STORE_MANAGER, Role.ADMINISTRATOR)
+  receiveTransfer(@Req() req: any, @Param('id', ParseUUIDPipe) id: string) {
+    return this.inventoryService.receiveTransfer(id, req.user);
   }
 
   @Get('transactions')

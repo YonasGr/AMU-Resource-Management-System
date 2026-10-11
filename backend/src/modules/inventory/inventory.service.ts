@@ -1,6 +1,6 @@
-import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
-import { Role, ScopeType, TransactionType } from '@prisma/client';
+import { Role, ScopeType, TransactionType, TransferStatus } from '@prisma/client';
 import { NotificationsService } from '../notifications/notifications.service';
 import { AuditService } from '../audit/audit.service';
 import { AccessControlService } from '../auth/access-control.service';
@@ -450,11 +450,118 @@ export class InventoryService {
     return transaction;
   }
 
-  /** Material Transfer (Transfer materials between stores or departments) */
-  async transferMaterial(storekeeperId: string, dto: TransferDto) {
-    throw new ConflictException(
-      'Transfers are temporarily unavailable until source and destination stock locations are enabled',
-    );
+  /** Create a transfer document; stock moves only when it is dispatched. */
+  async transferMaterial(actor: SafeUser | string, dto: TransferDto) {
+    const user = this.normalizeActor(actor);
+    if (dto.sourceStoreId === dto.destinationStoreId) {
+      throw new BadRequestException('Source and destination stores must be different');
+    }
+    this.resolveStoreId(user, dto.sourceStoreId);
+    const stores = await this.prisma.store.findMany({
+      where: { id: { in: [dto.sourceStoreId, dto.destinationStoreId] }, status: 'ACTIVE' },
+      select: { id: true },
+    });
+    if (stores.length !== 2) {
+      throw new BadRequestException('Both transfer stores must be active');
+    }
+    const material = await this.prisma.material.findUnique({ where: { id: dto.materialId } });
+    if (!material) throw new NotFoundException(`Material ${dto.materialId} not found`);
+
+    const transferCode = `TRF-${Date.now().toString().slice(-8)}-${Math.floor(100 + Math.random() * 900)}`;
+    const transfer = await this.prisma.inventoryTransfer.create({
+      data: {
+        transferCode,
+        materialId: dto.materialId,
+        sourceStoreId: dto.sourceStoreId,
+        destinationStoreId: dto.destinationStoreId,
+        quantity: dto.quantity,
+        purpose: dto.purpose || 'Inter-store transfer',
+        remarks: dto.remarks,
+        requestedById: user.id,
+      },
+      include: { material: true, sourceStore: true, destinationStore: true },
+    });
+    await this.auditService.log(user.id, 'CREATE_TRANSFER', 'INVENTORY', `Created transfer ${transferCode}`);
+    return transfer;
+  }
+
+  async dispatchTransfer(id: string, actor: SafeUser | string) {
+    const user = this.normalizeActor(actor);
+    const transfer = await this.prisma.inventoryTransfer.findUnique({ where: { id } });
+    if (!transfer) throw new NotFoundException(`Transfer ${id} not found`);
+    this.resolveStoreId(user, transfer.sourceStoreId);
+    if (transfer.status !== TransferStatus.DRAFT) {
+      throw new BadRequestException(`Only DRAFT transfers can be dispatched. Current status is ${transfer.status}`);
+    }
+    const result = await this.prisma.$transaction(async (tx) => {
+      const balance = await tx.stockBalance.findUnique({
+        where: { storeId_materialId: { storeId: transfer.sourceStoreId, materialId: transfer.materialId } },
+      });
+      const available = (balance?.remainingQuantity ?? 0) - (balance?.reservedQuantity ?? 0);
+      if (!balance || available < transfer.quantity) {
+        throw new BadRequestException(`Insufficient transferable stock. Available: ${Math.max(0, available)}`);
+      }
+      const moved = await tx.stockBalance.updateMany({
+        where: { id: balance.id, remainingQuantity: { gte: transfer.quantity }, reservedQuantity: balance.reservedQuantity },
+        data: { remainingQuantity: { decrement: transfer.quantity }, quantityIssued: { increment: transfer.quantity } },
+      });
+      if (moved.count !== 1) throw new BadRequestException('Stock changed while dispatching; refresh and retry');
+      await tx.inventoryTransaction.create({
+        data: {
+          transactionCode: `${transfer.transferCode}-OUT`,
+          type: TransactionType.TRANSFER,
+          materialId: transfer.materialId,
+          storeId: transfer.sourceStoreId,
+          quantity: transfer.quantity,
+          issuedById: user.id,
+          purpose: transfer.purpose,
+          remarks: `Dispatched transfer ${transfer.transferCode}`,
+        },
+      });
+      return tx.inventoryTransfer.update({
+        where: { id },
+        data: { status: TransferStatus.DISPATCHED, dispatchedById: user.id, dispatchedAt: new Date() },
+        include: { material: true, sourceStore: true, destinationStore: true },
+      });
+    });
+    await this.auditService.log(user.id, 'DISPATCH_TRANSFER', 'INVENTORY', `Dispatched transfer ${transfer.transferCode}`);
+    return result;
+  }
+
+  async receiveTransfer(id: string, actor: SafeUser | string) {
+    const user = this.normalizeActor(actor);
+    const transfer = await this.prisma.inventoryTransfer.findUnique({ where: { id } });
+    if (!transfer) throw new NotFoundException(`Transfer ${id} not found`);
+    this.resolveStoreId(user, transfer.destinationStoreId);
+    if (transfer.status !== TransferStatus.DISPATCHED) {
+      throw new BadRequestException(`Only DISPATCHED transfers can be received. Current status is ${transfer.status}`);
+    }
+    const result = await this.prisma.$transaction(async (tx) => {
+      await tx.stockBalance.upsert({
+        where: { storeId_materialId: { storeId: transfer.destinationStoreId, materialId: transfer.materialId } },
+        update: { quantityReceived: { increment: transfer.quantity }, remainingQuantity: { increment: transfer.quantity } },
+        create: { storeId: transfer.destinationStoreId, materialId: transfer.materialId, quantityReceived: transfer.quantity, remainingQuantity: transfer.quantity },
+      });
+      await tx.inventoryTransaction.create({
+        data: {
+          transactionCode: `${transfer.transferCode}-IN`,
+          type: TransactionType.TRANSFER,
+          materialId: transfer.materialId,
+          storeId: transfer.destinationStoreId,
+          quantity: transfer.quantity,
+          issuedById: user.id,
+          purpose: transfer.purpose,
+          remarks: `Received transfer ${transfer.transferCode}`,
+        },
+      });
+      return tx.inventoryTransfer.update({
+        where: { id },
+        data: { status: TransferStatus.RECEIVED, receivedById: user.id, receivedAt: new Date() },
+        include: { material: true, sourceStore: true, destinationStore: true },
+      });
+    });
+    await this.auditService.log(user.id, 'RECEIVE_TRANSFER', 'INVENTORY', `Received transfer ${transfer.transferCode}`);
+    return result;
   }
 
   /** Get all inventory transactions with filter */

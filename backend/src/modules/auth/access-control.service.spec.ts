@@ -182,4 +182,64 @@ describe('AccessControlService (Unit & Store Scope Verification)', () => {
       );
     });
   });
+
+  describe('visibility predicates', () => {
+    it('limits requesters to their own requests', () => {
+      const user = createMockUser({ role: Role.REQUESTER, id: 'requester-a' });
+
+      expect(service.getRequestVisibilityWhere(user)).toEqual({ requesterId: 'requester-a' });
+      expect(
+        service.canViewRequest(user, {
+          requesterId: 'requester-a',
+          departmentId: 'dept-1',
+          storeId: 'store-a',
+        }),
+      ).toBe(true);
+      expect(
+        service.canViewRequest(user, {
+          requesterId: 'requester-b',
+          departmentId: 'dept-1',
+          storeId: 'store-a',
+        }),
+      ).toBe(false);
+    });
+
+    it('limits store-scoped managers to their assigned store', () => {
+      const user = createMockUser({ role: Role.STORE_MANAGER, storeId: 'store-a' });
+
+      expect(service.getRequestVisibilityWhere(user)).toEqual({ storeId: 'store-a' });
+      expect(
+        service.canViewRequest(user, {
+          requesterId: 'requester-a',
+          departmentId: 'dept-1',
+          storeId: 'store-a',
+        }),
+      ).toBe(true);
+      expect(
+        service.canViewRequest(user, {
+          requesterId: 'requester-a',
+          departmentId: 'dept-1',
+          storeId: 'store-b',
+        }),
+      ).toBe(false);
+    });
+
+    it('allows global auditors to view all requests and transactions', () => {
+      const user = createMockUser({ role: Role.AUDITOR, scopeType: ScopeType.GLOBAL, storeId: null });
+
+      expect(service.getRequestVisibilityWhere(user)).toEqual({});
+      expect(service.getTransactionVisibilityWhere(user)).toEqual({});
+    });
+
+    it('scopes store transaction history to request store or issuing user store', () => {
+      const user = createMockUser({ role: Role.STOREKEEPER, storeId: 'store-a' });
+
+      expect(service.getTransactionVisibilityWhere(user)).toEqual({
+        OR: [
+          { request: { storeId: 'store-a' } },
+          { issuedBy: { storeId: 'store-a' } },
+        ],
+      });
+    });
+  });
 });

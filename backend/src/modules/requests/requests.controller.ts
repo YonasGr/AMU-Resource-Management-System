@@ -25,17 +25,18 @@ export class RequestsController {
   @Get()
   @ApiOperation({ summary: 'List all material requests' })
   findAll(
+    @CurrentUser() user: SafeUser,
     @Query('status') status?: RequestStatus,
     @Query('requesterId') requesterId?: string,
     @Query('departmentId') departmentId?: string,
   ) {
-    return this.requestsService.findAll({ status, requesterId, departmentId });
+    return this.requestsService.findAll(user, { status, requesterId, departmentId });
   }
 
   @Get(':id')
   @ApiOperation({ summary: 'Get details of a single material request' })
-  findOne(@Param('id', ParseUUIDPipe) id: string) {
-    return this.requestsService.findOne(id);
+  findOne(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: SafeUser) {
+    return this.requestsService.findOne(id, user);
   }
 
   @Post(':id/approve-reject')
@@ -58,6 +59,6 @@ export class RequestsController {
     @CurrentUser() user: SafeUser,
     @Body() body: IssueRequestDto,
   ) {
-    return this.requestsService.issueItems(id, user.id, body.employeeId, body.remarks);
+    return this.requestsService.issueItems(id, user, body.employeeId, body.remarks);
   }
 }

@@ -1,5 +1,5 @@
 import { ForbiddenException, Injectable } from '@nestjs/common';
-import { Role, ScopeType } from '@prisma/client';
+import { MaterialRequest, Role, ScopeType } from '@prisma/client';
 import { SafeUser } from './decorators/current-user.decorator';
 
 @Injectable()
@@ -41,5 +41,90 @@ export class AccessControlService {
         `Access denied: You do not have permission to manage or approve requests for store [${targetStoreId || 'UNASSIGNED'}]`,
       );
     }
+  }
+
+  canViewRequest(user: SafeUser, request: Pick<MaterialRequest, 'requesterId' | 'departmentId' | 'storeId'>): boolean {
+    if (user.role === Role.ADMINISTRATOR || user.role === Role.AUDITOR) {
+      return true;
+    }
+
+    if (user.role === Role.REQUESTER) {
+      return request.requesterId === user.id;
+    }
+
+    if (
+      (user.role === Role.STORE_MANAGER || user.role === Role.STOREKEEPER) &&
+      user.scopeType === ScopeType.GLOBAL
+    ) {
+      return true;
+    }
+
+    return (
+      (user.role === Role.STORE_MANAGER || user.role === Role.STOREKEEPER) &&
+      user.scopeType === ScopeType.STORE &&
+      Boolean(user.storeId) &&
+      request.storeId === user.storeId
+    );
+  }
+
+  getRequestVisibilityWhere(user: SafeUser) {
+    if (user.role === Role.ADMINISTRATOR || user.role === Role.AUDITOR) {
+      return {};
+    }
+
+    if (user.role === Role.REQUESTER) {
+      return { requesterId: user.id };
+    }
+
+    if (
+      (user.role === Role.STORE_MANAGER || user.role === Role.STOREKEEPER) &&
+      user.scopeType === ScopeType.GLOBAL
+    ) {
+      return {};
+    }
+
+    if (
+      (user.role === Role.STORE_MANAGER || user.role === Role.STOREKEEPER) &&
+      user.scopeType === ScopeType.STORE &&
+      user.storeId
+    ) {
+      return { storeId: user.storeId };
+    }
+
+    return { id: '__no_visible_requests__' };
+  }
+
+  getTransactionVisibilityWhere(user: SafeUser) {
+    if (user.role === Role.ADMINISTRATOR || user.role === Role.AUDITOR) {
+      return {};
+    }
+
+    if (user.role === Role.REQUESTER) {
+      return {
+        request: { requesterId: user.id },
+      };
+    }
+
+    if (
+      (user.role === Role.STORE_MANAGER || user.role === Role.STOREKEEPER) &&
+      user.scopeType === ScopeType.GLOBAL
+    ) {
+      return {};
+    }
+
+    if (
+      (user.role === Role.STORE_MANAGER || user.role === Role.STOREKEEPER) &&
+      user.scopeType === ScopeType.STORE &&
+      user.storeId
+    ) {
+      return {
+        OR: [
+          { request: { storeId: user.storeId } },
+          { issuedBy: { storeId: user.storeId } },
+        ],
+      };
+    }
+
+    return { id: '__no_visible_transactions__' };
   }
 }

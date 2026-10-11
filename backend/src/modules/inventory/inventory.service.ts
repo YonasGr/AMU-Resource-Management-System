@@ -3,6 +3,8 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { TransactionType } from '@prisma/client';
 import { NotificationsService } from '../notifications/notifications.service';
 import { AuditService } from '../audit/audit.service';
+import { AccessControlService } from '../auth/access-control.service';
+import { SafeUser } from '../auth/decorators/current-user.decorator';
 import {
   AdjustmentDto,
   ReturnDto,
@@ -17,6 +19,7 @@ export class InventoryService {
     private readonly prisma: PrismaService,
     private readonly notifications: NotificationsService,
     private readonly auditService: AuditService,
+    private readonly accessControlService: AccessControlService,
   ) {}
 
   /** Emit a low-stock alert if stock has fallen below minimum */
@@ -349,14 +352,14 @@ export class InventoryService {
   }
 
   /** Get all inventory transactions with filter */
-  async findAllTransactions(query?: {
+  async findAllTransactions(user: SafeUser, query?: {
     type?: TransactionType;
     materialId?: string;
     departmentId?: string;
     employeeId?: string;
     supplierId?: string;
   }) {
-    const where: any = {};
+    const where: any = { ...this.accessControlService.getTransactionVisibilityWhere(user) };
     if (query?.type) where.type = query.type;
     if (query?.materialId) where.materialId = query.materialId;
     if (query?.departmentId) where.departmentId = query.departmentId;

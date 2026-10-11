@@ -3,7 +3,7 @@ import { InventoryService } from './inventory.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { AuditService } from '../audit/audit.service';
-import { BadRequestException, ConflictException, ForbiddenException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { Role, ScopeType, TransactionType, UserStatus } from '@prisma/client';
 import { AccessControlService } from '../auth/access-control.service';
 
@@ -453,15 +453,16 @@ describe('InventoryService', () => {
   });
 
   describe('transferMaterial()', () => {
-    it('should reject transfers until location-aware stock is implemented', async () => {
+    it('should reject transfers where source and destination stores match', async () => {
       await expect(
         service.transferMaterial('keeper-1', {
           materialId: 'mat-uuid-1',
+          sourceStoreId: 'legacy-store',
+          destinationStoreId: 'legacy-store',
           quantity: 10,
-          toDepartmentId: 'dept-ee',
           purpose: 'Faculty inter-department loan',
         }),
-      ).rejects.toThrow(ConflictException);
+      ).rejects.toThrow(BadRequestException);
 
       expect(prisma.material.findUnique).not.toHaveBeenCalled();
       expect(auditService.log).not.toHaveBeenCalled();

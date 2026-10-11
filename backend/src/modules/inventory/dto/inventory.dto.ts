@@ -123,14 +123,18 @@ export class TransferDto {
   @IsUUID()
   materialId!: string;
 
+  @IsUUID()
+  sourceStoreId!: string;
+
+  @IsUUID()
+  destinationStoreId!: string;
+
   @Type(() => Number)
   @IsInt()
   @Min(1)
   quantity!: number;
 
   @IsUUID()
-  toDepartmentId!: string;
-
   @IsString()
   @IsOptional()
   @IsNotEmpty()

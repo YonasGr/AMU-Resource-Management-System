@@ -137,6 +137,8 @@ Primary Prisma models are `Department`, `Store`, `User`, `Employee`, `Supplier`,
 
 `StockSummary` remains the aggregate compatibility balance while `StockBalance` records the authoritative material balance for a specific store. `StockBalance.reservedQuantity` protects approved request allocations from competing issues; available stock is remaining quantity minus reservations. Inventory mutations use the authenticated user's assigned store; global administrators must provide an explicit store.
 
+Inter-store movement uses `InventoryTransfer` documents. Creating a transfer records a `DRAFT`; dispatch atomically removes available stock from the source store and records a transfer transaction; receipt adds stock to the destination store and completes the document. Transfers cannot be created within the same store or consume reserved stock.
+
 For exact fields, relations, and enum values, see [`backend/prisma/schema.prisma`](backend/prisma/schema.prisma). The schema and migrations define persisted behavior; this summary is intentionally compact.
 
 ## Architecture and operation

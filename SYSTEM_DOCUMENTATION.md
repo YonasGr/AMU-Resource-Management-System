@@ -1,102 +1,171 @@
-# System documentation
+# AMU Store Inventory & Requisition Management System
 
-This document describes the system implemented in this repository. It is the source of truth for current product scope. The code and database schema remain authoritative when implementation details change.
+> **System manual · Current implementation**
+> Arba Minch University · Materials, store operations, and departmental requests
 
-## Purpose and scope
+This manual describes features represented in the current schema and application code. It is the product documentation source of truth; when code and prose differ, the implementation wins.
 
-The AMU Store Inventory and Requisition Management System supports day-to-day material-store operations at Arba Minch University. Its implemented workflow covers material catalog management, stock receipts and issues, departmental requests, approval, fulfillment, returns, stock adjustments, supplier and employee records, notifications, and reporting.
+<p>
+  <a href="https://nestjs.com/"><img alt="NestJS 10" src="https://img.shields.io/badge/API-NestJS_10-E0234E?logo=nestjs&logoColor=white"></a>
+  <a href="https://react.dev/"><img alt="React 18" src="https://img.shields.io/badge/Web-React_18-149ECA?logo=react&logoColor=white"></a>
+  <a href="https://www.prisma.io/"><img alt="Prisma 5" src="https://img.shields.io/badge/Data-Prisma_5-2D3748?logo=prisma&logoColor=white"></a>
+  <a href="https://www.postgresql.org/"><img alt="PostgreSQL 16" src="https://img.shields.io/badge/Database-PostgreSQL_16-4169E1?logo=postgresql&logoColor=white"></a>
+</p>
 
-It is a focused store-management application, not a complete ERP. The current schema does not implement purchase orders, goods-receipt documents, distribution plans, individually tracked fixed assets, borrowing, maintenance, or disposal workflows.
+## Contents
 
-### Current multi-store limitation
+- [Purpose and boundaries](#purpose-and-boundaries)
+- [Operational workflow](#operational-workflow)
+- [Inventory rules](#inventory-rules)
+- [Roles and access](#roles-and-access)
+- [Application map](#application-map)
+- [Reports and API](#reports-and-api)
+- [Data model](#data-model)
+- [Architecture and operation](#architecture-and-operation)
 
-The database has `Store` records and requests may refer to a store. However, `StockSummary` has one row per material, and inventory transactions do not identify a source or destination store. Therefore stock balances are currently material-wide, not independently maintained per store. Store-scoped request approval does not make the stock ledger multi-store.
+## Purpose and boundaries
 
-## Main user workflow
+The system supports university store operations: maintaining a material catalog, recording stock activity, handling department requests, and reviewing operational reports.
 
-1. A store manager maintains material categories and the material catalog.
-2. A requester submits a material request with a department, purpose, and requested quantities. New requests start as `PENDING`.
-3. A store manager approves or rejects a pending request. The approval service checks the request's store scope using `AccessControlService`.
-4. A storekeeper issues an approved request. Issuance checks available stock and, in one database transaction, records stock-out transactions, updates balances and issued quantities, and marks the request `ISSUED`.
-5. Inventory transactions, audit log entries, notifications, and reports provide operational history and oversight.
+### Included today
 
-Requests use these statuses: `PENDING`, `APPROVED`, `REJECTED`, `ISSUED`, and `CANCELLED`.
+- Material categories and catalog records
+- Stock-in, stock-out, returns, adjustments, and transaction history
+- Department material requests, manager decisions, and storekeeper issuance
+- Supplier, employee, and department records
+- Low-stock reporting, notifications, audit logs, and dashboard metrics
 
-## Inventory behavior
+### Not implemented in the current schema
 
-Materials have a unique code, category, unit, minimum-stock threshold, optional location and barcode, and active/inactive status. `StockSummary` stores received, issued, and remaining quantities for each material.
+Purchase orders, goods-receipt documents, distribution plans, individually tracked fixed assets, borrowing, maintenance, and disposal are not part of the current application. Older project notes described these as completed; that description was inaccurate.
 
-The supported transaction types are `STOCK_IN`, `STOCK_OUT`, `RETURN`, `ADJUSTMENT`, and `TRANSFER`.
+> [!WARNING]
+> **Store records do not currently mean separate store stock.** `Store` exists and requests may reference a store, but `StockSummary` is unique per material. Inventory transactions also have no source-store or destination-store fields. The balance is therefore material-wide, not maintained independently for each store.
 
-- Stock-in adds to received and remaining quantities and can reference a supplier and unit price.
-- Stock-out records an issue and subtracts from remaining quantity, subject to an availability check.
-- Returns are tied to an already issued request item and cannot exceed its outstanding issued quantity.
-- Adjustments set the remaining quantity to a supplied physical count and record the reason in transaction remarks.
-- The transfer endpoint records a `TRANSFER` transaction and department destination, but currently does not move quantities between separate store balances or update the material's `StockSummary`.
+## Operational workflow
 
-Stock-in, stock-out, return, adjustment, and request issuance update the transaction record and stock summary together in database transactions. Audit logs are separate records; they are not described as immutable or tamper-proof.
+```mermaid
+flowchart LR
+    A[Manager maintains catalog] --> B[Stock is received]
+    C[Requester submits material request] --> D{Manager approves?}
+    D -->|No| E[Request rejected]
+    D -->|Yes| F[Storekeeper issues request]
+    B --> G[Material stock summary]
+    F --> G
+    G --> H[Transaction history and reports]
+    D --> I[Audit event and notification]
+    F --> I
+```
+
+1. A requester submits a request with a purpose, department, and material quantities. It starts as `PENDING`.
+2. A store manager approves or rejects it. Approval is limited by the store-scope check in `RequestsService`.
+3. A storekeeper issues an approved request. The service checks stock, records each stock-out, updates quantities, and changes the request to `ISSUED` within a database transaction.
+4. The system records audit events and sends notifications for key request and inventory events.
+
+Request statuses are `PENDING`, `APPROVED`, `REJECTED`, `ISSUED`, and `CANCELLED`.
+
+## Inventory rules
+
+Materials have a unique material code, category, unit, minimum-stock threshold, optional location and barcode, and active/inactive status. `StockSummary` holds received, issued, and remaining quantities for each material.
+
+| Transaction | Implemented effect |
+|---|---|
+| `STOCK_IN` | Creates a transaction and increases received and remaining quantities. Supplier and unit price may be recorded. |
+| `STOCK_OUT` | Creates a transaction, increases the issued total, and decreases remaining quantity after checking that sufficient stock is available. |
+| `RETURN` | Accepts a return against an issued request item, capped at the quantity still eligible for return; decreases the issued total and increases remaining quantity. |
+| `ADJUSTMENT` | Sets remaining quantity to the submitted physical count and records the reason in the transaction remarks. |
+| `TRANSFER` | Records a transfer transaction and department destination. It does **not** update `StockSummary` or move quantities between store balances. |
+
+Stock-in, stock-out, return, adjustment, and request issuance write their transaction and quantity changes together in database transactions. Audit logs are separate operational records; they are not immutable or tamper-proof by design.
 
 ## Roles and access
 
-The schema defines five roles:
+The schema defines five roles. This table summarizes their main intended work; it is not a complete endpoint-by-endpoint permission matrix.
 
-| Role | Implemented responsibility |
+| Role | Main responsibility |
 |---|---|
-| `ADMINISTRATOR` | Manages user accounts and departments; also has access to selected inventory and request operations. |
-| `STORE_MANAGER` | Manages material catalog records, approves or rejects requests, and can perform inventory operations. |
-| `STOREKEEPER` | Performs inventory operations and issues approved requests. |
+| `ADMINISTRATOR` | User and department administration; can also perform selected inventory operations and request decisions. |
+| `STORE_MANAGER` | Material catalog management, request decisions, supplier management, and inventory operations. |
+| `STOREKEEPER` | Inventory operations and issuance of approved requests. |
 | `REQUESTER` | Submits material requests and follows their status. |
-| `AUDITOR` | Reads audit logs and reports. |
+| `AUDITOR` | Reads audit records and operational reports. |
 
-JWT authentication is applied globally, with selected routes marked public (including login, refresh, and registration). `RolesGuard` enforces route-level role metadata. Store approval scope is checked in `RequestsService`; it permits administrators, globally scoped store managers, or store-scoped managers whose store matches the target. `ScopeType` also includes `ORGANIZATION`, but do not assume every endpoint filters records by scope: list and detail routes must be reviewed individually in code.
+JWT authentication is global, with login, refresh, and registration marked public. `RolesGuard` applies role restrictions where controllers declare them. The request approval service additionally checks store scope: administrators are allowed; a store manager needs `GLOBAL` scope or a matching `STORE` scope. `ORGANIZATION` exists as a scope type, but do not infer that all list and detail APIs filter data by scope.
 
-## Implemented modules
+## Application map
 
-Backend modules under `backend/src/modules/`:
+### Backend modules
 
-- `auth`: login, refresh, registration, current-user endpoint, JWT guards, and access checks
-- `users`: administrator-managed user accounts
-- `employees`: departments, employee records, and issue history
-- `materials`: categories and material catalog
-- `inventory`: stock operations and transaction history
-- `requests`: request submission, decision, and issuance
-- `suppliers`: supplier directory
-- `reports`: stock, movement, low-stock, employee, supplier, and transaction reports
-- `audit`: audit-log viewing
-- `notifications`: per-user inbox and read state
-- `dashboard`: inventory summary metrics
+| Module | Responsibility |
+|---|---|
+| `auth` | Login, refresh, registration, current user, JWT guards, access checks |
+| `users` | User account administration |
+| `employees` | Departments, employees, issue history |
+| `materials` | Categories and material catalog |
+| `inventory` | Stock operations and transaction ledger |
+| `requests` | Request submission, decisions, and issuance |
+| `suppliers` | Supplier directory |
+| `reports` | Operational stock and activity reports |
+| `audit` | Audit-log queries |
+| `notifications` | User inbox and read state |
+| `dashboard` | Inventory summary metrics |
 
-The frontend is a React single-page application. Current main routes are `/login`, `/`, `/materials`, `/requests`, `/inventory`, `/employees`, `/suppliers`, `/reports`, and `/users`.
+### Frontend routes
 
-## Reports
+The main routes are `/login`, `/`, `/materials`, `/requests`, `/inventory`, `/employees`, `/suppliers`, `/reports`, and `/users`.
 
-The reports module exposes:
+## Reports and API
 
-- `GET /reports/current-stock`
-- `GET /reports/stock-in`
-- `GET /reports/stock-out`
-- `GET /reports/material-balance`
-- `GET /reports/low-stock`
-- `GET /reports/employee-issue`
-- `GET /reports/supplier`
-- `GET /reports/transaction-history`
+The reports API exposes the following endpoints:
 
-The frontend provides report views and export/print actions. These reports are operational inventory summaries; they are not financial valuation reports.
+| Endpoint | Report |
+|---|---|
+| `GET /reports/current-stock` | Current material balances |
+| `GET /reports/stock-in` | Receipts |
+| `GET /reports/stock-out` | Issues |
+| `GET /reports/material-balance` | Received, issued, remaining, and low-stock status |
+| `GET /reports/low-stock` | Materials at or below their minimum threshold |
+| `GET /reports/employee-issue` | Issues by employee |
+| `GET /reports/supplier` | Supplier and recorded supply summary |
+| `GET /reports/transaction-history` | Inventory transaction history |
+
+The frontend provides report views and export/print actions. These are operational inventory reports, not financial valuation reports.
 
 ## Data model
 
-The primary records are `Department`, `Store`, `User`, `Employee`, `Supplier`, `MaterialCategory`, `Material`, `StockSummary`, `MaterialRequest`, `MaterialRequestItem`, `InventoryTransaction`, `AuditLog`, and `Notification`. See `backend/prisma/schema.prisma` for fields, relationships, enums, and migration-backed schema.
+Primary Prisma models are `Department`, `Store`, `User`, `Employee`, `Supplier`, `MaterialCategory`, `Material`, `StockSummary`, `MaterialRequest`, `MaterialRequestItem`, `InventoryTransaction`, `AuditLog`, and `Notification`.
 
-## Architecture and local operation
+For exact fields, relations, and enum values, see [`backend/prisma/schema.prisma`](backend/prisma/schema.prisma). The schema and migrations define persisted behavior; this summary is intentionally compact.
 
-- Frontend: React, TypeScript, Vite, Tailwind CSS, TanStack Query, Zustand
-- Backend: NestJS and TypeScript, with Prisma ORM
-- Persistence: PostgreSQL
-- Redis: login rate limiting and related cache services
-- Local services: Docker Compose; Nginx is included as a reverse proxy
+## Architecture and operation
 
-Start the development stack with `docker compose up -d --build`. The backend container generates the Prisma client, deploys checked-in migrations, seeds demo data, and starts the development server. Local URLs and shutdown instructions are in [README.md](README.md). Production Compose uses `docker-compose.prod.yml` and `backend/.env`; provide production secrets and database settings there. Railway build configuration is in `backend/railway.json` and `frontend/railway.json`; deployment behavior depends on the variables configured in Railway.
+```mermaid
+flowchart LR
+    Browser[Staff browser] --> Web[React + Vite]
+    Web -->|REST API / JWT| API[NestJS]
+    API --> Prisma[Prisma ORM]
+    Prisma --> DB[(PostgreSQL)]
+    API --> Redis[(Redis)]
+    Proxy[Nginx reverse proxy] -. optional entry point .-> Web
+    Proxy -. optional entry point .-> API
+```
 
-## Keeping this document accurate
+| Layer | Technology |
+|---|---|
+| Web client | React 18, TypeScript, Vite, Tailwind CSS, TanStack Query, Zustand |
+| API | NestJS 10, TypeScript, Prisma ORM |
+| Database | PostgreSQL 16 |
+| Cache / rate-limit support | Redis 7 |
+| Local orchestration | Docker Compose and Nginx |
 
-When a feature changes, update this document only after checking its database model, backend service/controller, and frontend route or screen as applicable. Do not document planned features as implemented. Keep historical requests or project plans out of the current product specification.
+Start the development stack with `docker compose up -d --build`. It starts the database, Redis, API, web client, and reverse proxy. The backend container generates Prisma Client, applies checked-in migrations, seeds development data, and starts the API.
+
+- Web client: <http://localhost:5173> or <http://localhost:8080>
+- API: <http://localhost:3000>
+- Swagger: <http://localhost:3000/api/docs>
+
+Stop services while retaining the database volume with `docker compose down`. Production configuration is in `docker-compose.prod.yml`, production Dockerfiles, and the Railway JSON files. Configure production database credentials, strong JWT secrets, and seed passwords before deployment. See [`README.md`](README.md) for the quick start.
+
+---
+
+<sub>Documentation maintenance: update this manual only after checking the relevant schema, backend service/controller, and frontend screen or route. Keep future plans separate from implemented behavior.</sub>

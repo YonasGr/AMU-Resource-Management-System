@@ -1,39 +1,112 @@
-# AMU Store Inventory and Requisition Management System
+<div align="center">
+  <img src="frontend/public/amu-logo.png" alt="Arba Minch University emblem" width="118" />
+  <h1>AMU Store Inventory &amp; Requisition Management System</h1>
+  <p><strong>Material-store operations for Arba Minch University</strong></p>
+  <p>Catalog materials · Track stock · Review requests · Record issues · Report activity</p>
 
-A web application for managing university store materials, stock movements, departmental material requests, approvals, and audit reports. It is built for Arba Minch University.
+  <a href="https://react.dev/"><img alt="React 18.3" src="https://img.shields.io/badge/React-18.3-149ECA?logo=react&logoColor=white"></a>
+  <a href="https://vite.dev/"><img alt="Vite 5.4" src="https://img.shields.io/badge/Vite-5.4-646CFF?logo=vite&logoColor=white"></a>
+  <a href="https://www.typescriptlang.org/"><img alt="TypeScript 5.5" src="https://img.shields.io/badge/TypeScript-5.5-3178C6?logo=typescript&logoColor=white"></a>
+  <a href="https://tailwindcss.com/"><img alt="Tailwind CSS 3.4" src="https://img.shields.io/badge/Tailwind_CSS-3.4-06B6D4?logo=tailwindcss&logoColor=white"></a>
+  <br />
+  <a href="https://nestjs.com/"><img alt="NestJS 10" src="https://img.shields.io/badge/NestJS-10-E0234E?logo=nestjs&logoColor=white"></a>
+  <a href="https://www.prisma.io/"><img alt="Prisma 5" src="https://img.shields.io/badge/Prisma-5-2D3748?logo=prisma&logoColor=white"></a>
+  <a href="https://www.postgresql.org/"><img alt="PostgreSQL 16" src="https://img.shields.io/badge/PostgreSQL-16-4169E1?logo=postgresql&logoColor=white"></a>
+  <a href="https://redis.io/"><img alt="Redis 7" src="https://img.shields.io/badge/Redis-7-DC382D?logo=redis&logoColor=white"></a>
+  <a href="https://docs.docker.com/compose/"><img alt="Docker Compose" src="https://img.shields.io/badge/Run-Docker_Compose-2496ED?logo=docker&logoColor=white"></a>
+</div>
 
-The application currently focuses on consumable materials and store operations. It is not a full university ERP or fixed-asset lifecycle system. See [SYSTEM_DOCUMENTATION.md](SYSTEM_DOCUMENTATION.md) for the verified scope, workflows, roles, data model, and known limitations.
+---
+
+## What it does
+
+This is a web-based **university store inventory and material requisition system**. Staff request materials, store managers review requests, and storekeepers record stock operations and issue approved requests. Audit records, notifications, and reports support day-to-day oversight.
+
+> [!IMPORTANT]
+> The current application is focused on materials and store operations. It is **not** a full university ERP or a fixed-asset lifecycle system. The manual documents important implementation limits, including material-wide stock balances and transfer records that do not currently adjust stock.
+
+[Read the system manual →](SYSTEM_DOCUMENTATION.md)
+
+## The main workflow
+
+```mermaid
+flowchart LR
+    A[Material catalog] --> B[Stock received]
+    B --> C[Department requests material]
+    C --> D{Manager decision}
+    D -->|Rejected| E[Requester notified]
+    D -->|Approved| F[Storekeeper issues items]
+    F --> G[Transaction and stock balance updated]
+    G --> H[Audit, reports, notifications]
+```
+
+## Features
+
+| Area | What’s available |
+|---|---|
+| Materials | Categories, unique material codes, units, locations, barcodes, and minimum-stock thresholds |
+| Inventory | Stock-in, stock-out, request-linked returns, physical-count adjustments, and transaction history |
+| Requisitions | Department requests with pending, approved, rejected, issued, and cancelled statuses |
+| People & suppliers | Department and employee directory, supplier records, and issue history |
+| Oversight | Low-stock alerts, in-app notifications, audit logs, dashboard metrics, and eight operational reports |
+| Access | JWT authentication, five roles, role guards, and store-scope checks on request decisions |
 
 ## Run locally
 
-Requirements: Docker with Compose.
+**Requirements:** Docker with Compose.
 
 ```bash
 docker compose up -d --build
 ```
 
-The development Compose setup starts PostgreSQL, Redis, the NestJS API, the React web app, and Nginx. It applies database migrations and runs the seed script when the backend starts.
+Compose starts PostgreSQL, Redis, the NestJS API, the React web app, and Nginx. The backend container generates the Prisma client, applies migrations, seeds development data, and starts the API.
 
-- Web app: <http://localhost:5173> or <http://localhost:8080>
-- API: <http://localhost:3000>
-- Swagger: <http://localhost:3000/api/docs>
+| Open | Address |
+|---|---|
+| Web app | [localhost:5173](http://localhost:5173) or [localhost:8080](http://localhost:8080) |
+| API | [localhost:3000](http://localhost:3000) |
+| Swagger | [localhost:3000/api/docs](http://localhost:3000/api/docs) |
 
-To stop the services while keeping the database volume:
+Stop the services and keep the database volume:
 
 ```bash
 docker compose down
 ```
 
-Seeded demo accounts are created by `backend/prisma/seed.ts`. Set the `SEED_*_PASSWORD` variables as described in `backend/.env.example`; do not rely on development defaults for a deployed environment.
+Seeded accounts are defined by `backend/prisma/seed.ts`. See `backend/.env.example` for the seed-password variables. Do not use development fallback credentials in a deployed environment.
 
-## Main components
+## Architecture
 
-- `frontend/`: React, TypeScript, Vite, Tailwind CSS
-- `backend/`: NestJS, TypeScript, Prisma
-- Database: PostgreSQL
-- Cache and login rate limits: Redis
-- Local orchestration: Docker Compose
+```mermaid
+flowchart TB
+    U[University staff] --> UI[React + Vite web app]
+    UI -->|REST / JWT| API[NestJS API]
+    API --> ORM[Prisma]
+    ORM --> DB[(PostgreSQL)]
+    API --> R[(Redis)]
+    N[Nginx reverse proxy] -. optional entry point .-> UI
+    N -. optional entry point .-> API
+```
 
-## Production configuration
+<details>
+<summary><strong>Repository map</strong></summary>
 
-The repository includes `docker-compose.prod.yml`, production Dockerfiles, and Railway configuration files. Before deploying, configure real database credentials, strong JWT secrets, and explicit seed passwords. Do not use development fallback credentials in a deployed environment. The old step-by-step Railway guide was removed because it contained conflicting and unsafe setup advice.
+| Path | Responsibility |
+|---|---|
+| `frontend/` | React, TypeScript, Vite, and Tailwind CSS application |
+| `backend/` | NestJS API, Prisma schema, migrations, and seed data |
+| `infra/nginx/` | Local and production Nginx configuration |
+| `docker-compose.yml` | Local development stack |
+| `docker-compose.prod.yml` | Production Compose stack |
+
+</details>
+
+## Production
+
+The repository includes production Dockerfiles, a production Compose file, and Railway build configuration. Before deployment, configure production database credentials, strong JWT secrets, and explicit seed passwords. Review the deployment configuration and [system manual](SYSTEM_DOCUMENTATION.md) before exposing the app.
+
+---
+
+<div align="center">
+  <sub>Built for Arba Minch University · Source code and database schema define the implemented behavior</sub>
+</div>

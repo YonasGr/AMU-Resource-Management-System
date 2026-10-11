@@ -28,6 +28,19 @@ export interface UpdateMaterialDto {
 export class MaterialsService {
   constructor(private readonly prisma: PrismaService) {}
 
+  private aggregateBalances<T extends { quantityReceived: number; quantityIssued: number; remainingQuantity: number }>(
+    balances: T[],
+  ) {
+    return balances.reduce(
+      (summary, balance) => ({
+        quantityReceived: summary.quantityReceived + balance.quantityReceived,
+        quantityIssued: summary.quantityIssued + balance.quantityIssued,
+        remainingQuantity: summary.remainingQuantity + balance.remainingQuantity,
+      }),
+      { quantityReceived: 0, quantityIssued: 0, remainingQuantity: 0 },
+    );
+  }
+
   async createCategory(name: string, description?: string) {
     const existing = await this.prisma.materialCategory.findUnique({ where: { name } });
     if (existing) {
@@ -110,18 +123,19 @@ export class MaterialsService {
       where,
       include: {
         category: true,
-        stockSummary: true,
+        stockBalances: true,
       },
       orderBy: { name: 'asc' },
     });
 
-    if (query?.lowStockOnly) {
-      return materials.filter(
-        (m) => (m.stockSummary?.remainingQuantity ?? 0) <= m.minimumStock,
-      );
-    }
+    const withAggregateBalances = materials.map(({ stockBalances, ...material }) => ({
+      ...material,
+      stockSummary: this.aggregateBalances(stockBalances),
+    }));
 
-    return materials;
+    return query?.lowStockOnly
+      ? withAggregateBalances.filter((m) => m.stockSummary.remainingQuantity <= m.minimumStock)
+      : withAggregateBalances;
   }
 
   async findOne(id: string) {
@@ -129,7 +143,7 @@ export class MaterialsService {
       where: { id },
       include: {
         category: true,
-        stockSummary: true,
+        stockBalances: true,
         transactions: {
           take: 10,
           orderBy: { createdAt: 'desc' },
@@ -145,7 +159,11 @@ export class MaterialsService {
     if (!material) {
       throw new NotFoundException(`Material with ID ${id} not found`);
     }
-    return material;
+    const { stockBalances, ...materialWithoutBalances } = material;
+    return {
+      ...materialWithoutBalances,
+      stockSummary: this.aggregateBalances(stockBalances),
+    };
   }
 
   async update(id: string, dto: UpdateMaterialDto) {
@@ -154,14 +172,19 @@ export class MaterialsService {
       throw new NotFoundException(`Material ${id} not found`);
     }
 
-    return this.prisma.material.update({
+    const updated = await this.prisma.material.update({
       where: { id },
       data: dto,
       include: {
         category: true,
-        stockSummary: true,
+        stockBalances: true,
       },
     });
+    const { stockBalances, ...materialWithoutBalances } = updated;
+    return {
+      ...materialWithoutBalances,
+      stockSummary: this.aggregateBalances(stockBalances),
+    };
   }
 
   async delete(id: string) {

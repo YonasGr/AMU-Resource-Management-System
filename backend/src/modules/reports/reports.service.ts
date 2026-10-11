@@ -7,15 +7,16 @@ export class ReportsService {
 
   /** 1. Current Stock Report */
   async getCurrentStockReport() {
-    return this.prisma.material.findMany({
+    const materials = await this.prisma.material.findMany({
       select: {
+        id: true,
         materialCode: true,
         name: true,
         unit: true,
         location: true,
         minimumStock: true,
         category: { select: { name: true } },
-        stockSummary: {
+        stockBalances: {
           select: {
             quantityReceived: true,
             quantityIssued: true,
@@ -25,6 +26,18 @@ export class ReportsService {
       },
       orderBy: { name: 'asc' },
     });
+
+    return materials.map(({ stockBalances, ...material }) => ({
+      ...material,
+      stockSummary: stockBalances.reduce(
+        (summary, balance) => ({
+          quantityReceived: summary.quantityReceived + balance.quantityReceived,
+          quantityIssued: summary.quantityIssued + balance.quantityIssued,
+          remainingQuantity: summary.remainingQuantity + balance.remainingQuantity,
+        }),
+        { quantityReceived: 0, quantityIssued: 0, remainingQuantity: 0 },
+      ),
+    }));
   }
 
   /** 2. Stock In Report */
@@ -60,7 +73,7 @@ export class ReportsService {
     const materials = await this.prisma.material.findMany({
       include: {
         category: true,
-        stockSummary: true,
+        stockBalances: true,
       },
       orderBy: { name: 'asc' },
     });
@@ -70,11 +83,11 @@ export class ReportsService {
       materialName: m.name,
       category: m.category.name,
       unit: m.unit,
-      quantityReceived: m.stockSummary?.quantityReceived ?? 0,
-      quantityIssued: m.stockSummary?.quantityIssued ?? 0,
-      remainingQuantity: m.stockSummary?.remainingQuantity ?? 0,
+      quantityReceived: m.stockBalances.reduce((sum, balance) => sum + balance.quantityReceived, 0),
+      quantityIssued: m.stockBalances.reduce((sum, balance) => sum + balance.quantityIssued, 0),
+      remainingQuantity: m.stockBalances.reduce((sum, balance) => sum + balance.remainingQuantity, 0),
       status:
-        (m.stockSummary?.remainingQuantity ?? 0) <= m.minimumStock
+        m.stockBalances.reduce((sum, balance) => sum + balance.remainingQuantity, 0) <= m.minimumStock
           ? 'LOW_STOCK'
           : 'HEALTHY',
     }));
@@ -85,22 +98,26 @@ export class ReportsService {
     const materials = await this.prisma.material.findMany({
       include: {
         category: true,
-        stockSummary: true,
+        stockBalances: true,
       },
       orderBy: { name: 'asc' },
     });
 
     return materials
-      .filter((m) => (m.stockSummary?.remainingQuantity ?? 0) <= m.minimumStock)
       .map((m) => ({
-        materialCode: m.materialCode,
-        name: m.name,
-        category: m.category.name,
-        unit: m.unit,
-        minimumStock: m.minimumStock,
-        remainingQuantity: m.stockSummary?.remainingQuantity ?? 0,
-        reorderShortage: m.minimumStock - (m.stockSummary?.remainingQuantity ?? 0),
-        location: m.location,
+        material: m,
+        remainingQuantity: m.stockBalances.reduce((sum, balance) => sum + balance.remainingQuantity, 0),
+      }))
+      .filter(({ material, remainingQuantity }) => remainingQuantity <= material.minimumStock)
+      .map((m) => ({
+        materialCode: m.material.materialCode,
+        name: m.material.name,
+        category: m.material.category.name,
+        unit: m.material.unit,
+        minimumStock: m.material.minimumStock,
+        remainingQuantity: m.remainingQuantity,
+        reorderShortage: m.material.minimumStock - m.remainingQuantity,
+        location: m.material.location,
       }));
   }
 

@@ -82,12 +82,19 @@ export class RequestsService {
     return request;
   }
 
-  async findAll(query?: { status?: RequestStatus; requesterId?: string; departmentId?: string; storeId?: string }) {
-    const where: any = {};
-    if (query?.status) where.status = query.status;
-    if (query?.requesterId) where.requesterId = query.requesterId;
-    if (query?.departmentId) where.departmentId = query.departmentId;
-    if (query?.storeId) where.storeId = query.storeId;
+  async findAll(
+    user: SafeUser,
+    query?: { status?: RequestStatus; requesterId?: string; departmentId?: string; storeId?: string },
+  ) {
+    const filters: Record<string, string> = {};
+    if (query?.status) filters.status = query.status;
+    if (query?.requesterId) filters.requesterId = query.requesterId;
+    if (query?.departmentId) filters.departmentId = query.departmentId;
+    if (query?.storeId) filters.storeId = query.storeId;
+    const visibility = this.accessControlService.getRequestVisibilityWhere(user);
+    const where: any = Object.keys(filters).length
+      ? { AND: [visibility, filters] }
+      : visibility;
 
     return this.prisma.materialRequest.findMany({
       where,
@@ -106,7 +113,7 @@ export class RequestsService {
     });
   }
 
-  async findOne(id: string) {
+  async findOne(id: string, user: SafeUser) {
     const request = await this.prisma.materialRequest.findUnique({
       where: { id },
       include: {
@@ -128,7 +135,7 @@ export class RequestsService {
         },
       },
     });
-    if (!request) {
+    if (!request || !this.accessControlService.canViewRequest(user, request)) {
       throw new NotFoundException(`Material request ${id} not found`);
     }
     return request;
@@ -199,7 +206,7 @@ export class RequestsService {
   }
 
   /** Storekeeper issues materials for an approved request */
-  async issueItems(id: string, storekeeperId: string, employeeId?: string, remarks?: string) {
+  async issueItems(id: string, user: SafeUser, employeeId?: string, remarks?: string) {
     const request = await this.prisma.materialRequest.findUnique({
       where: { id },
       include: {
@@ -214,6 +221,10 @@ export class RequestsService {
     });
 
     if (!request) {
+      throw new NotFoundException(`Request ${id} not found`);
+    }
+
+    if (!this.accessControlService.canViewRequest(user, request)) {
       throw new NotFoundException(`Request ${id} not found`);
     }
 
@@ -257,7 +268,7 @@ export class RequestsService {
             requestItemId: item.id,
             departmentId: request.departmentId,
             employeeId: employeeId || null,
-            issuedById: storekeeperId,
+            issuedById: user.id,
             approvedById: request.approvedById,
             purpose: request.purpose,
             remarks: remarks || `Issued for Request ${request.requestNumber}`,
@@ -288,7 +299,7 @@ export class RequestsService {
 
     // Log Audit Event
     await this.auditService.log(
-      storekeeperId,
+      user.id,
       'ISSUE_REQUEST',
       'REQUESTS',
       `Storekeeper fulfilled and issued materials for request ${request.requestNumber} (${request.items.length} item line(s))`,

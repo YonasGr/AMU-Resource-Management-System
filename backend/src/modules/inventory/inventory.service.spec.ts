@@ -4,7 +4,8 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { AuditService } from '../audit/audit.service';
 import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
-import { TransactionType } from '@prisma/client';
+import { Role, ScopeType, TransactionType, UserStatus } from '@prisma/client';
+import { AccessControlService } from '../auth/access-control.service';
 
 describe('InventoryService', () => {
   let service: InventoryService;
@@ -90,6 +91,7 @@ describe('InventoryService', () => {
             log: jest.fn().mockResolvedValue({ id: 'audit-1' }),
           },
         },
+        AccessControlService,
       ],
     }).compile();
 
@@ -425,6 +427,18 @@ describe('InventoryService', () => {
       prisma.inventoryTransaction.findMany.mockResolvedValue(mockTxns);
 
       const result = await service.findAllTransactions({
+        id: 'manager-1',
+        fullName: 'Global Manager',
+        email: 'manager@example.com',
+        phone: null,
+        role: Role.STORE_MANAGER,
+        status: UserStatus.ACTIVE,
+        scopeType: ScopeType.GLOBAL,
+        departmentId: null,
+        storeId: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      }, {
         type: TransactionType.STOCK_IN,
         materialId: 'mat-uuid-1',
       });
@@ -443,7 +457,19 @@ describe('InventoryService', () => {
     it('should query all transactions without filter if query is empty', async () => {
       prisma.inventoryTransaction.findMany.mockResolvedValue([]);
 
-      const result = await service.findAllTransactions();
+      const result = await service.findAllTransactions({
+        id: 'manager-1',
+        fullName: 'Global Manager',
+        email: 'manager@example.com',
+        phone: null,
+        role: Role.STORE_MANAGER,
+        status: UserStatus.ACTIVE,
+        scopeType: ScopeType.GLOBAL,
+        departmentId: null,
+        storeId: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
 
       expect(result).toEqual([]);
       expect(prisma.inventoryTransaction.findMany).toHaveBeenCalledWith({

@@ -12,6 +12,7 @@ import {
   TransferDto,
 } from './dto/inventory.dto';
 import { Roles } from '../auth/decorators/roles.decorator';
+import { CurrentUser, SafeUser } from '../auth/decorators/current-user.decorator';
 
 @ApiTags('inventory')
 @ApiBearerAuth()
@@ -57,13 +58,14 @@ export class InventoryController {
   @Get('transactions')
   @ApiOperation({ summary: 'View Transaction History Ledger (UC16)' })
   findAllTransactions(
+    @CurrentUser() user: SafeUser,
     @Query('type') type?: string,
     @Query('materialId') materialId?: string,
     @Query('departmentId') departmentId?: string,
     @Query('employeeId') employeeId?: string,
     @Query('supplierId') supplierId?: string,
   ) {
-    return this.inventoryService.findAllTransactions({
+    return this.inventoryService.findAllTransactions(user, {
       type: type as any,
       materialId,
       departmentId,

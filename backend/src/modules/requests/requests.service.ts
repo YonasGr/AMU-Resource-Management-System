@@ -246,9 +246,14 @@ export class RequestsService {
       let itemSeq = 1;
 
       for (const item of request.items) {
-        const decremented = await tx.stockSummary.updateMany({
+        if (!request.storeId) {
+          throw new BadRequestException('The approved request is not assigned to a store');
+        }
+
+        const decremented = await tx.stockBalance.updateMany({
           where: {
             materialId: item.materialId,
+            storeId: request.storeId,
             remainingQuantity: { gte: item.quantityRequested },
           },
           data: {
@@ -263,6 +268,17 @@ export class RequestsService {
           );
         }
 
+        await tx.stockSummary.updateMany({
+          where: {
+            materialId: item.materialId,
+            remainingQuantity: { gte: item.quantityRequested },
+          },
+          data: {
+            quantityIssued: { increment: item.quantityRequested },
+            remainingQuantity: { decrement: item.quantityRequested },
+          },
+        });
+
         const txnCode = `TXN-OUT-${timeStamp}-${String(itemSeq++).padStart(3, '0')}`;
 
         // Create Stock Out Transaction
@@ -274,6 +290,7 @@ export class RequestsService {
             quantity: item.quantityRequested,
             requestId: request.id,
             requestItemId: item.id,
+            storeId: request.storeId,
             departmentId: request.departmentId,
             employeeId: employeeId || null,
             issuedById: user.id,

@@ -3,7 +3,7 @@ import { InventoryService } from './inventory.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { AuditService } from '../audit/audit.service';
-import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { Role, ScopeType, TransactionType, UserStatus } from '@prisma/client';
 import { AccessControlService } from '../auth/access-control.service';
 
@@ -42,6 +42,14 @@ describe('InventoryService', () => {
         findUnique: jest.fn(),
         updateMany: jest.fn().mockResolvedValue({ count: 1 }),
       },
+      stockBalance: {
+        upsert: jest.fn().mockResolvedValue({}),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+        update: jest.fn().mockResolvedValue({}),
+        findUnique: jest.fn().mockResolvedValue({
+          remainingQuantity: 30,
+        }),
+      },
       stockSummary: {
         upsert: jest.fn().mockResolvedValue({
           id: 'summary-uuid-1',
@@ -58,6 +66,7 @@ describe('InventoryService', () => {
         })),
       },
     };
+    mockTx.stockBalance.updateMany = mockTx.stockSummary.updateMany;
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -70,6 +79,9 @@ describe('InventoryService', () => {
             },
             materialRequestItem: {
               findUnique: jest.fn(),
+            },
+            stockBalance: {
+              findUnique: jest.fn().mockResolvedValue({ remainingQuantity: 30 }),
             },
             inventoryTransaction: {
               findMany: jest.fn(),
@@ -106,6 +118,38 @@ describe('InventoryService', () => {
   });
 
   describe('stockIn()', () => {
+    it('requires a store for global administrators', async () => {
+      await expect(
+        service.stockIn(
+          {
+            id: 'admin-1',
+            role: 'ADMINISTRATOR',
+            scopeType: 'GLOBAL',
+            storeId: null,
+          } as any,
+          { materialId: 'mat-uuid-1', quantity: 1 },
+        ),
+      ).rejects.toThrow(BadRequestException);
+
+      expect(prisma.material.findUnique).not.toHaveBeenCalled();
+    });
+
+    it('rejects store-scoped users attempting to mutate another store', async () => {
+      await expect(
+        service.stockIn(
+          {
+            id: 'keeper-1',
+            role: 'STOREKEEPER',
+            scopeType: 'STORE',
+            storeId: 'store-a',
+          } as any,
+          { materialId: 'mat-uuid-1', quantity: 1, storeId: 'store-b' },
+        ),
+      ).rejects.toThrow(ForbiddenException);
+
+      expect(prisma.material.findUnique).not.toHaveBeenCalled();
+    });
+
     it('should successfully record stock in, update stock summary, notify and audit', async () => {
       prisma.material.findUnique.mockResolvedValue(mockMaterial);
 
@@ -277,6 +321,7 @@ describe('InventoryService', () => {
           requestNumber: 'REQ-2026-0001',
           status: 'ISSUED',
           departmentId: 'dept-cs',
+          storeId: 'legacy-store',
         },
         material: mockMaterial,
       });

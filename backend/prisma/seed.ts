@@ -444,6 +444,26 @@ async function main() {
     },
   });
 
+  const seededBalances = [
+    { materialId: matPaper.id, quantityReceived: 100, quantityIssued: 15, remainingQuantity: 85 },
+    { materialId: matPen.id, quantityReceived: 50, quantityIssued: 10, remainingQuantity: 40 },
+    { materialId: matCable.id, quantityReceived: 10, quantityIssued: 8, remainingQuantity: 2 },
+    { materialId: matToner.id, quantityReceived: 25, quantityIssued: 5, remainingQuantity: 20 },
+    { materialId: matChair.id, quantityReceived: 15, quantityIssued: 12, remainingQuantity: 3 },
+  ];
+  for (const balance of seededBalances) {
+    await prisma.stockBalance.upsert({
+      where: {
+        storeId_materialId: {
+          storeId: storeMain.id,
+          materialId: balance.materialId,
+        },
+      },
+      update: balance,
+      create: { storeId: storeMain.id, ...balance },
+    });
+  }
+
   console.log('✅ Stock Summaries seeded');
 
   // 9. Sample Stock In Transactions
@@ -453,6 +473,7 @@ async function main() {
         transactionCode: 'TXN-IN-001',
         type: TransactionType.STOCK_IN,
         materialId: matPaper.id,
+        storeId: storeMain.id,
         quantity: 100,
         unitPrice: 450.00,
         supplierId: supp1.id,
@@ -465,6 +486,7 @@ async function main() {
         transactionCode: 'TXN-IN-002',
         type: TransactionType.STOCK_IN,
         materialId: matCable.id,
+        storeId: storeMain.id,
         quantity: 10,
         unitPrice: 2800.00,
         supplierId: supp2.id,
@@ -598,6 +620,7 @@ async function main() {
     where: { transactionCode: 'TXN-OUT-001' },
     update: {
       requestId: req4.id,
+      storeId: storeMain.id,
     },
     create: {
       transactionCode: 'TXN-OUT-001',

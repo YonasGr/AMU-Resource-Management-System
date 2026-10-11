@@ -56,4 +56,20 @@ export class IssueRequestDto {
   @IsString()
   @IsOptional()
   remarks?: string;
+
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => IssueRequestItemDto)
+  @IsOptional()
+  items?: IssueRequestItemDto[];
+}
+
+export class IssueRequestItemDto {
+  @IsUUID()
+  requestItemId!: string;
+
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  quantity!: number;
 }

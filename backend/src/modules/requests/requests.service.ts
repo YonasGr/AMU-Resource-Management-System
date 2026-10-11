@@ -5,7 +5,7 @@ import { NotificationsService } from '../notifications/notifications.service';
 import { AccessControlService } from '../auth/access-control.service';
 import { SafeUser } from '../auth/decorators/current-user.decorator';
 import { AuditService } from '../audit/audit.service';
-import { CreateRequestDto } from './dto/request.dto';
+import { CreateRequestDto, IssueRequestItemDto } from './dto/request.dto';
 
 @Injectable()
 export class RequestsService {
@@ -214,7 +214,13 @@ export class RequestsService {
   }
 
   /** Storekeeper issues materials for an approved request */
-  async issueItems(id: string, user: SafeUser, employeeId?: string, remarks?: string) {
+  async issueItems(
+    id: string,
+    user: SafeUser,
+    employeeId?: string,
+    remarks?: string,
+    requestedItems?: IssueRequestItemDto[],
+  ) {
     const request = await this.prisma.materialRequest.findUnique({
       where: { id },
       include: {
@@ -236,8 +242,24 @@ export class RequestsService {
       throw new NotFoundException(`Request ${id} not found`);
     }
 
-    if (request.status !== RequestStatus.APPROVED) {
-      throw new BadRequestException(`Only APPROVED requests can be issued. Current status is ${request.status}`);
+    if (request.status !== RequestStatus.APPROVED && request.status !== RequestStatus.PARTIALLY_ISSUED) {
+      throw new BadRequestException(
+        `Only APPROVED or PARTIALLY_ISSUED requests can be issued. Current status is ${request.status}`,
+      );
+    }
+
+    const issueQuantities = new Map(
+      (requestedItems ?? request.items.map((item) => ({
+        requestItemId: item.id,
+        quantity: item.quantityRequested - item.quantityIssued,
+      }))).map((item) => [item.requestItemId, item.quantity]),
+    );
+    if (issueQuantities.size === 0 || [...issueQuantities.values()].some((quantity) => quantity < 1)) {
+      throw new BadRequestException('At least one positive issue quantity is required');
+    }
+    const requestItemIds = new Set(request.items.map((item) => item.id));
+    if ([...issueQuantities.keys()].some((itemId) => !requestItemIds.has(itemId))) {
+      throw new BadRequestException('Every issue line must belong to the request');
     }
 
     // Execute in DB Transaction
@@ -246,6 +268,14 @@ export class RequestsService {
       let itemSeq = 1;
 
       for (const item of request.items) {
+        const issueQuantity = issueQuantities.get(item.id);
+        if (issueQuantity === undefined) continue;
+        const outstanding = item.quantityRequested - item.quantityIssued;
+        if (issueQuantity > outstanding) {
+          throw new BadRequestException(
+            `Cannot issue ${issueQuantity} for "${item.material.name}". Only ${outstanding} remains outstanding`,
+          );
+        }
         if (!request.storeId) {
           throw new BadRequestException('The approved request is not assigned to a store');
         }
@@ -254,28 +284,28 @@ export class RequestsService {
           where: {
             materialId: item.materialId,
             storeId: request.storeId,
-            remainingQuantity: { gte: item.quantityRequested },
+            remainingQuantity: { gte: issueQuantity },
           },
           data: {
-            quantityIssued: { increment: item.quantityRequested },
-            remainingQuantity: { decrement: item.quantityRequested },
+            quantityIssued: { increment: issueQuantity },
+            remainingQuantity: { decrement: issueQuantity },
           },
         });
         if (decremented.count !== 1) {
           const remaining = item.material.stockSummary?.remainingQuantity ?? 0;
           throw new BadRequestException(
-            `Insufficient stock for "${item.material.name}". Requested: ${item.quantityRequested}, Available: ${remaining}`,
+            `Insufficient stock for "${item.material.name}". Requested: ${issueQuantity}, Available: ${remaining}`,
           );
         }
 
         await tx.stockSummary.updateMany({
           where: {
             materialId: item.materialId,
-            remainingQuantity: { gte: item.quantityRequested },
+            remainingQuantity: { gte: issueQuantity },
           },
           data: {
-            quantityIssued: { increment: item.quantityRequested },
-            remainingQuantity: { decrement: item.quantityRequested },
+            quantityIssued: { increment: issueQuantity },
+            remainingQuantity: { decrement: issueQuantity },
           },
         });
 
@@ -287,7 +317,7 @@ export class RequestsService {
             transactionCode: txnCode,
             type: TransactionType.STOCK_OUT,
             materialId: item.materialId,
-            quantity: item.quantityRequested,
+            quantity: issueQuantity,
             requestId: request.id,
             requestItemId: item.id,
             storeId: request.storeId,
@@ -303,15 +333,18 @@ export class RequestsService {
         // Update item issued quantity
         await tx.materialRequestItem.update({
           where: { id: item.id },
-          data: { quantityIssued: item.quantityRequested },
+          data: { quantityIssued: { increment: issueQuantity } },
         });
       }
 
-      // Mark request as ISSUED
+      const fullyIssued = request.items.every(
+        (item) => item.quantityIssued + (issueQuantities.get(item.id) ?? 0) >= item.quantityRequested,
+      );
+
       return tx.materialRequest.update({
         where: { id },
         data: {
-          status: RequestStatus.ISSUED,
+          status: fullyIssued ? RequestStatus.ISSUED : RequestStatus.PARTIALLY_ISSUED,
         },
         include: {
           requester: { select: { fullName: true, email: true, id: true } },
@@ -327,15 +360,17 @@ export class RequestsService {
       user.id,
       'ISSUE_REQUEST',
       'REQUESTS',
-      `Storekeeper fulfilled and issued materials for request ${request.requestNumber} (${request.items.length} item line(s))`,
+      `Storekeeper issued materials for request ${request.requestNumber} (${[...issueQuantities.values()].reduce((sum, quantity) => sum + quantity, 0)} unit(s))`,
     );
 
     // Notify requester that materials have been issued
     await this.notifications.createForUsers(
       [result.requester.id],
       'REQUEST_ISSUED',
-      'Materials Issued — Ready for Collection ✓',
-      `Materials for your request ${request.requestNumber} have been issued. Please collect from the store.`,
+      result.status === RequestStatus.ISSUED ? 'Materials Issued — Ready for Collection ✓' : 'Request Partially Issued',
+      result.status === RequestStatus.ISSUED
+        ? `Materials for your request ${request.requestNumber} have been issued. Please collect from the store.`
+        : `Part of request ${request.requestNumber} has been issued. Remaining items are still outstanding.`,
       { requestId: id, requestNumber: request.requestNumber },
     );
 
@@ -345,7 +380,9 @@ export class RequestsService {
         [result.approvedBy.id],
         'REQUEST_ISSUED',
         `Request ${request.requestNumber} Fulfilled`,
-        `Request ${request.requestNumber} has been fulfilled by the storekeeper.`,
+        result.status === RequestStatus.ISSUED
+          ? `Request ${request.requestNumber} has been fulfilled by the storekeeper.`
+          : `Request ${request.requestNumber} has been partially issued by the storekeeper.`,
         { requestId: id, requestNumber: request.requestNumber },
       );
     }

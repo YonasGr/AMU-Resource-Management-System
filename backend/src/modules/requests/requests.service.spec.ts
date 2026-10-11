@@ -262,6 +262,60 @@ describe('RequestsService Store-Scope Enforcement Verification', () => {
         expect(result.status).toBe(RequestStatus.ISSUED);
         expect(prisma.$transaction).toHaveBeenCalled();
       });
+
+      it('supports partial line issuance and marks the request partially issued', async () => {
+        prisma.materialRequest.findUnique.mockResolvedValue({
+          id: 'req-partial-1',
+          requestNumber: 'REQ-2026-0006',
+          purpose: 'Issue paper',
+          status: RequestStatus.APPROVED,
+          storeId: 'store-a',
+          requesterId: 'requester-1',
+          departmentId: 'dept-1',
+          approvedById: 'manager-1',
+          items: [
+            {
+              id: 'item-1',
+              materialId: 'material-1',
+              quantityRequested: 5,
+              quantityIssued: 0,
+              material: {
+                name: 'Paper',
+                stockSummary: { remainingQuantity: 10 },
+              },
+            },
+          ],
+        });
+        prisma._mockTx.materialRequest.update.mockResolvedValue({
+          id: 'req-partial-1',
+          status: RequestStatus.PARTIALLY_ISSUED,
+          requester: { id: 'requester-1' },
+          approvedBy: null,
+        });
+
+        const result = await service.issueItems(
+          'req-partial-1',
+          createMockUser({ role: Role.STOREKEEPER, scopeType: ScopeType.STORE, storeId: 'store-a' }),
+          undefined,
+          undefined,
+          [{ requestItemId: 'item-1', quantity: 2 }],
+        );
+
+        expect(result.status).toBe(RequestStatus.PARTIALLY_ISSUED);
+        expect(prisma._mockTx.stockBalance.updateMany).toHaveBeenCalledWith(
+          expect.objectContaining({
+            where: expect.objectContaining({ remainingQuantity: { gte: 2 } }),
+            data: expect.objectContaining({
+              quantityIssued: { increment: 2 },
+              remainingQuantity: { decrement: 2 },
+            }),
+          }),
+        );
+        expect(prisma._mockTx.materialRequestItem.update).toHaveBeenCalledWith({
+          where: { id: 'item-1' },
+          data: { quantityIssued: { increment: 2 } },
+        });
+      });
     });
   });
 });

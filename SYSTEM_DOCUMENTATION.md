@@ -59,10 +59,10 @@ flowchart LR
 
 1. A requester submits a request with a purpose, department, and material quantities. It starts as `PENDING`.
 2. A store manager approves or rejects it. Approval is limited by the store-scope check in `RequestsService`.
-3. A storekeeper issues an approved request. The service checks stock, records each stock-out, updates quantities, and changes the request to `ISSUED` within a database transaction.
+3. A storekeeper issues an approved request. The service checks store-specific stock, records each stock-out, updates line quantities, and changes the request to `PARTIALLY_ISSUED` or `ISSUED` within a database transaction. Issue requests may include selected line quantities; omitting them issues all outstanding quantities for backward compatibility.
 4. The system records audit events and sends notifications for key request and inventory events.
 
-Request statuses are `PENDING`, `APPROVED`, `REJECTED`, `ISSUED`, and `CANCELLED`.
+Request statuses are `PENDING`, `APPROVED`, `PARTIALLY_ISSUED`, `REJECTED`, `ISSUED`, and `CANCELLED`.
 
 ## Inventory rules
 

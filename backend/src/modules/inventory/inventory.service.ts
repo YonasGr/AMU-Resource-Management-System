@@ -53,14 +53,15 @@ export class InventoryService {
   }
 
   /** Emit a low-stock alert if stock has fallen below minimum */
-  private async maybeAlertLowStock(materialId: string) {
+  private async maybeAlertLowStock(materialId: string, storeId: string) {
     const material = await this.prisma.material.findUnique({
       where: { id: materialId },
-      include: { stockSummary: true },
+      include: { stockBalances: { where: { storeId }, take: 1 }, stockSummary: true },
     });
-    if (!material || !material.stockSummary) return;
+    const balance = material?.stockBalances?.[0] ?? material?.stockSummary;
+    if (!material || !balance) return;
 
-    const { remainingQuantity } = material.stockSummary;
+    const { remainingQuantity } = balance;
     if (remainingQuantity < material.minimumStock) {
       const recipientIds = await Promise.all([
         this.notifications.getUserIdsByRole('STORE_MANAGER'),
@@ -199,9 +200,12 @@ export class InventoryService {
         },
       });
       if (decremented.count !== 1) {
-        const available = material.stockSummary?.remainingQuantity ?? 0;
+        const available = await tx.stockBalance.findUnique({
+          where: { storeId_materialId: { storeId, materialId: dto.materialId } },
+          select: { remainingQuantity: true },
+        });
         throw new BadRequestException(
-          `Insufficient stock for "${material.name}". Requested: ${dto.quantity}, Available: ${available}`,
+          `Insufficient stock for "${material.name}". Requested: ${dto.quantity}, Available: ${available?.remainingQuantity ?? 0}`,
         );
       }
       await tx.stockSummary.updateMany({
@@ -240,7 +244,7 @@ export class InventoryService {
     });
 
     // Check if stock fell below minimum after this operation
-    await this.maybeAlertLowStock(dto.materialId);
+    await this.maybeAlertLowStock(dto.materialId, storeId);
 
     // Audit Log
     await this.auditService.log(
@@ -427,7 +431,7 @@ export class InventoryService {
     });
 
     // Check low-stock after adjustment too
-    await this.maybeAlertLowStock(dto.materialId);
+    await this.maybeAlertLowStock(dto.materialId, storeId);
 
     // Audit Log
     await this.auditService.log(

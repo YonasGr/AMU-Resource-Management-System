@@ -15,11 +15,11 @@ export class DashboardService {
     const approvedRequests = await this.prisma.materialRequest.count({ where: { status: 'APPROVED' } });
 
     const materials = await this.prisma.material.findMany({
-      include: { stockSummary: true, category: true },
+      include: { stockBalances: true, category: true },
     });
 
     const lowStockItems = materials.filter(
-      (m) => (m.stockSummary?.remainingQuantity ?? 0) <= m.minimumStock,
+      (m) => m.stockBalances.reduce((sum, balance) => sum + balance.remainingQuantity, 0) <= m.minimumStock,
     );
 
     const recentTransactions = await this.prisma.inventoryTransaction.findMany({
@@ -51,7 +51,7 @@ export class DashboardService {
         materialCode: m.materialCode,
         name: m.name,
         category: m.category.name,
-        remainingQuantity: m.stockSummary?.remainingQuantity ?? 0,
+        remainingQuantity: m.stockBalances.reduce((sum, balance) => sum + balance.remainingQuantity, 0),
         minimumStock: m.minimumStock,
         unit: m.unit,
         location: m.location,

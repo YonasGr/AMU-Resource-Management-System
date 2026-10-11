@@ -212,6 +212,7 @@ model StockBalance {
 enum RequestStatus {
   PENDING
   APPROVED
+  PARTIALLY_ISSUED
   REJECTED
   ISSUED
   CANCELLED

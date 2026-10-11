@@ -59,6 +59,6 @@ export class RequestsController {
     @CurrentUser() user: SafeUser,
     @Body() body: IssueRequestDto,
   ) {
-    return this.requestsService.issueItems(id, user, body.employeeId, body.remarks);
+    return this.requestsService.issueItems(id, user, body.employeeId, body.remarks, body.items);
   }
 }

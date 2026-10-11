@@ -5,16 +5,7 @@ import { NotificationsService } from '../notifications/notifications.service';
 import { AccessControlService } from '../auth/access-control.service';
 import { SafeUser } from '../auth/decorators/current-user.decorator';
 import { AuditService } from '../audit/audit.service';
-
-export interface CreateRequestDto {
-  purpose: string;
-  departmentId: string;
-  storeId?: string;
-  items: {
-    materialId: string;
-    quantityRequested: number;
-  }[];
-}
+import { CreateRequestDto } from './dto/request.dto';
 
 @Injectable()
 export class RequestsService {
@@ -236,8 +227,18 @@ export class RequestsService {
       let itemSeq = 1;
 
       for (const item of request.items) {
-        const remaining = item.material.stockSummary?.remainingQuantity ?? 0;
-        if (remaining < item.quantityRequested) {
+        const decremented = await tx.stockSummary.updateMany({
+          where: {
+            materialId: item.materialId,
+            remainingQuantity: { gte: item.quantityRequested },
+          },
+          data: {
+            quantityIssued: { increment: item.quantityRequested },
+            remainingQuantity: { decrement: item.quantityRequested },
+          },
+        });
+        if (decremented.count !== 1) {
+          const remaining = item.material.stockSummary?.remainingQuantity ?? 0;
           throw new BadRequestException(
             `Insufficient stock for "${item.material.name}". Requested: ${item.quantityRequested}, Available: ${remaining}`,
           );
@@ -260,15 +261,6 @@ export class RequestsService {
             approvedById: request.approvedById,
             purpose: request.purpose,
             remarks: remarks || `Issued for Request ${request.requestNumber}`,
-          },
-        });
-
-        // Update StockSummary
-        await tx.stockSummary.update({
-          where: { materialId: item.materialId },
-          data: {
-            quantityIssued: { increment: item.quantityRequested },
-            remainingQuantity: { decrement: item.quantityRequested },
           },
         });
 

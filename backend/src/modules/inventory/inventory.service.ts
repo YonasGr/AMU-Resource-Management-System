@@ -1,50 +1,15 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { TransactionType } from '@prisma/client';
 import { NotificationsService } from '../notifications/notifications.service';
 import { AuditService } from '../audit/audit.service';
-
-export interface StockInDto {
-  materialId: string;
-  quantity: number;
-  unitPrice?: number;
-  supplierId?: string;
-  purpose?: string;
-  remarks?: string;
-}
-
-export interface StockOutDto {
-  materialId: string;
-  quantity: number;
-  employeeId?: string;
-  departmentId?: string;
-  purpose?: string;
-  remarks?: string;
-}
-
-export interface ReturnDto {
-  requestId: string;
-  requestItemId: string;
-  materialId: string;
-  quantity: number;
-  employeeId?: string;
-  departmentId?: string;
-  remarks?: string;
-}
-
-export interface AdjustmentDto {
-  materialId: string;
-  newQuantity: number;
-  reason: string;
-}
-
-export interface TransferDto {
-  materialId: string;
-  quantity: number;
-  toDepartmentId: string;
-  purpose?: string;
-  remarks?: string;
-}
+import {
+  AdjustmentDto,
+  ReturnDto,
+  StockInDto,
+  StockOutDto,
+  TransferDto,
+} from './dto/inventory.dto';
 
 @Injectable()
 export class InventoryService {
@@ -165,18 +130,28 @@ export class InventoryService {
       throw new NotFoundException(`Material ${dto.materialId} not found`);
     }
 
-    const available = material.stockSummary?.remainingQuantity ?? 0;
-    if (available < dto.quantity) {
-      throw new BadRequestException(
-        `Insufficient stock for "${material.name}". Requested: ${dto.quantity}, Available: ${available}`,
-      );
-    }
-
     const timeStamp = Date.now().toString().slice(-6);
     const rand = Math.floor(100 + Math.random() * 900);
     const txnCode = `TXN-OUT-${timeStamp}-${rand}`;
 
     const transaction = await this.prisma.$transaction(async (tx) => {
+      const decremented = await tx.stockSummary.updateMany({
+        where: {
+          materialId: dto.materialId,
+          remainingQuantity: { gte: dto.quantity },
+        },
+        data: {
+          quantityIssued: { increment: dto.quantity },
+          remainingQuantity: { decrement: dto.quantity },
+        },
+      });
+      if (decremented.count !== 1) {
+        const available = material.stockSummary?.remainingQuantity ?? 0;
+        throw new BadRequestException(
+          `Insufficient stock for "${material.name}". Requested: ${dto.quantity}, Available: ${available}`,
+        );
+      }
+
       const txn = await tx.inventoryTransaction.create({
         data: {
           transactionCode: txnCode,
@@ -194,14 +169,6 @@ export class InventoryService {
           employee: true,
           department: true,
           issuedBy: { select: { fullName: true } },
-        },
-      });
-
-      await tx.stockSummary.update({
-        where: { materialId: dto.materialId },
-        data: {
-          quantityIssued: { increment: dto.quantity },
-          remainingQuantity: { decrement: dto.quantity },
         },
       });
 
@@ -376,56 +343,9 @@ export class InventoryService {
 
   /** Material Transfer (Transfer materials between stores or departments) */
   async transferMaterial(storekeeperId: string, dto: TransferDto) {
-    const material = await this.prisma.material.findUnique({
-      where: { id: dto.materialId },
-      include: { stockSummary: true },
-    });
-    if (!material) {
-      throw new NotFoundException(`Material ${dto.materialId} not found`);
-    }
-
-    const available = material.stockSummary?.remainingQuantity ?? 0;
-    if (available < dto.quantity) {
-      throw new BadRequestException(
-        `Cannot transfer ${dto.quantity} ${material.unit}(s). Only ${available} available in stock.`,
-      );
-    }
-
-    const timeStamp = Date.now().toString().slice(-6);
-    const rand = Math.floor(100 + Math.random() * 900);
-    const txnCode = `TXN-TRF-${timeStamp}-${rand}`;
-
-    const transaction = await this.prisma.$transaction(async (tx) => {
-      const txn = await tx.inventoryTransaction.create({
-        data: {
-          transactionCode: txnCode,
-          type: TransactionType.TRANSFER,
-          materialId: dto.materialId,
-          quantity: dto.quantity,
-          departmentId: dto.toDepartmentId,
-          issuedById: storekeeperId,
-          purpose: dto.purpose || 'Inter-Department Material Transfer',
-          remarks: dto.remarks || `Transferred to department`,
-        },
-        include: {
-          material: true,
-          department: true,
-          issuedBy: { select: { fullName: true } },
-        },
-      });
-
-      return txn;
-    });
-
-    // Audit Log
-    await this.auditService.log(
-      storekeeperId,
-      'TRANSFER',
-      'INVENTORY',
-      `Transferred ${dto.quantity} ${material.unit}(s) of "${material.name}" (${material.materialCode}) to department [Txn: ${transaction.transactionCode}]`,
+    throw new ConflictException(
+      'Transfers are temporarily unavailable until source and destination stock locations are enabled',
     );
-
-    return transaction;
   }
 
   /** Get all inventory transactions with filter */

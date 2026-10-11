@@ -1,7 +1,12 @@
 import { Body, Controller, Get, HttpCode, HttpStatus, Param, ParseUUIDPipe, Post, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { RequestStatus, Role } from '@prisma/client';
-import { RequestsService, CreateRequestDto } from './requests.service';
+import { RequestsService } from './requests.service';
+import {
+  ApproveRejectRequestDto,
+  CreateRequestDto,
+  IssueRequestDto,
+} from './dto/request.dto';
 import { CurrentUser, SafeUser } from '../auth/decorators/current-user.decorator';
 import { Roles } from '../auth/decorators/roles.decorator';
 
@@ -40,7 +45,7 @@ export class RequestsController {
   approveOrReject(
     @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser() user: SafeUser,
-    @Body() body: { action: 'APPROVE' | 'REJECT'; remarks?: string },
+    @Body() body: ApproveRejectRequestDto,
   ) {
     return this.requestsService.approveOrReject(id, user, body.action, body.remarks);
   }
@@ -51,7 +56,7 @@ export class RequestsController {
   issueItems(
     @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser() user: SafeUser,
-    @Body() body: { employeeId?: string; remarks?: string },
+    @Body() body: IssueRequestDto,
   ) {
     return this.requestsService.issueItems(id, user.id, body.employeeId, body.remarks);
   }

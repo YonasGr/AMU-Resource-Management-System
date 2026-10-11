@@ -15,17 +15,36 @@ describe('RequestsService Store-Scope Enforcement Verification', () => {
 
   beforeEach(() => {
     accessControlService = new AccessControlService();
+    const mockTx = {
+      requestNumberCounter: {
+        upsert: jest.fn().mockResolvedValue({ nextNumber: 2 }),
+      },
+      materialRequest: {
+        create: jest.fn().mockResolvedValue({
+          id: 'req-1',
+          requestNumber: 'REQ-2026-0001',
+          purpose: 'Office stationery',
+          requester: { fullName: 'Requester User' },
+          department: { name: 'Computer Science' },
+          items: [],
+        }),
+      },
+    };
 
     prisma = {
       materialRequest: {
         findUnique: jest.fn(),
         update: jest.fn(),
         create: jest.fn(),
-        count: jest.fn().mockResolvedValue(0),
+      },
+      requestNumberCounter: {
+        upsert: jest.fn().mockResolvedValue({ nextNumber: 2 }),
       },
       store: {
         findFirst: jest.fn().mockResolvedValue({ id: 'store-a' }),
       },
+      $transaction: jest.fn((callback) => callback(mockTx)),
+      _mockTx: mockTx,
     };
 
     notifications = {
@@ -70,6 +89,29 @@ describe('RequestsService Store-Scope Enforcement Verification', () => {
     requester: { id: 'user-req-1', fullName: 'Requester User', email: 'req@amu.edu.et' },
     items: [],
   };
+
+  describe('create()', () => {
+    it('allocates the next yearly request number inside the creation transaction', async () => {
+      const request = await service.create('requester-1', {
+        purpose: 'Office stationery',
+        departmentId: 'dept-1',
+        items: [{ materialId: 'material-1', quantityRequested: 3 }],
+      });
+
+      expect(request.requestNumber).toBe('REQ-2026-0001');
+      expect(prisma._mockTx.requestNumberCounter.upsert).toHaveBeenCalledWith({
+        where: { year: 2026 },
+        update: { nextNumber: { increment: 1 } },
+        create: { year: 2026, nextNumber: 2 },
+        select: { nextNumber: true },
+      });
+      expect(prisma._mockTx.materialRequest.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ requestNumber: 'REQ-2026-0001' }),
+        }),
+      );
+    });
+  });
 
   describe('approveOrReject() Store Scope Enforcement', () => {
     it('should ALLOW STORE_MANAGER assigned to Store A to approve request for Store A', async () => {

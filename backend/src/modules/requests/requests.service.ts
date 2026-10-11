@@ -29,36 +29,44 @@ export class RequestsService {
       }
     }
 
-    const count = await this.prisma.materialRequest.count();
-    const requestNumber = `REQ-${new Date().getFullYear()}-${String(count + 1).padStart(4, '0')}`;
+    const year = new Date().getFullYear();
+    const request = await this.prisma.$transaction(async (tx) => {
+      const counter = await tx.requestNumberCounter.upsert({
+        where: { year },
+        update: { nextNumber: { increment: 1 } },
+        create: { year, nextNumber: 2 },
+        select: { nextNumber: true },
+      });
+      const requestNumber = `REQ-${year}-${String(counter.nextNumber - 1).padStart(4, '0')}`;
 
-    const request = await this.prisma.materialRequest.create({
-      data: {
-        requestNumber,
-        purpose: dto.purpose,
-        requesterId,
-        departmentId: dto.departmentId,
-        storeId: targetStoreId,
-        status: RequestStatus.PENDING,
-        items: {
-          create: dto.items.map((item) => ({
-            materialId: item.materialId,
-            quantityRequested: item.quantityRequested,
-          })),
+      return tx.materialRequest.create({
+        data: {
+          requestNumber,
+          purpose: dto.purpose,
+          requesterId,
+          departmentId: dto.departmentId,
+          storeId: targetStoreId,
+          status: RequestStatus.PENDING,
+          items: {
+            create: dto.items.map((item) => ({
+              materialId: item.materialId,
+              quantityRequested: item.quantityRequested,
+            })),
+          },
         },
-      },
-      include: {
-        requester: { select: { id: true, fullName: true, email: true } },
-        department: true,
-        store: true,
-        items: {
-          include: {
-            material: {
-              include: { stockSummary: true },
+        include: {
+          requester: { select: { id: true, fullName: true, email: true } },
+          department: true,
+          store: true,
+          items: {
+            include: {
+              material: {
+                include: { stockSummary: true },
+              },
             },
           },
         },
-      },
+      });
     });
 
     // Log Audit Event
@@ -66,7 +74,7 @@ export class RequestsService {
       requesterId,
       'CREATE_REQUEST',
       'REQUESTS',
-      `Submitted requisition ${requestNumber} for ${request.department?.name || 'Department'} (${dto.items.length} item line(s)): "${dto.purpose}"`,
+      `Submitted requisition ${request.requestNumber} for ${request.department?.name || 'Department'} (${dto.items.length} item line(s)): "${dto.purpose}"`,
     );
 
     // Notify all Store Managers about the new request
@@ -75,8 +83,8 @@ export class RequestsService {
       managerIds,
       'REQUEST_SUBMITTED',
       'New Material Request Submitted',
-      `${request.requester.fullName} submitted request ${requestNumber}: "${dto.purpose}"`,
-      { requestId: request.id, requestNumber },
+      `${request.requester.fullName} submitted request ${request.requestNumber}: "${dto.purpose}"`,
+      { requestId: request.id, requestNumber: request.requestNumber },
     );
 
     return request;

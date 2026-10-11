@@ -188,11 +188,21 @@ export class InventoryService {
     const txnCode = `TXN-OUT-${timeStamp}-${rand}`;
 
     const transaction = await this.prisma.$transaction(async (tx) => {
+      const balance = await tx.stockBalance.findUnique({
+        where: { storeId_materialId: { storeId, materialId: dto.materialId } },
+      });
+      const available = (balance?.remainingQuantity ?? 0) - (balance?.reservedQuantity ?? 0);
+      if (!balance || available < dto.quantity) {
+        throw new BadRequestException(
+          `Insufficient stock for "${material.name}". Requested: ${dto.quantity}, Available: ${Math.max(0, available)}`,
+        );
+      }
+
       const decremented = await tx.stockBalance.updateMany({
         where: {
-          materialId: dto.materialId,
-          storeId,
+          id: balance.id,
           remainingQuantity: { gte: dto.quantity },
+          reservedQuantity: balance.reservedQuantity,
         },
         data: {
           quantityIssued: { increment: dto.quantity },
@@ -200,12 +210,8 @@ export class InventoryService {
         },
       });
       if (decremented.count !== 1) {
-        const available = await tx.stockBalance.findUnique({
-          where: { storeId_materialId: { storeId, materialId: dto.materialId } },
-          select: { remainingQuantity: true },
-        });
         throw new BadRequestException(
-          `Insufficient stock for "${material.name}". Requested: ${dto.quantity}, Available: ${available?.remainingQuantity ?? 0}`,
+          `Stock changed while issuing "${material.name}". Refresh and try again.`,
         );
       }
       await tx.stockSummary.updateMany({

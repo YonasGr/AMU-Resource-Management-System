@@ -171,24 +171,82 @@ export class RequestsService {
     const targetStoreId = request.storeId || user.storeId;
     this.accessControlService.enforceStoreScope(user, targetStoreId);
 
-    const newStatus = action === 'APPROVE' ? RequestStatus.APPROVED : RequestStatus.REJECTED;
+    const updated = action === 'APPROVE'
+      ? await this.prisma.$transaction(async (tx) => {
+          if (!targetStoreId) {
+            throw new BadRequestException('The approved request must be assigned to a store');
+          }
 
-    const updated = await this.prisma.materialRequest.update({
-      where: { id },
-      data: {
-        status: newStatus,
-        approvedById: user.id,
-        approvedAt: new Date(),
-        managerRemarks: remarks,
-      },
-      include: {
-        requester: { select: { fullName: true, email: true, id: true } },
-        department: true,
-        store: true,
-        approvedBy: { select: { fullName: true } },
-        items: { include: { material: true } },
-      },
-    });
+          for (const item of request.items) {
+            const balance = await tx.stockBalance.findUnique({
+              where: {
+                storeId_materialId: {
+                  storeId: targetStoreId,
+                  materialId: item.materialId,
+                },
+              },
+            });
+            const available = (balance?.remainingQuantity ?? 0) - (balance?.reservedQuantity ?? 0);
+            if (!balance || available < item.quantityRequested) {
+              throw new BadRequestException(
+                `Insufficient available stock to approve "${item.material.name}". Requested: ${item.quantityRequested}, Available: ${Math.max(0, available)}`,
+              );
+            }
+
+            const reserved = await tx.stockBalance.updateMany({
+              where: {
+                id: balance.id,
+                remainingQuantity: { gte: item.quantityRequested },
+                reservedQuantity: balance.reservedQuantity,
+              },
+              data: { reservedQuantity: { increment: item.quantityRequested } },
+            });
+            if (reserved.count !== 1) {
+              throw new BadRequestException(
+                `Stock changed while approving "${item.material.name}". Refresh and try again.`,
+              );
+            }
+
+            await tx.materialRequestItem.update({
+              where: { id: item.id },
+              data: { quantityReserved: item.quantityRequested },
+            });
+          }
+
+          return tx.materialRequest.update({
+            where: { id },
+            data: {
+              status: RequestStatus.APPROVED,
+              storeId: targetStoreId,
+              approvedById: user.id,
+              approvedAt: new Date(),
+              managerRemarks: remarks,
+            },
+            include: {
+              requester: { select: { fullName: true, email: true, id: true } },
+              department: true,
+              store: true,
+              approvedBy: { select: { fullName: true } },
+              items: { include: { material: true } },
+            },
+          });
+        })
+      : await this.prisma.materialRequest.update({
+          where: { id },
+          data: {
+            status: RequestStatus.REJECTED,
+            approvedById: user.id,
+            approvedAt: new Date(),
+            managerRemarks: remarks,
+          },
+          include: {
+            requester: { select: { fullName: true, email: true, id: true } },
+            department: true,
+            store: true,
+            approvedBy: { select: { fullName: true } },
+            items: { include: { material: true } },
+          },
+        });
 
     // Log Audit Event
     await this.auditService.log(
@@ -276,6 +334,11 @@ export class RequestsService {
             `Cannot issue ${issueQuantity} for "${item.material.name}". Only ${outstanding} remains outstanding`,
           );
         }
+        if (item.quantityReserved > 0 && issueQuantity > item.quantityReserved) {
+          throw new BadRequestException(
+            `Cannot issue ${issueQuantity} for "${item.material.name}". Only ${item.quantityReserved} is reserved`,
+          );
+        }
         if (!request.storeId) {
           throw new BadRequestException('The approved request is not assigned to a store');
         }
@@ -285,10 +348,12 @@ export class RequestsService {
             materialId: item.materialId,
             storeId: request.storeId,
             remainingQuantity: { gte: issueQuantity },
+            ...(item.quantityReserved > 0 ? { reservedQuantity: { gte: issueQuantity } } : {}),
           },
           data: {
             quantityIssued: { increment: issueQuantity },
             remainingQuantity: { decrement: issueQuantity },
+            ...(item.quantityReserved > 0 ? { reservedQuantity: { decrement: issueQuantity } } : {}),
           },
         });
         if (decremented.count !== 1) {
@@ -333,7 +398,12 @@ export class RequestsService {
         // Update item issued quantity
         await tx.materialRequestItem.update({
           where: { id: item.id },
-          data: { quantityIssued: { increment: issueQuantity } },
+          data: {
+            quantityIssued: { increment: issueQuantity },
+            ...(item.quantityReserved > 0
+              ? { quantityReserved: { decrement: issueQuantity } }
+              : {}),
+          },
         });
       }
 

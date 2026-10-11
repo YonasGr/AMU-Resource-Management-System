@@ -3,7 +3,7 @@ import { InventoryService } from './inventory.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { AuditService } from '../audit/audit.service';
-import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
 import { TransactionType } from '@prisma/client';
 
 describe('InventoryService', () => {
@@ -37,6 +37,10 @@ describe('InventoryService', () => {
           createdAt: new Date(),
         })),
       },
+      materialRequestItem: {
+        findUnique: jest.fn(),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+      },
       stockSummary: {
         upsert: jest.fn().mockResolvedValue({
           id: 'summary-uuid-1',
@@ -45,6 +49,7 @@ describe('InventoryService', () => {
           quantityIssued: 20,
           remainingQuantity: 40,
         }),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
         update: jest.fn().mockImplementation(({ data }) => ({
           id: 'summary-uuid-1',
           materialId: 'mat-uuid-1',
@@ -60,6 +65,9 @@ describe('InventoryService', () => {
           provide: PrismaService,
           useValue: {
             material: {
+              findUnique: jest.fn(),
+            },
+            materialRequestItem: {
               findUnique: jest.fn(),
             },
             inventoryTransaction: {
@@ -179,9 +187,12 @@ describe('InventoryService', () => {
       expect(result.type).toBe(TransactionType.STOCK_OUT);
       expect(result.quantity).toBe(15);
 
-      expect(prisma._mockTx.stockSummary.update).toHaveBeenCalledWith(
+      expect(prisma._mockTx.stockSummary.updateMany).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: { materialId: 'mat-uuid-1' },
+          where: {
+            materialId: 'mat-uuid-1',
+            remainingQuantity: { gte: 15 },
+          },
           data: {
             quantityIssued: { increment: 15 },
             remainingQuantity: { decrement: 15 },
@@ -227,6 +238,7 @@ describe('InventoryService', () => {
 
     it('should reject with BadRequestException when requested quantity exceeds available balance', async () => {
       prisma.material.findUnique.mockResolvedValue(mockMaterial); // available = 30
+      prisma._mockTx.stockSummary.updateMany.mockResolvedValueOnce({ count: 0 });
 
       await expect(
         service.stockOut('keeper-1', {
@@ -252,10 +264,25 @@ describe('InventoryService', () => {
 
   describe('returnMaterial()', () => {
     it('should accept returned materials, update stock summary, and audit', async () => {
-      prisma.material.findUnique.mockResolvedValue(mockMaterial);
+      prisma.materialRequestItem.findUnique.mockResolvedValue({
+        id: 'request-item-1',
+        requestId: 'request-1',
+        materialId: 'mat-uuid-1',
+        quantityIssued: 10,
+        quantityReturned: 0,
+        request: {
+          id: 'request-1',
+          requestNumber: 'REQ-2026-0001',
+          status: 'ISSUED',
+          departmentId: 'dept-cs',
+        },
+        material: mockMaterial,
+      });
 
       const dto = {
         materialId: 'mat-uuid-1',
+        requestId: 'request-1',
+        requestItemId: 'request-item-1',
         quantity: 5,
         employeeId: 'emp-101',
         departmentId: 'dept-cs',
@@ -285,12 +312,14 @@ describe('InventoryService', () => {
       );
     });
 
-    it('should throw NotFoundException if material does not exist', async () => {
-      prisma.material.findUnique.mockResolvedValue(null);
+    it('should throw NotFoundException if the issued request item does not exist', async () => {
+      prisma.materialRequestItem.findUnique.mockResolvedValue(null);
 
       await expect(
         service.returnMaterial('keeper-1', {
           materialId: 'missing-id',
+          requestId: 'request-1',
+          requestItemId: 'missing-item',
           quantity: 2,
         }),
       ).rejects.toThrow(NotFoundException);
@@ -371,53 +400,20 @@ describe('InventoryService', () => {
   });
 
   describe('transferMaterial()', () => {
-    it('should transfer materials to another department when stock is sufficient', async () => {
-      prisma.material.findUnique.mockResolvedValue(mockMaterial); // available = 30
-
-      const dto = {
-        materialId: 'mat-uuid-1',
-        quantity: 10,
-        toDepartmentId: 'dept-ee',
-        purpose: 'Faculty inter-department loan',
-      };
-
-      const result = await service.transferMaterial('keeper-1', dto);
-
-      expect(result.type).toBe(TransactionType.TRANSFER);
-      expect(result.quantity).toBe(10);
-      expect(result.departmentId).toBe('dept-ee');
-
-      expect(auditService.log).toHaveBeenCalledWith(
-        'keeper-1',
-        'TRANSFER',
-        'INVENTORY',
-        expect.stringContaining('Transferred 10 Ream(s) of "A4 Printing Paper"'),
-      );
-    });
-
-    it('should reject transfer with BadRequestException when quantity exceeds available stock', async () => {
-      prisma.material.findUnique.mockResolvedValue(mockMaterial); // available = 30
-
+    it('should reject transfers until location-aware stock is implemented', async () => {
       await expect(
         service.transferMaterial('keeper-1', {
           materialId: 'mat-uuid-1',
-          quantity: 40,
+          quantity: 10,
           toDepartmentId: 'dept-ee',
+          purpose: 'Faculty inter-department loan',
         }),
-      ).rejects.toThrow(BadRequestException);
+      ).rejects.toThrow(ConflictException);
+
+      expect(prisma.material.findUnique).not.toHaveBeenCalled();
+      expect(auditService.log).not.toHaveBeenCalled();
     });
 
-    it('should throw NotFoundException if material does not exist', async () => {
-      prisma.material.findUnique.mockResolvedValue(null);
-
-      await expect(
-        service.transferMaterial('keeper-1', {
-          materialId: 'missing',
-          quantity: 5,
-          toDepartmentId: 'dept-ee',
-        }),
-      ).rejects.toThrow(NotFoundException);
-    });
   });
 
   describe('findAllTransactions()', () => {

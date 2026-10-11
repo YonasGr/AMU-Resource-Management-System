@@ -3,12 +3,14 @@ import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Role } from '@prisma/client';
 import {
   InventoryService,
+} from './inventory.service';
+import {
+  AdjustmentDto,
+  ReturnDto,
   StockInDto,
   StockOutDto,
-  ReturnDto,
-  AdjustmentDto,
   TransferDto,
-} from './inventory.service';
+} from './dto/inventory.dto';
 import { Roles } from '../auth/decorators/roles.decorator';
 
 @ApiTags('inventory')

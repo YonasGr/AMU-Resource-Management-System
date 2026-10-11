@@ -227,6 +227,14 @@ model MaterialRequest {
   @@map("material_requests")
 }
 
+model RequestNumberCounter {
+  year       Int      @id
+  nextNumber Int      @default(1) @map("next_number")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  @@map("request_number_counters")
+}
+
 model MaterialRequestItem {
   id                String          @id @default(uuid())
   requestId         String          @map("request_id")

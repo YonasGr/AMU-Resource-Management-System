@@ -13,6 +13,7 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(RedisService.name);
   private client: Redis | null = null;
   private isConnected = false;
+  private isProduction = false;
 
   // In-memory fallback if Redis is unavailable (e.g. unit tests, local offline dev)
   private readonly memoryStore = new Map<string, { value: string; expiresAt: number }>();
@@ -20,6 +21,8 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
   constructor(private readonly configService: ConfigService) {}
 
   async onModuleInit() {
+    const environment = this.configService.get<string>('NODE_ENV') || 'development';
+    this.isProduction = environment === 'production';
     const redisUrl = this.configService.get<string>('REDIS_URL');
     const host = this.configService.get<string>('REDIS_HOST') || this.configService.get<string>('REDISHOST') || 'localhost';
     const port = Number(this.configService.get<number>('REDIS_PORT') || this.configService.get<number>('REDISPORT')) || 6379;
@@ -58,7 +61,11 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
 
       this.client.on('error', (err) => {
         this.isConnected = false;
-        this.logger.warn(`Redis connection error (${err.message}); falling back to memory store`);
+        if (this.isProduction) {
+          this.logger.error(`Redis connection error in production: ${err.message}`);
+        } else {
+          this.logger.warn(`Redis connection error (${err.message}); falling back to memory store`);
+        }
       });
 
       this.client.on('close', () => {
@@ -67,10 +74,16 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
 
       await this.client.connect().catch((err) => {
         this.isConnected = false;
+        if (environment === 'production') {
+          throw new Error(`Redis is required in production: ${err.message}`);
+        }
         this.logger.warn(`Initial Redis connection failed (${err.message}); using memory fallback`);
       });
     } catch (err: any) {
       this.isConnected = false;
+      if (environment === 'production') {
+        throw err;
+      }
       this.logger.warn(`Failed to initialize Redis client (${err?.message}); using memory fallback`);
     }
   }
@@ -93,6 +106,7 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
 
   /** Get raw value by key */
   async get(key: string): Promise<string | null> {
+    this.ensureAvailableInProduction();
     if (this.isRedisConnected()) {
       try {
         return await this.client!.get(key);
@@ -112,6 +126,7 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
 
   /** Set key-value with optional TTL in seconds */
   async set(key: string, value: string, ttlSeconds?: number): Promise<void> {
+    this.ensureAvailableInProduction();
     if (this.isRedisConnected()) {
       try {
         if (ttlSeconds && ttlSeconds > 0) {
@@ -131,6 +146,7 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
 
   /** Delete a key */
   async del(key: string): Promise<void> {
+    this.ensureAvailableInProduction();
     if (this.isRedisConnected()) {
       try {
         await this.client!.del(key);
@@ -143,6 +159,7 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
 
   /** Increment integer value for key. Returns new counter value. */
   async incr(key: string): Promise<number> {
+    this.ensureAvailableInProduction();
     if (this.isRedisConnected()) {
       try {
         return await this.client!.incr(key);
@@ -161,6 +178,7 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
 
   /** Set TTL expiration in seconds on key */
   async expire(key: string, ttlSeconds: number): Promise<void> {
+    this.ensureAvailableInProduction();
     if (this.isRedisConnected()) {
       try {
         await this.client!.expire(key, ttlSeconds);
@@ -179,6 +197,7 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
 
   /** Get remaining TTL in seconds for key (-1 if no expire, -2 if not exists) */
   async ttl(key: string): Promise<number> {
+    this.ensureAvailableInProduction();
     if (this.isRedisConnected()) {
       try {
         return await this.client!.ttl(key);
@@ -239,5 +258,11 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
       remainingAttempts: Math.max(0, maxAttempts - currentCount),
       retryAfterSeconds: 0,
     };
+  }
+
+  private ensureAvailableInProduction() {
+    if (this.isProduction && !this.isRedisConnected()) {
+      throw new Error('Redis is unavailable; production rate limiting is fail-closed');
+    }
   }
 }

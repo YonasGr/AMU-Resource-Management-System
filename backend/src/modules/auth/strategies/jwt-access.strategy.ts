@@ -18,9 +18,7 @@ export class JwtAccessStrategy extends PassportStrategy(Strategy, 'jwt') {
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
       ignoreExpiration: false,
-      secretOrKey:
-        configService.get<string>('JWT_ACCESS_SECRET') ||
-        'amu-default-jwt-access-secret-32-chars-long-min',
+      secretOrKey: configService.getOrThrow<string>('JWT_ACCESS_SECRET'),
     });
   }
 

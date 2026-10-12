@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { validateEnv } from './config/env.validation';
 import { APP_GUARD } from '@nestjs/core';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
@@ -25,6 +26,7 @@ import { ProcurementModule } from './modules/procurement/procurement.module';
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
+      validate: validateEnv,
     }),
     RedisModule,
     PrismaModule,

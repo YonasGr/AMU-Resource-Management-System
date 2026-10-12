@@ -1,4 +1,3 @@
-import * as http from 'http';
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
@@ -23,6 +22,7 @@ async function bootstrap() {
     'http://127.0.0.1:3000',
   ];
 
+  const isProduction = process.env.NODE_ENV === 'production';
   const origins = allowedOrigins.length > 0 ? allowedOrigins : defaultOrigins;
 
   app.enableCors({
@@ -35,8 +35,9 @@ async function bootstrap() {
       if (
         allowedOrigins.includes('*') ||
         origins.includes(normalizedOrigin) ||
-        normalizedOrigin.endsWith('.up.railway.app') ||
-        normalizedOrigin.endsWith('.railway.app')
+        (!isProduction &&
+          (normalizedOrigin.endsWith('.up.railway.app') ||
+            normalizedOrigin.endsWith('.railway.app')))
       ) {
         return callback(null, true);
       }
@@ -76,18 +77,5 @@ async function bootstrap() {
   // eslint-disable-next-line no-console
   console.log(`Swagger docs at http://0.0.0.0:${primaryPort}/api/docs`);
 
-  // Secondary fallback port so both 3000 and 8080 always accept traffic
-  const fallbackPort = primaryPort === 3000 ? 8080 : 3000;
-  try {
-    const httpAdapter = app.getHttpAdapter();
-    const server = http.createServer(httpAdapter.getInstance());
-    server.listen(fallbackPort, '0.0.0.0', () => {
-      // eslint-disable-next-line no-console
-      console.log(`University ERP backend also listening on fallback http://0.0.0.0:${fallbackPort}`);
-    });
-  } catch (err) {
-    // eslint-disable-next-line no-console
-    console.warn(`Could not start fallback listener on ${fallbackPort}:`, err);
-  }
 }
 bootstrap();

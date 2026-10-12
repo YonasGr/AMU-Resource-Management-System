@@ -79,7 +79,7 @@ async function main() {
 
   // 3. Users (5 Core System Users with Locked-Down Role Credentials)
   const isProd = process.env.NODE_ENV === 'production';
-  const allowDefaultSeed = process.env.ALLOW_DEFAULT_SEED_PASSWORDS === 'true' || !isProd;
+  const allowDefaultSeed = !isProd && process.env.ALLOW_DEFAULT_SEED_PASSWORDS !== 'false';
   const adminPassword = process.env.SEED_ADMIN_PASSWORD || (allowDefaultSeed ? 'Admin#AMU2026!SecureKey' : '');
   const managerPassword = process.env.SEED_MANAGER_PASSWORD || (allowDefaultSeed ? 'Manager#AMU2026!StoreKey' : '');
   const keeperPassword = process.env.SEED_KEEPER_PASSWORD || (allowDefaultSeed ? 'Keeper#AMU2026!InventoryKey' : '');
@@ -88,7 +88,7 @@ async function main() {
 
   if (isProd && !allowDefaultSeed && (!adminPassword || !managerPassword || !keeperPassword || !auditorPassword || !requesterPassword)) {
     throw new Error(
-      'Production Security Error: In production, explicit SEED_*_PASSWORD environment variables must be defined for all 5 accounts (or set ALLOW_DEFAULT_SEED_PASSWORDS=true for testing/staging environments).',
+      'Production Security Error: explicit SEED_*_PASSWORD environment variables must be defined for all 5 accounts.',
     );
   }
 

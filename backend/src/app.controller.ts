@@ -1,4 +1,4 @@
-import { Controller, Get } from '@nestjs/common';
+import { Controller, Get, HttpCode, HttpStatus } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { AppService } from './app.service';
 import { Public } from './modules/auth/decorators/public.decorator';
@@ -24,5 +24,13 @@ export class AppController {
   @ApiOperation({ summary: 'Health check endpoint used by Docker/monitoring' })
   getHealth() {
     return this.appService.getHealth();
+  }
+
+  @Public()
+  @Get('health/readiness')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Readiness check for database and Redis dependencies' })
+  async getReadiness() {
+    return this.appService.getReadiness();
   }
 }

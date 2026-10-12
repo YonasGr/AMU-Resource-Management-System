@@ -215,6 +215,14 @@ Production configuration is fail-fast: `NODE_ENV=production` requires explicit J
 
 Production seeding is disabled by default. If a reviewed one-time seed is required, all seeded account passwords must be explicitly supplied through `SEED_*_PASSWORD` variables; default demo passwords are never accepted in production.
 
+### Recovery and observability
+
+Every HTTP request receives an `X-Correlation-Id` response header. A caller may supply a bounded correlation ID, otherwise the API generates one. Include this value in support tickets, deployment incidents, and audit investigations. The readiness endpoint at `/health/readiness` checks both PostgreSQL and Redis; a `not_ready` result means the service should not receive traffic.
+
+The repository includes `infra/db/backup-postgres.sh` for encrypted-storage-compatible custom-format PostgreSQL backups and `infra/db/restore-postgres.sh` for an approved restore window. These scripts require explicit `DATABASE_URL`, `BACKUP_DIR`, or `BACKUP_FILE` variables and never embed credentials. Operators must schedule backups outside the application container, retain multiple points in time, monitor backup success, and perform periodic restore drills. A backup is not considered recoverable until a restore has been tested.
+
+Recommended production objectives are to define an owner-approved recovery point objective (RPO), recovery time objective (RTO), backup retention period, restore evidence location, and escalation contact. The application does not claim that a provider backup or restore drill has been completed merely because these scripts exist.
+
 - Web client: <http://localhost:5173> or <http://localhost:8080>
 - API: <http://localhost:3000>
 - Swagger: <http://localhost:3000/api/docs>

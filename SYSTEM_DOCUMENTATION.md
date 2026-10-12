@@ -153,6 +153,8 @@ Outbox events use `PENDING`, `PROCESSING`, `PROCESSED`, and `FAILED` statuses. F
 
 The current service adapter makes the enqueue durable and idempotent, but strict business-write-plus-outbox atomicity still requires passing a transaction-scoped outbox client into the highest-risk mutation transactions. That follow-up remains necessary before claiming full transactional guarantees for every workflow.
 
+Audit records now support actor role, entity type and ID, correlation ID, source, reason, request metadata, and structured before/after JSON snapshots. Existing callers receive generated correlation IDs and the `api` source by default; workflows can provide richer context through `AuditService.log` options. Audit rows are protected against application-level updates and deletes by a PostgreSQL trigger and should be retained in a restricted database role or exported to separate immutable storage for long-term retention.
+
 For exact fields, relations, and enum values, see [`backend/prisma/schema.prisma`](backend/prisma/schema.prisma). The schema and migrations define persisted behavior; this summary is intentionally compact.
 
 ## Architecture and operation

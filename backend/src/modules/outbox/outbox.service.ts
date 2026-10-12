@@ -1,13 +1,23 @@
 import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 
 type AuditPayload = {
   userId: string | null;
+  actorRole?: string;
   action: string;
   module: string;
+  entityType?: string;
+  entityId?: string;
+  correlationId: string;
   details?: string;
+  reason?: string;
+  source: string;
   ipAddress?: string;
+  userAgent?: string;
+  beforeData?: Record<string, unknown>;
+  afterData?: Record<string, unknown>;
 };
 
 type NotificationPayload = {
@@ -145,7 +155,13 @@ export class OutboxService implements OnModuleInit, OnModuleDestroy {
   private async dispatch(eventType: string, payload: unknown) {
     if (eventType === 'AUDIT_LOG') {
       const event = payload as AuditPayload;
-      await this.prisma.auditLog.create({ data: event });
+      await this.prisma.auditLog.create({
+        data: {
+          ...event,
+          beforeData: event.beforeData as Prisma.InputJsonValue | undefined,
+          afterData: event.afterData as Prisma.InputJsonValue | undefined,
+        },
+      });
       return;
     }
     if (eventType === 'NOTIFICATION_BATCH') {

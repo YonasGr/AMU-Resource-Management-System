@@ -30,6 +30,8 @@ if [ "$SEED_CATALOG" = "true" ]; then
   else
     pnpm prisma:seed:catalog
   fi
+  catalog_count="$(node -e "const { PrismaClient } = require('@prisma/client'); const prisma = new PrismaClient(); prisma.material.count().then((count) => { console.log(count); }).finally(() => prisma.\$disconnect());")"
+  echo "==> [AMU Store] Catalog material count: ${catalog_count}"
   echo "==> [AMU Store] Catalog seed completed successfully."
 fi
 

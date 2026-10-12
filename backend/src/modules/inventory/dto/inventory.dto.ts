@@ -42,6 +42,56 @@ export class StockInDto {
   remarks?: string;
 }
 
+export class CreateGoodsReceiptDto {
+  @IsUUID()
+  materialId!: string;
+
+  @IsUUID()
+  storeId!: string;
+
+  @IsUUID()
+  @IsOptional()
+  supplierId?: string;
+
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  quantityReceived!: number;
+
+  @IsString()
+  @IsOptional()
+  @IsNotEmpty()
+  deliveryReference?: string;
+
+  @IsString()
+  @IsOptional()
+  condition?: string;
+
+  @IsString()
+  @IsOptional()
+  remarks?: string;
+}
+
+export class InspectGoodsReceiptDto {
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  quantityAccepted!: number;
+
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  quantityRejected!: number;
+
+  @IsString()
+  @IsOptional()
+  condition?: string;
+
+  @IsString()
+  @IsOptional()
+  remarks?: string;
+}
+
 export class StockOutDto {
   @IsUUID()
   materialId!: string;

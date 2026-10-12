@@ -63,6 +63,7 @@ model Store {
   transactions InventoryTransaction[] @relation("TransactionStore")
   outgoingTransfers InventoryTransfer[] @relation("TransferSource")
   incomingTransfers InventoryTransfer[] @relation("TransferDestination")
+  goodsReceipts GoodsReceipt[]
   createdAt    DateTime        @default(now()) @map("created_at")
   updatedAt    DateTime        @updatedAt @map("updated_at")
 
@@ -81,6 +82,9 @@ model User {
   requestedTransfers InventoryTransfer[] @relation("TransferRequester")
   dispatchedTransfers InventoryTransfer[] @relation("TransferDispatcher")
   receivedTransfers InventoryTransfer[] @relation("TransferReceiver")
+  createdGoodsReceipts GoodsReceipt[] @relation("ReceiptCreator")
+  inspectedGoodsReceipts GoodsReceipt[] @relation("ReceiptInspector")
+  postedGoodsReceipts GoodsReceipt[] @relation("ReceiptPoster")
 
   departmentId String?     @map("department_id")
   department   Department? @relation(fields: [departmentId], references: [id])
@@ -136,6 +140,7 @@ model Supplier {
   status        SupplierStatus @default(ACTIVE)
 
   transactions InventoryTransaction[]
+  goodsReceipts GoodsReceipt[]
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -179,6 +184,7 @@ model Material {
   requestItems MaterialRequestItem[]
   transactions InventoryTransaction[]
   transfers InventoryTransfer[]
+  goodsReceipts GoodsReceipt[]
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -290,6 +296,45 @@ enum TransferStatus {
   DISPATCHED
   RECEIVED
   CANCELLED
+}
+
+enum ReceiptStatus {
+  DRAFT
+  INSPECTED
+  POSTED
+  REJECTED
+}
+
+model GoodsReceipt {
+  id                String       @id @default(uuid())
+  receiptCode       String       @unique @map("receipt_code")
+  materialId        String       @map("material_id")
+  material          Material     @relation(fields: [materialId], references: [id])
+  storeId           String       @map("store_id")
+  store             Store        @relation(fields: [storeId], references: [id])
+  supplierId        String?      @map("supplier_id")
+  supplier          Supplier?    @relation(fields: [supplierId], references: [id])
+  quantityReceived  Int          @map("quantity_received")
+  quantityAccepted  Int          @default(0) @map("quantity_accepted")
+  quantityRejected  Int          @default(0) @map("quantity_rejected")
+  condition         String?
+  deliveryReference String?      @map("delivery_reference")
+  status            ReceiptStatus @default(DRAFT)
+  createdById       String       @map("created_by_id")
+  createdBy         User         @relation("ReceiptCreator", fields: [createdById], references: [id])
+  inspectedById     String?      @map("inspected_by_id")
+  inspectedBy       User?        @relation("ReceiptInspector", fields: [inspectedById], references: [id])
+  inspectedAt       DateTime?    @map("inspected_at")
+  postedById        String?      @map("posted_by_id")
+  postedBy          User?        @relation("ReceiptPoster", fields: [postedById], references: [id])
+  postedAt          DateTime?    @map("posted_at")
+  remarks           String?
+  createdAt         DateTime     @default(now()) @map("created_at")
+  updatedAt         DateTime     @updatedAt @map("updated_at")
+
+  @@index([storeId, status])
+  @@index([supplierId])
+  @@map("goods_receipts")
 }
 
 model InventoryTransfer {

@@ -6,6 +6,8 @@ import {
 } from './inventory.service';
 import {
   AdjustmentDto,
+  CreateGoodsReceiptDto,
+  InspectGoodsReceiptDto,
   ReturnDto,
   StockInDto,
   StockOutDto,
@@ -25,6 +27,28 @@ export class InventoryController {
   @ApiOperation({ summary: 'Receive Stock / Stock In (Storekeeper / Manager / Admin - UC8)' })
   stockIn(@Req() req: any, @Body() dto: StockInDto) {
     return this.inventoryService.stockIn(req.user, dto);
+  }
+
+  @Post('receipts')
+  @Roles(Role.STOREKEEPER, Role.STORE_MANAGER, Role.ADMINISTRATOR)
+  createGoodsReceipt(@Req() req: any, @Body() dto: CreateGoodsReceiptDto) {
+    return this.inventoryService.createGoodsReceipt(req.user, dto);
+  }
+
+  @Post('receipts/:id/inspect')
+  @Roles(Role.STORE_MANAGER, Role.ADMINISTRATOR)
+  inspectGoodsReceipt(
+    @Req() req: any,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: InspectGoodsReceiptDto,
+  ) {
+    return this.inventoryService.inspectGoodsReceipt(id, req.user, dto);
+  }
+
+  @Post('receipts/:id/post')
+  @Roles(Role.STORE_MANAGER, Role.ADMINISTRATOR)
+  postGoodsReceipt(@Req() req: any, @Param('id', ParseUUIDPipe) id: string) {
+    return this.inventoryService.postGoodsReceipt(id, req.user);
   }
 
   @Post('stock-out')

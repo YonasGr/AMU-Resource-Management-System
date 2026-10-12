@@ -7,6 +7,8 @@ import { AccessControlService } from '../auth/access-control.service';
 import { SafeUser } from '../auth/decorators/current-user.decorator';
 import {
   AdjustmentDto,
+  CreateGoodsReceiptDto,
+  InspectGoodsReceiptDto,
   ReturnDto,
   StockInDto,
   StockOutDto,
@@ -169,6 +171,131 @@ export class InventoryService {
     );
 
     return transaction;
+  }
+
+  async createGoodsReceipt(actor: SafeUser | string, dto: CreateGoodsReceiptDto) {
+    const user = this.normalizeActor(actor);
+    this.resolveStoreId(user, dto.storeId);
+    const [material, store] = await Promise.all([
+      this.prisma.material.findUnique({ where: { id: dto.materialId } }),
+      this.prisma.store.findFirst({ where: { id: dto.storeId, status: 'ACTIVE' } }),
+    ]);
+    if (!material) throw new NotFoundException(`Material ${dto.materialId} not found`);
+    if (!store) throw new BadRequestException('The receiving store is not active');
+
+    const receiptCode = `GRN-${Date.now().toString().slice(-8)}-${Math.floor(100 + Math.random() * 900)}`;
+    const receipt = await this.prisma.goodsReceipt.create({
+      data: {
+        receiptCode,
+        materialId: dto.materialId,
+        storeId: dto.storeId,
+        supplierId: dto.supplierId,
+        quantityReceived: dto.quantityReceived,
+        deliveryReference: dto.deliveryReference,
+        condition: dto.condition,
+        remarks: dto.remarks,
+        createdById: user.id,
+      },
+      include: { material: true, store: true, supplier: true },
+    });
+    await this.auditService.log(user.id, 'CREATE_GOODS_RECEIPT', 'INVENTORY', `Created goods receipt ${receiptCode}`);
+    return receipt;
+  }
+
+  async inspectGoodsReceipt(id: string, actor: SafeUser | string, dto: InspectGoodsReceiptDto) {
+    const user = this.normalizeActor(actor);
+    const receipt = await this.prisma.goodsReceipt.findUnique({ where: { id } });
+    if (!receipt) throw new NotFoundException(`Goods receipt ${id} not found`);
+    this.resolveStoreId(user, receipt.storeId);
+    if (receipt.status !== 'DRAFT') {
+      throw new BadRequestException(`Only DRAFT receipts can be inspected. Current status is ${receipt.status}`);
+    }
+    if (dto.quantityAccepted + dto.quantityRejected !== receipt.quantityReceived) {
+      throw new BadRequestException('Accepted and rejected quantities must equal the received quantity');
+    }
+    if (dto.quantityRejected > 0 && !dto.condition?.trim()) {
+      throw new BadRequestException('A condition note is required when quantities are rejected');
+    }
+    const inspected = await this.prisma.goodsReceipt.update({
+      where: { id },
+      data: {
+        status: 'INSPECTED',
+        quantityAccepted: dto.quantityAccepted,
+        quantityRejected: dto.quantityRejected,
+        condition: dto.condition ?? receipt.condition,
+        remarks: dto.remarks ?? receipt.remarks,
+        inspectedById: user.id,
+        inspectedAt: new Date(),
+      },
+      include: { material: true, store: true, supplier: true },
+    });
+    await this.auditService.log(user.id, 'INSPECT_GOODS_RECEIPT', 'INVENTORY', `Inspected goods receipt ${receipt.receiptCode}`);
+    return inspected;
+  }
+
+  async postGoodsReceipt(id: string, actor: SafeUser | string) {
+    const user = this.normalizeActor(actor);
+    const receipt = await this.prisma.goodsReceipt.findUnique({ where: { id } });
+    if (!receipt) throw new NotFoundException(`Goods receipt ${id} not found`);
+    this.resolveStoreId(user, receipt.storeId);
+    if (receipt.status !== 'INSPECTED') {
+      throw new BadRequestException(`Only INSPECTED receipts can be posted. Current status is ${receipt.status}`);
+    }
+    const transactionCode = `TXN-IN-${receipt.receiptCode}`;
+    const posted = await this.prisma.$transaction(async (tx) => {
+      const claimed = await tx.goodsReceipt.updateMany({
+        where: { id, status: 'INSPECTED' },
+        data: { status: 'POSTED', postedById: user.id, postedAt: new Date() },
+      });
+      if (claimed.count !== 1) {
+        throw new BadRequestException('This goods receipt has already been posted or is no longer inspectable');
+      }
+      await tx.stockBalance.upsert({
+        where: { storeId_materialId: { storeId: receipt.storeId, materialId: receipt.materialId } },
+        update: {
+          quantityReceived: { increment: receipt.quantityAccepted },
+          remainingQuantity: { increment: receipt.quantityAccepted },
+        },
+        create: {
+          storeId: receipt.storeId,
+          materialId: receipt.materialId,
+          quantityReceived: receipt.quantityAccepted,
+          remainingQuantity: receipt.quantityAccepted,
+        },
+      });
+      await tx.stockSummary.upsert({
+        where: { materialId: receipt.materialId },
+        update: {
+          quantityReceived: { increment: receipt.quantityAccepted },
+          remainingQuantity: { increment: receipt.quantityAccepted },
+        },
+        create: {
+          materialId: receipt.materialId,
+          quantityReceived: receipt.quantityAccepted,
+          remainingQuantity: receipt.quantityAccepted,
+        },
+      });
+      await tx.inventoryTransaction.create({
+        data: {
+          transactionCode,
+          type: TransactionType.STOCK_IN,
+          materialId: receipt.materialId,
+          storeId: receipt.storeId,
+          supplierId: receipt.supplierId,
+          quantity: receipt.quantityAccepted,
+          issuedById: user.id,
+          purpose: `Goods receipt ${receipt.receiptCode}`,
+          remarks: receipt.remarks,
+        },
+      });
+      return tx.goodsReceipt.update({
+        where: { id },
+        data: {},
+        include: { material: true, store: true, supplier: true },
+      });
+    });
+    await this.auditService.log(user.id, 'POST_GOODS_RECEIPT', 'INVENTORY', `Posted goods receipt ${receipt.receiptCode}`);
+    return posted;
   }
 
   /** Direct Stock Out (Issue materials directly to employee / department) */

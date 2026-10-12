@@ -139,6 +139,8 @@ Primary Prisma models are `Department`, `Store`, `User`, `Employee`, `Supplier`,
 
 Inter-store movement uses `InventoryTransfer` documents. Creating a transfer records a `DRAFT`; dispatch atomically removes available stock from the source store and records a transfer transaction; receipt adds stock to the destination store and completes the document. Transfers cannot be created within the same store or consume reserved stock.
 
+Receiving from a supplier or other source can use `GoodsReceipt` documents. A receipt begins as `DRAFT` and does not change inventory. Inspection records accepted and rejected quantities; those quantities must reconcile to the received quantity, and rejected units require a condition note. Posting is allowed only after inspection, atomically adds accepted units to the receiving store and aggregate compatibility balance, records a `STOCK_IN` transaction, and marks the receipt `POSTED`. Rejected units never enter available inventory.
+
 For exact fields, relations, and enum values, see [`backend/prisma/schema.prisma`](backend/prisma/schema.prisma). The schema and migrations define persisted behavior; this summary is intentionally compact.
 
 ## Architecture and operation

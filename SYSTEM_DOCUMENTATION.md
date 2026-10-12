@@ -138,6 +138,26 @@ All report endpoints accept bounded query controls: `page` (1-based, default `1`
 
 The frontend provides report views and export/print actions. These are operational inventory reports, not financial valuation reports. For larger exports, clients should request sequential pages rather than raising `pageSize` beyond the server maximum.
 
+## Valuation and accounting policy
+
+The application is currently an **operational inventory system**, not a perpetual financial-inventory subledger. It does not calculate inventory value, cost of goods issued, cost of goods sold, write-downs, tax, landed cost, or general-ledger postings.
+
+`InventoryTransaction.unitPrice` and purchase-order line prices are source-document capture fields. They preserve the price supplied by the operator or supplier for operational traceability, but they are not an accounting valuation basis. A transaction with no price is valid, and historical prices must not be inferred from the latest receipt.
+
+The following controls apply until a financial valuation release is approved:
+
+- Do not use `StockSummary`, `StockBalance`, or operational reports as a currency-valued balance-sheet figure.
+- Do not post inventory, COGS, accrual, or variance journals from this application.
+- Do not mix quantities across units or currencies when preparing financial reports.
+- Treat supplier price changes, freight, tax, discounts, rejected quantities, returns, and exchange-rate effects as external accounting concerns.
+- Reconcile physical quantities and approved receiving/issue documents to the organization’s accounting system outside this application.
+
+### Required decision before financial integration
+
+Before enabling valuation, Finance must approve the inventory accounting basis and ownership of the accounting master data. The implementation must then select one explicit cost-flow method per inventory scope (for example, weighted-average or FIFO), define currency and tax/landed-cost rules, and establish treatment for returns, transfers, adjustments, expiry, damage, and supplier credits.
+
+The future valuation release must introduce an auditable cost layer rather than reinterpret existing operational fields. At minimum it must preserve the source transaction price, applied unit cost, total cost, currency, valuation method, cost-layer or allocation reference, and posting/export status. Reprocessing must be idempotent and must not change historical operational quantities.
+
 ## Data model
 
 Primary Prisma models are `Department`, `Store`, `User`, `Employee`, `Supplier`, `MaterialCategory`, `Material`, `StockSummary`, `StockBalance`, `MaterialRequest`, `MaterialRequestItem`, `InventoryTransaction`, `AuditLog`, and `Notification`.

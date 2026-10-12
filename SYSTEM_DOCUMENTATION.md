@@ -240,7 +240,7 @@ Start the development stack with `docker compose up -d --build`. It starts the d
 
 Production configuration is fail-fast: `NODE_ENV=production` requires explicit JWT access/refresh secrets, a configured Redis connection, and an explicit CORS origin. Production does not use JWT defaults, does not silently replace Redis with an in-memory store, does not open a secondary fallback listener, and does not permit wildcard or automatically trusted Railway origins. PostgreSQL and Redis are internal compose services without published host ports; only the application entry point should be exposed.
 
-Production seeding is disabled by default. If a reviewed one-time seed is required, all seeded account passwords must be explicitly supplied through `SEED_*_PASSWORD` variables; default demo passwords are never accepted in production.
+Production seeding is disabled by default. If a reviewed one-time seed is required, set `AUTO_SEED=true` only for that deployment and supply all seeded account passwords through the `SEED_*_PASSWORD` variables; default demo passwords are never accepted in production. A seed failure stops the container and must be corrected before the API can start.
 
 ### Recovery and observability
 

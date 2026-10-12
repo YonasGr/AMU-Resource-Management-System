@@ -88,6 +88,9 @@ export class ProcurementService {
     const order = await this.prisma.purchaseOrder.findUnique({ where: { id } });
     if (!order) throw new NotFoundException(`Purchase order ${id} not found`);
     this.ensureStoreAccess(user, order.storeId);
+    if (to === PurchaseOrderStatus.APPROVED && order.createdById === user.id) {
+      throw new ForbiddenException('The person who created a purchase order cannot approve it');
+    }
     if (order.status !== from) throw new BadRequestException(`Only ${from} purchase orders can move to ${to}`);
     const data =
       to === PurchaseOrderStatus.APPROVED

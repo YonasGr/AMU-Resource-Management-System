@@ -73,3 +73,15 @@ export class IssueRequestItemDto {
   @Min(1)
   quantity!: number;
 }
+
+export class CancelRequestDto {
+  @IsString()
+  @IsNotEmpty()
+  reason!: string;
+}
+
+export class HandoverRequestDto {
+  @IsString()
+  @IsNotEmpty()
+  evidence!: string;
+}

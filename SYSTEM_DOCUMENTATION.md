@@ -145,6 +145,8 @@ Cycle counts use `CycleCount` sessions. Creating a session snapshots each select
 
 Returns can use `MaterialReturn` inspection documents without changing stock at intake. The request item and store are derived and validated from the original issued request, and outstanding quantities include other open return inspections. Inspection assigns `ACCEPT_TO_STOCK`, `QUARANTINE`, or `SCRAP`. Posting increments the request item's returned quantity; accepted returns restore store stock and write a `RETURN` ledger transaction, while quarantine and scrap dispositions do not inflate available stock. The existing immediate return endpoint remains available for legacy clients.
 
+Request lifecycle closure uses explicit `BACKORDERED`, `CANCELLED`, and `CLOSED` states. Managers can mark approved or partially issued requests as backordered, and cancellation releases any remaining reservations while refusing cancellation of lines that were already issued. Store staff record handover evidence after full issuance; only the requester can confirm a handed-over request, and confirmation requires all requested quantities to be issued with no open return inspections before the request becomes `CLOSED`.
+
 For exact fields, relations, and enum values, see [`backend/prisma/schema.prisma`](backend/prisma/schema.prisma). The schema and migrations define persisted behavior; this summary is intentionally compact.
 
 ## Architecture and operation

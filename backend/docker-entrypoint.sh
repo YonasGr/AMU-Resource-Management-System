@@ -3,12 +3,13 @@ set -e
 
 echo "==> [AMU Store] Production Entrypoint Initializing..."
 
-if [ -n "$DATABASE_URL" ]; then
-  echo "==> [AMU Store] Applying Prisma database migrations..."
-  npx prisma migrate deploy
-else
-  echo "==> [AMU Store] WARNING: DATABASE_URL is not set!"
+if [ -z "$DATABASE_URL" ]; then
+  echo "==> [AMU Store] ERROR: DATABASE_URL is required."
+  exit 1
 fi
+
+echo "==> [AMU Store] Applying Prisma database migrations..."
+npx prisma migrate deploy
 
 if [ "$AUTO_SEED" = "true" ]; then
   echo "==> [AMU Store] AUTO_SEED is enabled. Seeding initial database records..."

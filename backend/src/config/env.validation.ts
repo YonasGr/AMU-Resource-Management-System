@@ -105,5 +105,26 @@ export function validateEnv(config: Record<string, unknown>) {
         .join('\n')}`,
     );
   }
+  if (validatedConfig.NODE_ENV === Environment.Production) {
+    const requiredProductionSecrets = [
+      ['JWT_ACCESS_SECRET', validatedConfig.JWT_ACCESS_SECRET],
+      ['JWT_REFRESH_SECRET', validatedConfig.JWT_REFRESH_SECRET],
+    ];
+    const missing = requiredProductionSecrets
+      .filter(([, value]) => typeof value !== 'string' || value.length < 32)
+      .map(([name]) => name);
+    if (missing.length > 0) {
+      throw new Error(`Production configuration is invalid or missing: ${missing.join(', ')}`);
+    }
+    if (!validatedConfig.CORS_ORIGIN && !validatedConfig.CORS_ORIGINS) {
+      throw new Error('Production configuration requires CORS_ORIGIN or CORS_ORIGINS');
+    }
+    if ([validatedConfig.CORS_ORIGIN, validatedConfig.CORS_ORIGINS].some((value) => value?.split(',').some((origin) => origin.trim() === '*'))) {
+      throw new Error('Production configuration must not allow wildcard CORS origins');
+    }
+    if (!validatedConfig.REDIS_URL && !validatedConfig.REDIS_HOST && !validatedConfig.REDISHOST) {
+      throw new Error('Production configuration requires REDIS_URL or REDIS_HOST');
+    }
+  }
   return validatedConfig;
 }

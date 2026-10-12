@@ -211,6 +211,10 @@ flowchart LR
 
 Start the development stack with `docker compose up -d --build`. It starts the database, Redis, API, web client, and reverse proxy. The backend container generates Prisma Client, applies checked-in migrations, seeds development data, and starts the API.
 
+Production configuration is fail-fast: `NODE_ENV=production` requires explicit JWT access/refresh secrets, a configured Redis connection, and an explicit CORS origin. Production does not use JWT defaults, does not silently replace Redis with an in-memory store, does not open a secondary fallback listener, and does not permit wildcard or automatically trusted Railway origins. PostgreSQL and Redis are internal compose services without published host ports; only the application entry point should be exposed.
+
+Production seeding is disabled by default. If a reviewed one-time seed is required, all seeded account passwords must be explicitly supplied through `SEED_*_PASSWORD` variables; default demo passwords are never accepted in production.
+
 - Web client: <http://localhost:5173> or <http://localhost:8080>
 - API: <http://localhost:3000>
 - Swagger: <http://localhost:3000/api/docs>

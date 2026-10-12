@@ -95,9 +95,7 @@ export class AuthService {
       const payload = this.jwtService.verify<{ sub: string; type: string }>(
         dto.refreshToken,
         {
-          secret:
-            this.configService.get<string>('JWT_REFRESH_SECRET') ||
-            'amu-default-jwt-refresh-secret-32-chars-long-min',
+          secret: this.configService.getOrThrow<string>('JWT_REFRESH_SECRET'),
         },
       );
       if (payload.type !== 'refresh') throw new Error('Invalid token type');
@@ -116,18 +114,14 @@ export class AuthService {
     const accessToken = this.jwtService.sign(
       { sub: user.id, email: user.email, role: user.role },
       {
-        secret:
-          this.configService.get<string>('JWT_ACCESS_SECRET') ||
-          'amu-default-jwt-access-secret-32-chars-long-min',
+        secret: this.configService.getOrThrow<string>('JWT_ACCESS_SECRET'),
         expiresIn: this.configService.get<string>('JWT_ACCESS_EXPIRES_IN') || '1d',
       },
     );
     const refreshToken = this.jwtService.sign(
       { sub: user.id, type: 'refresh' },
       {
-        secret:
-          this.configService.get<string>('JWT_REFRESH_SECRET') ||
-          'amu-default-jwt-refresh-secret-32-chars-long-min',
+        secret: this.configService.getOrThrow<string>('JWT_REFRESH_SECRET'),
         expiresIn: this.configService.get<string>('JWT_REFRESH_EXPIRES_IN') || '7d',
       },
     );

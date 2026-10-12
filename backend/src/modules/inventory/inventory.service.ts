@@ -38,6 +38,29 @@ export class InventoryService {
     private readonly accessControlService: AccessControlService,
   ) {}
 
+  private validateTraceability(
+    material: Partial<{
+      requiresLotTracking: boolean;
+      requiresExpiryTracking: boolean;
+      requiresSerialTracking: boolean;
+    }>,
+    data: { lotNumber?: string; expiryDate?: string; serialNumber?: string },
+    quantity: number,
+  ) {
+    if (material.requiresLotTracking === true && !data.lotNumber?.trim()) {
+      throw new BadRequestException('A lot number is required for this material');
+    }
+    if (material.requiresExpiryTracking === true && !data.expiryDate) {
+      throw new BadRequestException('An expiry date is required for this material');
+    }
+    if (data.expiryDate && new Date(data.expiryDate) <= new Date()) {
+      throw new BadRequestException('Expiry date must be in the future');
+    }
+    if (material.requiresSerialTracking === true && (!data.serialNumber?.trim() || quantity !== 1)) {
+      throw new BadRequestException('Serial-tracked material movements must provide one serial number per unit');
+    }
+  }
+
   private normalizeActor(actor: SafeUser | InventoryActor | string): InventoryActor {
     if (typeof actor === 'string') {
       return { id: actor, storeId: 'legacy-store', scopeType: ScopeType.STORE, role: Role.STOREKEEPER };
@@ -103,6 +126,7 @@ export class InventoryService {
     if (!material) {
       throw new NotFoundException(`Material ${dto.materialId} not found`);
     }
+    this.validateTraceability(material, dto, dto.quantity);
 
     const timeStamp = Date.now().toString().slice(-6);
     const rand = Math.floor(100 + Math.random() * 900);
@@ -118,10 +142,15 @@ export class InventoryService {
           quantity: dto.quantity,
           unitPrice: dto.unitPrice,
           supplierId: dto.supplierId || null,
+          lotNumber: dto.lotNumber,
+          batchNumber: dto.batchNumber,
+          expiryDate: dto.expiryDate ? new Date(dto.expiryDate) : undefined,
+          serialNumber: dto.serialNumber,
+          condition: dto.condition,
           issuedById: user.id,
           purpose: dto.purpose || 'Stock Received',
           remarks: dto.remarks,
-        },
+        } as never,
         include: {
           material: true,
           supplier: true,
@@ -194,6 +223,7 @@ export class InventoryService {
     ]);
     if (!material) throw new NotFoundException(`Material ${dto.materialId} not found`);
     if (!store) throw new BadRequestException('The receiving store is not active');
+    this.validateTraceability(material, dto, dto.quantityReceived);
 
     const receiptCode = `GRN-${Date.now().toString().slice(-8)}-${Math.floor(100 + Math.random() * 900)}`;
     const receipt = await this.prisma.goodsReceipt.create({
@@ -205,9 +235,13 @@ export class InventoryService {
         quantityReceived: dto.quantityReceived,
         deliveryReference: dto.deliveryReference,
         condition: dto.condition,
+        lotNumber: dto.lotNumber,
+        batchNumber: dto.batchNumber,
+        expiryDate: dto.expiryDate ? new Date(dto.expiryDate) : undefined,
+        serialNumber: dto.serialNumber,
         remarks: dto.remarks,
         createdById: user.id,
-      },
+      } as never,
       include: { material: true, store: true, supplier: true },
     });
     await this.auditService.log(user.id, 'CREATE_GOODS_RECEIPT', 'INVENTORY', `Created goods receipt ${receiptCode}`);
@@ -238,7 +272,7 @@ export class InventoryService {
         remarks: dto.remarks ?? receipt.remarks,
         inspectedById: user.id,
         inspectedAt: new Date(),
-      },
+      } as never,
       include: { material: true, store: true, supplier: true },
     });
     await this.auditService.log(user.id, 'INSPECT_GOODS_RECEIPT', 'INVENTORY', `Inspected goods receipt ${receipt.receiptCode}`);
@@ -294,11 +328,15 @@ export class InventoryService {
           materialId: receipt.materialId,
           storeId: receipt.storeId,
           supplierId: receipt.supplierId,
+          lotNumber: receipt.lotNumber,
+          batchNumber: receipt.batchNumber,
+          expiryDate: receipt.expiryDate,
+          serialNumber: receipt.serialNumber,
           quantity: receipt.quantityAccepted,
           issuedById: user.id,
           purpose: `Goods receipt ${receipt.receiptCode}`,
           remarks: receipt.remarks,
-        },
+        } as never,
       });
       return tx.goodsReceipt.update({
         where: { id },
@@ -495,6 +533,7 @@ export class InventoryService {
       throw new BadRequestException('Materials can only be returned against an issued request');
     }
     const storeId = this.resolveStoreId(user, requestItem.request.storeId ?? dto.storeId);
+    this.validateTraceability(requestItem.material, dto, dto.quantity);
     const pendingReturns = await this.prisma.materialReturn.findMany({
       where: { requestItemId: dto.requestItemId, status: { in: [MaterialReturnStatus.DRAFT, MaterialReturnStatus.INSPECTED] } },
       select: { quantity: true },
@@ -515,6 +554,10 @@ export class InventoryService {
         storeId,
         quantity: dto.quantity,
         condition: dto.condition,
+        lotNumber: dto.lotNumber,
+        batchNumber: dto.batchNumber,
+        expiryDate: dto.expiryDate ? new Date(dto.expiryDate) : undefined,
+        serialNumber: dto.serialNumber,
         remarks: dto.remarks,
         createdById: user.id,
       },
@@ -924,6 +967,7 @@ export class InventoryService {
     }
     const material = await this.prisma.material.findUnique({ where: { id: dto.materialId } });
     if (!material) throw new NotFoundException(`Material ${dto.materialId} not found`);
+    this.validateTraceability(material, dto, dto.quantity);
 
     const transferCode = `TRF-${Date.now().toString().slice(-8)}-${Math.floor(100 + Math.random() * 900)}`;
     const transfer = await this.prisma.inventoryTransfer.create({
@@ -933,6 +977,9 @@ export class InventoryService {
         sourceStoreId: dto.sourceStoreId,
         destinationStoreId: dto.destinationStoreId,
         quantity: dto.quantity,
+        lotNumber: dto.lotNumber,
+        batchNumber: dto.batchNumber,
+        expiryDate: dto.expiryDate ? new Date(dto.expiryDate) : undefined,
         purpose: dto.purpose || 'Inter-store transfer',
         remarks: dto.remarks,
         requestedById: user.id,

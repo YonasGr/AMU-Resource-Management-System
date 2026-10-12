@@ -185,6 +185,14 @@ enum UnitCategory {
   OTHER
 }
 
+enum InventoryCondition {
+  NEW
+  GOOD
+  DAMAGED
+  QUARANTINED
+  SCRAPPED
+}
+
 model Material {
   id                     String         @id @default(uuid())
   materialCode           String         @unique @map("material_code")
@@ -194,6 +202,9 @@ model Material {
   baseUnit               String         @default("piece") @map("base_unit")
   conversionFactorToBase Int            @default(1) @map("conversion_factor_to_base")
   allowsFractional       Boolean        @default(false) @map("allows_fractional")
+  requiresLotTracking    Boolean        @default(false) @map("requires_lot_tracking")
+  requiresExpiryTracking Boolean        @default(false) @map("requires_expiry_tracking")
+  requiresSerialTracking Boolean        @default(false) @map("requires_serial_tracking")
   minimumStock           Int            @default(5) @map("minimum_stock")
   location               String?        // Shelf / Rack location e.g. "Shelf A-12"
   barcode                String?        @unique
@@ -420,6 +431,10 @@ model GoodsReceipt {
   quantityAccepted  Int          @default(0) @map("quantity_accepted")
   quantityRejected  Int          @default(0) @map("quantity_rejected")
   condition         String?
+  lotNumber         String?      @map("lot_number")
+  batchNumber       String?      @map("batch_number")
+  expiryDate        DateTime?    @map("expiry_date")
+  serialNumber      String?      @map("serial_number")
   deliveryReference String?      @map("delivery_reference")
   status            ReceiptStatus @default(DRAFT)
   createdById       String       @map("created_by_id")
@@ -452,6 +467,10 @@ model MaterialReturn {
   store         Store               @relation(fields: [storeId], references: [id])
   quantity      Int
   condition     String?
+  lotNumber     String?              @map("lot_number")
+  batchNumber   String?              @map("batch_number")
+  expiryDate    DateTime?            @map("expiry_date")
+  serialNumber  String?              @map("serial_number")
   disposition   ReturnDisposition?
   status        MaterialReturnStatus @default(DRAFT)
   createdById   String               @map("created_by_id")
@@ -477,6 +496,9 @@ model InventoryTransfer {
   materialId         String         @map("material_id")
   material           Material       @relation(fields: [materialId], references: [id])
   quantity           Int
+  lotNumber          String?        @map("lot_number")
+  batchNumber        String?        @map("batch_number")
+  expiryDate         DateTime?      @map("expiry_date")
   sourceStoreId      String         @map("source_store_id")
   sourceStore        Store          @relation("TransferSource", fields: [sourceStoreId], references: [id])
   destinationStoreId String         @map("destination_store_id")
@@ -505,6 +527,11 @@ model InventoryTransaction {
   transactionCode String          @unique @map("transaction_code")
   type            TransactionType
   quantity        Int
+  lotNumber       String?         @map("lot_number")
+  batchNumber     String?         @map("batch_number")
+  expiryDate      DateTime?       @map("expiry_date")
+  serialNumber    String?         @map("serial_number")
+  condition       InventoryCondition?
   unitPrice       Decimal?        @map("unit_price") @db.Decimal(12, 2)
   purpose         String?
   remarks         String?

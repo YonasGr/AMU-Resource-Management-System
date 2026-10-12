@@ -45,6 +45,18 @@ export class CreateMaterialDto {
   @IsOptional()
   allowsFractional?: boolean;
 
+  @IsBoolean()
+  @IsOptional()
+  requiresLotTracking?: boolean;
+
+  @IsBoolean()
+  @IsOptional()
+  requiresExpiryTracking?: boolean;
+
+  @IsBoolean()
+  @IsOptional()
+  requiresSerialTracking?: boolean;
+
   @Type(() => Number)
   @IsInt()
   @Min(0)
@@ -99,6 +111,18 @@ export class UpdateMaterialDto {
   @IsBoolean()
   @IsOptional()
   allowsFractional?: boolean;
+
+  @IsBoolean()
+  @IsOptional()
+  requiresLotTracking?: boolean;
+
+  @IsBoolean()
+  @IsOptional()
+  requiresExpiryTracking?: boolean;
+
+  @IsBoolean()
+  @IsOptional()
+  requiresSerialTracking?: boolean;
 
   @Type(() => Number)
   @IsInt()

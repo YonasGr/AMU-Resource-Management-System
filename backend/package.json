@@ -71,16 +71,6 @@
   "prisma": {
     "seed": "node dist/prisma/seed.js || ts-node prisma/seed.ts"
   },
-  "pnpm": {
-    "onlyBuiltDependencies": [
-      "@nestjs/core",
-      "@prisma/client",
-      "@prisma/engines",
-      "argon2",
-      "msgpackr-extract",
-      "prisma"
-    ]
-  },
   "jest": {
     "moduleFileExtensions": [
       "js",

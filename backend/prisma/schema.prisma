@@ -175,16 +175,30 @@ enum MaterialStatus {
   INACTIVE
 }
 
+enum UnitCategory {
+  COUNT
+  MASS
+  VOLUME
+  LENGTH
+  AREA
+  PACKAGE
+  OTHER
+}
+
 model Material {
-  id           String         @id @default(uuid())
-  materialCode String         @unique @map("material_code")
-  name         String
-  unit         String         // e.g. Box, Piece, Pack, Ream, Roll
-  minimumStock Int            @default(5) @map("minimum_stock")
-  location     String?        // Shelf / Rack location e.g. "Shelf A-12"
-  barcode      String?        @unique
-  description  String?
-  status       MaterialStatus @default(ACTIVE)
+  id                     String         @id @default(uuid())
+  materialCode           String         @unique @map("material_code")
+  name                   String
+  unit                   String         // Declared stock unit shown to operators.
+  unitCategory           UnitCategory   @default(COUNT) @map("unit_category")
+  baseUnit               String         @default("piece") @map("base_unit")
+  conversionFactorToBase Int            @default(1) @map("conversion_factor_to_base")
+  allowsFractional       Boolean        @default(false) @map("allows_fractional")
+  minimumStock           Int            @default(5) @map("minimum_stock")
+  location               String?        // Shelf / Rack location e.g. "Shelf A-12"
+  barcode                String?        @unique
+  description            String?
+  status                 MaterialStatus @default(ACTIVE)
 
   categoryId String           @map("category_id")
   category   MaterialCategory @relation(fields: [categoryId], references: [id])

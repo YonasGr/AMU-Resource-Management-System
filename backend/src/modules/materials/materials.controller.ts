@@ -1,7 +1,8 @@
 import { Body, Controller, Delete, Get, Param, ParseUUIDPipe, Patch, Post, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Role } from '@prisma/client';
-import { MaterialsService, CreateMaterialDto, UpdateMaterialDto } from './materials.service';
+import { MaterialsService } from './materials.service';
+import { CreateMaterialDto, UpdateMaterialDto } from './dto/material.dto';
 import { Roles } from '../auth/decorators/roles.decorator';
 
 @ApiTags('materials')

@@ -3,6 +3,7 @@ import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Role } from '@prisma/client';
 import { ReportsService } from './reports.service';
 import { Roles } from '../auth/decorators/roles.decorator';
+import { ReportQueryDto } from './dto/report-query.dto';
 
 @ApiTags('reports')
 @ApiBearerAuth()
@@ -13,49 +14,49 @@ export class ReportsController {
 
   @Get('current-stock')
   @ApiOperation({ summary: 'Current Stock Report' })
-  getCurrentStock() {
-    return this.reportsService.getCurrentStockReport();
+  getCurrentStock(@Query() query: ReportQueryDto) {
+    return this.reportsService.getCurrentStockReport(query);
   }
 
   @Get('stock-in')
   @ApiOperation({ summary: 'Stock In Report' })
-  getStockIn() {
-    return this.reportsService.getStockInReport();
+  getStockIn(@Query() query: ReportQueryDto) {
+    return this.reportsService.getStockInReport(query);
   }
 
   @Get('stock-out')
   @ApiOperation({ summary: 'Stock Out Report' })
-  getStockOut() {
-    return this.reportsService.getStockOutReport();
+  getStockOut(@Query() query: ReportQueryDto) {
+    return this.reportsService.getStockOutReport(query);
   }
 
   @Get('material-balance')
   @ApiOperation({ summary: 'Material Balance Report' })
-  getMaterialBalance() {
-    return this.reportsService.getMaterialBalanceReport();
+  getMaterialBalance(@Query() query: ReportQueryDto) {
+    return this.reportsService.getMaterialBalanceReport(query);
   }
 
   @Get('low-stock')
   @ApiOperation({ summary: 'Low Stock Alert Report' })
-  getLowStock() {
-    return this.reportsService.getLowStockReport();
+  getLowStock(@Query() query: ReportQueryDto) {
+    return this.reportsService.getLowStockReport(query);
   }
 
   @Get('employee-issue')
   @ApiOperation({ summary: 'Employee Material Issue Report' })
-  getEmployeeIssue(@Query('employeeId') employeeId?: string) {
-    return this.reportsService.getEmployeeIssueReport(employeeId);
+  getEmployeeIssue(@Query('employeeId') employeeId: string | undefined, @Query() query: ReportQueryDto) {
+    return this.reportsService.getEmployeeIssueReport(employeeId, query);
   }
 
   @Get('supplier')
   @ApiOperation({ summary: 'Supplier Report' })
-  getSupplier() {
-    return this.reportsService.getSupplierReport();
+  getSupplier(@Query() query: ReportQueryDto) {
+    return this.reportsService.getSupplierReport(query);
   }
 
   @Get('transaction-history')
   @ApiOperation({ summary: 'Full Transaction History Report' })
-  getTransactionHistory() {
-    return this.reportsService.getTransactionHistoryReport();
+  getTransactionHistory(@Query() query: ReportQueryDto) {
+    return this.reportsService.getTransactionHistoryReport(query);
   }
 }

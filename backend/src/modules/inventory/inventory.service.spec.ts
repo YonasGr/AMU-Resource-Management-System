@@ -38,6 +38,14 @@ describe('InventoryService', () => {
           createdAt: new Date(),
         })),
       },
+      goodsReceipt: {
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+        update: jest.fn().mockImplementation(({ data }) => ({
+          id: 'receipt-uuid-1',
+          status: 'POSTED',
+          ...data,
+        })),
+      },
       materialRequestItem: {
         findUnique: jest.fn(),
         updateMany: jest.fn().mockResolvedValue({ count: 1 }),
@@ -78,6 +86,14 @@ describe('InventoryService', () => {
           useValue: {
             material: {
               findUnique: jest.fn(),
+            },
+            store: {
+              findFirst: jest.fn(),
+            },
+            goodsReceipt: {
+              create: jest.fn(),
+              findUnique: jest.fn(),
+              update: jest.fn(),
             },
             materialRequestItem: {
               findUnique: jest.fn(),
@@ -213,6 +229,118 @@ describe('InventoryService', () => {
           quantity: 10,
         }),
       ).rejects.toThrow(NotFoundException);
+    });
+  });
+
+  describe('goods receipts', () => {
+    const draftReceipt = {
+      id: 'receipt-uuid-1',
+      receiptCode: 'GRN-12345678-123',
+      materialId: 'mat-uuid-1',
+      storeId: 'store-1',
+      supplierId: 'sup-1',
+      quantityReceived: 10,
+      quantityAccepted: 0,
+      quantityRejected: 0,
+      status: 'DRAFT',
+      condition: null,
+      remarks: null,
+    };
+
+    it('creates a draft without changing stock', async () => {
+      prisma.material.findUnique.mockResolvedValue({ id: 'mat-uuid-1' });
+      prisma.store.findFirst.mockResolvedValue({ id: 'store-1', status: 'ACTIVE' });
+      prisma.goodsReceipt.create.mockResolvedValue(draftReceipt);
+
+      const result = await service.createGoodsReceipt(
+        { id: 'keeper-1', role: Role.STOREKEEPER, scopeType: ScopeType.STORE, storeId: 'store-1' } as any,
+        { materialId: 'mat-uuid-1', storeId: 'store-1', quantityReceived: 10 },
+      );
+
+      expect(result).toEqual(draftReceipt);
+      expect(prisma._mockTx.stockBalance.upsert).not.toHaveBeenCalled();
+      expect(prisma.goodsReceipt.create).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ quantityReceived: 10, createdById: 'keeper-1' }) }),
+      );
+    });
+
+    it('requires accepted and rejected quantities to reconcile', async () => {
+      prisma.goodsReceipt.findUnique.mockResolvedValue(draftReceipt);
+
+      await expect(
+        service.inspectGoodsReceipt(
+          'receipt-uuid-1',
+          { id: 'keeper-1', role: Role.STOREKEEPER, scopeType: ScopeType.STORE, storeId: 'store-1' } as any,
+          {
+          quantityAccepted: 8,
+          quantityRejected: 1,
+          },
+        ),
+      ).rejects.toThrow('Accepted and rejected quantities must equal the received quantity');
+    });
+
+    it('requires a condition note when quantities are rejected', async () => {
+      prisma.goodsReceipt.findUnique.mockResolvedValue(draftReceipt);
+
+      await expect(
+        service.inspectGoodsReceipt(
+          'receipt-uuid-1',
+          { id: 'keeper-1', role: Role.STOREKEEPER, scopeType: ScopeType.STORE, storeId: 'store-1' } as any,
+          {
+          quantityAccepted: 8,
+          quantityRejected: 2,
+          },
+        ),
+      ).rejects.toThrow('A condition note is required when quantities are rejected');
+    });
+
+    it('posts only accepted quantity and creates one stock-in transaction', async () => {
+      prisma.goodsReceipt.findUnique.mockResolvedValue({
+        ...draftReceipt,
+        status: 'INSPECTED',
+        quantityAccepted: 8,
+        quantityRejected: 2,
+        remarks: 'Two damaged units',
+      });
+
+      await service.postGoodsReceipt(
+        'receipt-uuid-1',
+        { id: 'keeper-1', role: Role.STOREKEEPER, scopeType: ScopeType.STORE, storeId: 'store-1' } as any,
+      );
+
+      expect(prisma._mockTx.stockBalance.upsert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          update: { quantityReceived: { increment: 8 }, remainingQuantity: { increment: 8 } },
+        }),
+      );
+      expect(prisma._mockTx.stockSummary.upsert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          update: { quantityReceived: { increment: 8 }, remainingQuantity: { increment: 8 } },
+        }),
+      );
+      expect(prisma._mockTx.inventoryTransaction.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            quantity: 8,
+            type: TransactionType.STOCK_IN,
+            storeId: 'store-1',
+          }),
+        }),
+      );
+    });
+
+    it('does not post a receipt that is no longer inspected', async () => {
+      prisma.goodsReceipt.findUnique.mockResolvedValue({ ...draftReceipt, status: 'POSTED' });
+
+      await expect(
+        service.postGoodsReceipt(
+          'receipt-uuid-1',
+          { id: 'keeper-1', role: Role.STOREKEEPER, scopeType: ScopeType.STORE, storeId: 'store-1' } as any,
+        ),
+      ).rejects.toThrow(
+        'Only INSPECTED receipts can be posted',
+      );
+      expect(prisma._mockTx.stockBalance.upsert).not.toHaveBeenCalled();
     });
   });
 

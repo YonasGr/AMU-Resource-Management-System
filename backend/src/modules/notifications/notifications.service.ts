@@ -1,10 +1,11 @@
 import { Injectable } from '@nestjs/common';
 import { NotificationType } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
+import { OutboxService } from '../outbox/outbox.service';
 
 @Injectable()
 export class NotificationsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService, private readonly outbox: OutboxService) {}
 
   /** Create notifications for one or more users */
   async createForUsers(
@@ -15,17 +16,7 @@ export class NotificationsService {
     metadata?: Record<string, unknown>,
   ) {
     if (!userIds.length) return;
-    await this.prisma.notification.createMany({
-      data: userIds.map((userId) => ({
-        userId,
-        type,
-        title,
-        message,
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        metadata: (metadata as any) ?? undefined,
-      })),
-      skipDuplicates: true,
-    });
+    await this.outbox.enqueue('NOTIFICATION_BATCH', { userIds, type, title, message, metadata });
   }
 
   /** Get all user IDs with a given role */

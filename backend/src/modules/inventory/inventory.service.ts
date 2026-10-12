@@ -277,6 +277,9 @@ export class InventoryService {
     const receipt = await this.prisma.goodsReceipt.findUnique({ where: { id }, include: { purchaseOrderLine: true } });
     if (!receipt) throw new NotFoundException(`Goods receipt ${id} not found`);
     this.resolveStoreId(user, receipt.storeId);
+    if (receipt.createdById === user.id) {
+      throw new ForbiddenException('The person who created a goods receipt cannot inspect it');
+    }
     if (receipt.status !== 'DRAFT') {
       throw new BadRequestException(`Only DRAFT receipts can be inspected. Current status is ${receipt.status}`);
     }
@@ -308,6 +311,9 @@ export class InventoryService {
     const receipt = await this.prisma.goodsReceipt.findUnique({ where: { id } });
     if (!receipt) throw new NotFoundException(`Goods receipt ${id} not found`);
     this.resolveStoreId(user, receipt.storeId);
+    if (receipt.createdById === user.id || receipt.inspectedById === user.id) {
+      throw new ForbiddenException('Goods receipt posting requires an independent operator');
+    }
     if (receipt.status !== 'INSPECTED') {
       throw new BadRequestException(`Only INSPECTED receipts can be posted. Current status is ${receipt.status}`);
     }
@@ -431,6 +437,9 @@ export class InventoryService {
     const count = await this.prisma.cycleCount.findUnique({ where: { id } });
     if (!count) throw new NotFoundException(`Cycle count ${id} not found`);
     this.resolveStoreId(user, count.storeId);
+    if (count.createdById === user.id) {
+      throw new ForbiddenException('The person who created a cycle count cannot approve its variance');
+    }
     if (count.status !== CycleCountStatus.COUNTED) {
       throw new BadRequestException(`Only COUNTED cycle counts can be sent for recount. Current status is ${count.status}`);
     }

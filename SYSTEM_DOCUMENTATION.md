@@ -47,6 +47,33 @@ Distribution plans, individually tracked fixed assets, borrowing, maintenance, a
 
 Purchase orders are created in `DRAFT`, submitted for approval, and approved or rejected by an administrator or store manager. Approved orders may be cancelled before receipt. Goods receipts can optionally reference a purchase-order line; linked receipts must match the supplier, destination store, and material and are rejected when they would exceed the ordered quantity. Posting an inspected linked receipt increments the line's received quantity and moves the order to `PARTIALLY_RECEIVED` or `RECEIVED`.
 
+## Operating controls
+
+The following role matrix is the application baseline. It describes the minimum permitted responsibility; organizational policy may impose stricter limits.
+
+| Activity | Requester | Storekeeper | Store manager | Administrator | Auditor |
+|---|---:|---:|---:|---:|---:|
+| Submit and view own requests | Yes | Yes | Yes | Yes | Read |
+| Approve/reject requests | No | No | Yes, scoped | Yes | No |
+| Pick/issue approved requests | No | Yes | No by default | No by default | No |
+| Create receiving/count documents | No | Yes | Yes | Yes | No |
+| Inspect/post receipts | No | Inspect: No | Yes, independent operator | Yes, independent operator | No |
+| Approve count variances | No | No | Yes, independent of creator | Yes, independent of creator | No |
+| Create purchase orders | No | No | Yes, scoped | Yes | No |
+| Approve purchase orders | No | No | Yes, not creator | Yes, not creator | No |
+| View operational reports | No | Scoped | Scoped | Global | Global read |
+| View audit records | No | No | No | Yes | Yes |
+
+### Segregation-of-duties rules
+
+The API prevents a requester from approving their own request, a purchase-order creator from approving that order, a goods-receipt creator from inspecting it, and a receipt creator or inspector from posting it. A cycle-count creator cannot approve its variance. These are compensating controls for the current role model; they do not replace periodic access review or staffing-specific policies.
+
+Approval thresholds are not yet monetary because the application is not a financial subledger. Finance and Internal Audit must approve any future amount-based thresholds. Until then, all purchase-order and variance approvals require the role and independence controls above.
+
+### Operational SOP and recertification requirements
+
+Store management should maintain approved SOPs for receiving, inspection, issuing, returns, transfers, cycle counts, adjustments, and emergency access. At least quarterly, an authorized owner should review active users, roles, store scope, inactive accounts, administrator access, and conflicting duties; evidence of the review should be retained with the audit records. Emergency access must have a reason, time limit, owner, and retrospective review.
+
 ## Operational workflow
 
 ```mermaid

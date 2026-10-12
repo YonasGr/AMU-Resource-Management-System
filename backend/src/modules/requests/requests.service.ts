@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { RequestStatus, TransactionType } from '@prisma/client';
 import { NotificationsService } from '../notifications/notifications.service';
@@ -161,6 +161,9 @@ export class RequestsService {
 
     if (!request) {
       throw new NotFoundException(`Request ${id} not found`);
+    }
+    if (request.requesterId === user.id) {
+      throw new ForbiddenException('A requester cannot approve or reject their own request');
     }
 
     if (request.status !== RequestStatus.PENDING) {

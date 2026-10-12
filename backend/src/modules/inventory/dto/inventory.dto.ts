@@ -10,7 +10,10 @@ import {
   IsArray,
   ArrayMinSize,
   ValidateNested,
+  IsDateString,
+  IsEnum,
 } from 'class-validator';
+import { InventoryCondition } from '@prisma/client';
 
 export class StockInDto {
   @IsUUID()
@@ -43,6 +46,26 @@ export class StockInDto {
   @IsString()
   @IsOptional()
   remarks?: string;
+
+  @IsString()
+  @IsOptional()
+  lotNumber?: string;
+
+  @IsString()
+  @IsOptional()
+  batchNumber?: string;
+
+  @IsDateString()
+  @IsOptional()
+  expiryDate?: string;
+
+  @IsString()
+  @IsOptional()
+  serialNumber?: string;
+
+  @IsEnum(InventoryCondition)
+  @IsOptional()
+  condition?: InventoryCondition;
 }
 
 export class CreateGoodsReceiptDto {
@@ -73,6 +96,22 @@ export class CreateGoodsReceiptDto {
   @IsString()
   @IsOptional()
   remarks?: string;
+
+  @IsString()
+  @IsOptional()
+  lotNumber?: string;
+
+  @IsString()
+  @IsOptional()
+  batchNumber?: string;
+
+  @IsDateString()
+  @IsOptional()
+  expiryDate?: string;
+
+  @IsString()
+  @IsOptional()
+  serialNumber?: string;
 }
 
 export class InspectGoodsReceiptDto {
@@ -93,6 +132,22 @@ export class InspectGoodsReceiptDto {
   @IsString()
   @IsOptional()
   remarks?: string;
+
+  @IsString()
+  @IsOptional()
+  lotNumber?: string;
+
+  @IsString()
+  @IsOptional()
+  batchNumber?: string;
+
+  @IsDateString()
+  @IsOptional()
+  expiryDate?: string;
+
+  @IsString()
+  @IsOptional()
+  serialNumber?: string;
 }
 
 export class StockOutDto {
@@ -124,6 +179,22 @@ export class StockOutDto {
   @IsString()
   @IsOptional()
   remarks?: string;
+
+  @IsString()
+  @IsOptional()
+  lotNumber?: string;
+
+  @IsString()
+  @IsOptional()
+  batchNumber?: string;
+
+  @IsDateString()
+  @IsOptional()
+  expiryDate?: string;
+
+  @IsString()
+  @IsOptional()
+  serialNumber?: string;
 }
 
 export class ReturnDto {
@@ -152,6 +223,22 @@ export class ReturnDto {
   @IsString()
   @IsOptional()
   remarks?: string;
+
+  @IsString()
+  @IsOptional()
+  lotNumber?: string;
+
+  @IsString()
+  @IsOptional()
+  batchNumber?: string;
+
+  @IsDateString()
+  @IsOptional()
+  expiryDate?: string;
+
+  @IsString()
+  @IsOptional()
+  serialNumber?: string;
 }
 
 export class CreateReturnInspectionDto {
@@ -177,6 +264,22 @@ export class CreateReturnInspectionDto {
   @IsString()
   @IsOptional()
   remarks?: string;
+
+  @IsString()
+  @IsOptional()
+  lotNumber?: string;
+
+  @IsString()
+  @IsOptional()
+  batchNumber?: string;
+
+  @IsDateString()
+  @IsOptional()
+  expiryDate?: string;
+
+  @IsString()
+  @IsOptional()
+  serialNumber?: string;
 }
 
 export class InspectReturnDto {
@@ -278,4 +381,16 @@ export class TransferDto {
   @IsString()
   @IsOptional()
   remarks?: string;
+
+  @IsString()
+  @IsOptional()
+  lotNumber?: string;
+
+  @IsString()
+  @IsOptional()
+  batchNumber?: string;
+
+  @IsDateString()
+  @IsOptional()
+  expiryDate?: string;
 }

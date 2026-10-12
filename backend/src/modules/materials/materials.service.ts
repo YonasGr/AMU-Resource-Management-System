@@ -1,28 +1,6 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
-
-export interface CreateMaterialDto {
-  materialCode: string;
-  name: string;
-  unit: string;
-  minimumStock?: number;
-  location?: string;
-  barcode?: string;
-  description?: string;
-  categoryId: string;
-}
-
-export interface UpdateMaterialDto {
-  materialCode?: string;
-  name?: string;
-  unit?: string;
-  minimumStock?: number;
-  location?: string;
-  barcode?: string;
-  description?: string;
-  categoryId?: string;
-  status?: 'ACTIVE' | 'INACTIVE';
-}
+import { CreateMaterialDto, UpdateMaterialDto } from './dto/material.dto';
 
 @Injectable()
 export class MaterialsService {
@@ -46,71 +24,54 @@ export class MaterialsService {
     if (existing) {
       throw new ConflictException(`Category "${name}" already exists`);
     }
-    return this.prisma.materialCategory.create({
-      data: { name, description },
-    });
+    return this.prisma.materialCategory.create({ data: { name, description } });
   }
 
   async findAllCategories() {
     return this.prisma.materialCategory.findMany({
-      include: {
-        _count: { select: { materials: true } },
-      },
+      include: { _count: { select: { materials: true } } },
       orderBy: { name: 'asc' },
     });
   }
 
   async create(dto: CreateMaterialDto) {
-    const existingCode = await this.prisma.material.findUnique({
-      where: { materialCode: dto.materialCode },
-    });
+    const existingCode = await this.prisma.material.findUnique({ where: { materialCode: dto.materialCode } });
     if (existingCode) {
       throw new ConflictException(`Material code "${dto.materialCode}" already exists`);
     }
 
     if (dto.barcode) {
-      const existingBarcode = await this.prisma.material.findUnique({
-        where: { barcode: dto.barcode },
-      });
+      const existingBarcode = await this.prisma.material.findUnique({ where: { barcode: dto.barcode } });
       if (existingBarcode) {
         throw new ConflictException(`Barcode "${dto.barcode}" is already assigned to another material`);
       }
     }
 
-    const material = await this.prisma.material.create({
+    return this.prisma.material.create({
       data: {
         materialCode: dto.materialCode,
         name: dto.name,
-        unit: dto.unit,
+        unit: dto.unit.trim(),
+        unitCategory: dto.unitCategory,
+        baseUnit: dto.baseUnit,
+        conversionFactorToBase: dto.conversionFactorToBase,
+        allowsFractional: dto.allowsFractional,
         minimumStock: dto.minimumStock ?? 5,
         location: dto.location,
         barcode: dto.barcode,
         description: dto.description,
         categoryId: dto.categoryId,
         stockSummary: {
-          create: {
-            quantityReceived: 0,
-            quantityIssued: 0,
-            remainingQuantity: 0,
-          },
+          create: { quantityReceived: 0, quantityIssued: 0, remainingQuantity: 0 },
         },
       },
-      include: {
-        category: true,
-        stockSummary: true,
-      },
+      include: { category: true, stockSummary: true },
     });
-
-    return material;
   }
 
   async findAll(query?: { search?: string; categoryId?: string; lowStockOnly?: boolean }) {
     const where: any = { status: 'ACTIVE' };
-
-    if (query?.categoryId) {
-      where.categoryId = query.categoryId;
-    }
-
+    if (query?.categoryId) where.categoryId = query.categoryId;
     if (query?.search) {
       where.OR = [
         { name: { contains: query.search, mode: 'insensitive' } },
@@ -121,13 +82,9 @@ export class MaterialsService {
 
     const materials = await this.prisma.material.findMany({
       where,
-      include: {
-        category: true,
-        stockBalances: true,
-      },
+      include: { category: true, stockBalances: true },
       orderBy: { name: 'asc' },
     });
-
     const withAggregateBalances = materials.map(({ stockBalances, ...material }) => ({
       ...material,
       stockSummary: this.aggregateBalances(stockBalances),
@@ -156,35 +113,22 @@ export class MaterialsService {
         },
       },
     });
-    if (!material) {
-      throw new NotFoundException(`Material with ID ${id} not found`);
-    }
+    if (!material) throw new NotFoundException(`Material with ID ${id} not found`);
     const { stockBalances, ...materialWithoutBalances } = material;
-    return {
-      ...materialWithoutBalances,
-      stockSummary: this.aggregateBalances(stockBalances),
-    };
+    return { ...materialWithoutBalances, stockSummary: this.aggregateBalances(stockBalances) };
   }
 
   async update(id: string, dto: UpdateMaterialDto) {
     const material = await this.prisma.material.findUnique({ where: { id } });
-    if (!material) {
-      throw new NotFoundException(`Material ${id} not found`);
-    }
+    if (!material) throw new NotFoundException(`Material ${id} not found`);
 
     const updated = await this.prisma.material.update({
       where: { id },
-      data: dto,
-      include: {
-        category: true,
-        stockBalances: true,
-      },
+      data: { ...dto, ...(dto.unit ? { unit: dto.unit.trim() } : {}) },
+      include: { category: true, stockBalances: true },
     });
     const { stockBalances, ...materialWithoutBalances } = updated;
-    return {
-      ...materialWithoutBalances,
-      stockSummary: this.aggregateBalances(stockBalances),
-    };
+    return { ...materialWithoutBalances, stockSummary: this.aggregateBalances(stockBalances) };
   }
 
   async delete(id: string) {

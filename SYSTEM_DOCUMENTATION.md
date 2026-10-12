@@ -147,6 +147,12 @@ Returns can use `MaterialReturn` inspection documents without changing stock at 
 
 Request lifecycle closure uses explicit `BACKORDERED`, `CANCELLED`, and `CLOSED` states. Managers can mark approved or partially issued requests as backordered, and cancellation releases any remaining reservations while refusing cancellation of lines that were already issued. Store staff record handover evidence after full issuance; only the requester can confirm a handed-over request, and confirmation requires all requested quantities to be issued with no open return inspections before the request becomes `CLOSED`.
 
+Audit and notification side effects are persisted through the transactional outbox. `AuditService` and `NotificationsService` enqueue durable `OutboxEvent` records, and the background worker claims pending events before dispatching them to `AuditLog` or `Notification`. Event keys are unique, so callers can safely retry an enqueue without creating duplicate outbox records.
+
+Outbox events use `PENDING`, `PROCESSING`, `PROCESSED`, and `FAILED` statuses. Failed events retain the processing error and are retried with exponential backoff (up to ten attempts, capped at one minute). A `PROCESSING` event left behind by a crashed worker is reclaimed after one minute. Events that remain failed after the retry limit require operational investigation and can be replayed by resetting their status and availability in the database after the underlying cause is corrected. The worker polls every five seconds and claims events conditionally so multiple API instances do not process the same event concurrently.
+
+The current service adapter makes the enqueue durable and idempotent, but strict business-write-plus-outbox atomicity still requires passing a transaction-scoped outbox client into the highest-risk mutation transactions. That follow-up remains necessary before claiming full transactional guarantees for every workflow.
+
 For exact fields, relations, and enum values, see [`backend/prisma/schema.prisma`](backend/prisma/schema.prisma). The schema and migrations define persisted behavior; this summary is intentionally compact.
 
 ## Architecture and operation

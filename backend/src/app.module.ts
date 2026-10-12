@@ -18,6 +18,7 @@ import { AuditModule } from './modules/audit/audit.module';
 import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { RedisModule } from './common/redis/redis.module';
+import { OutboxModule } from './modules/outbox/outbox.module';
 
 @Module({
   imports: [
@@ -37,6 +38,7 @@ import { RedisModule } from './common/redis/redis.module';
     AuditModule,
     DashboardModule,
     NotificationsModule,
+    OutboxModule,
   ],
   controllers: [AppController],
   providers: [

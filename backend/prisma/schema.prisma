@@ -540,6 +540,30 @@ model AuditLog {
   @@map("audit_logs")
 }
 
+enum OutboxEventStatus {
+  PENDING
+  PROCESSING
+  PROCESSED
+  FAILED
+}
+
+model OutboxEvent {
+  id            String           @id @default(uuid())
+  eventKey      String           @unique @map("event_key")
+  eventType     String           @map("event_type")
+  payload       Json
+  status        OutboxEventStatus @default(PENDING)
+  attempts      Int              @default(0)
+  availableAt   DateTime         @default(now()) @map("available_at")
+  processedAt   DateTime?        @map("processed_at")
+  lastError     String?          @map("last_error")
+  createdAt     DateTime         @default(now()) @map("created_at")
+  updatedAt     DateTime         @updatedAt @map("updated_at")
+
+  @@index([status, availableAt])
+  @@map("outbox_events")
+}
+
 enum NotificationType {
   REQUEST_SUBMITTED
   REQUEST_APPROVED

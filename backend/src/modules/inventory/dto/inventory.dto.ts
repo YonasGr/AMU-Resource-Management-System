@@ -7,6 +7,9 @@ import {
   IsUUID,
   Min,
   IsNumber,
+  IsArray,
+  ArrayMinSize,
+  ValidateNested,
 } from 'class-validator';
 
 export class StockInDto {
@@ -167,6 +170,49 @@ export class AdjustmentDto {
   @IsString()
   @IsNotEmpty()
   reason!: string;
+}
+
+export class CreateCycleCountLineDto {
+  @IsUUID()
+  materialId!: string;
+}
+
+export class CreateCycleCountDto {
+  @IsUUID()
+  storeId!: string;
+
+  @IsArray()
+  @ArrayMinSize(1)
+  @ValidateNested({ each: true })
+  @Type(() => CreateCycleCountLineDto)
+  lines!: CreateCycleCountLineDto[];
+
+  @IsString()
+  @IsOptional()
+  remarks?: string;
+}
+
+export class SubmitCycleCountLineDto {
+  @IsUUID()
+  lineId!: string;
+
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  physicalQuantity!: number;
+
+  @IsString()
+  @IsOptional()
+  @IsNotEmpty()
+  varianceReason?: string;
+}
+
+export class SubmitCycleCountDto {
+  @IsArray()
+  @ArrayMinSize(1)
+  @ValidateNested({ each: true })
+  @Type(() => SubmitCycleCountLineDto)
+  lines!: SubmitCycleCountLineDto[];
 }
 
 export class TransferDto {

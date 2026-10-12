@@ -46,12 +46,21 @@ describe('InventoryService', () => {
           ...data,
         })),
       },
+      cycleCount: {
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+        update: jest.fn(),
+        findUnique: jest.fn(),
+      },
+      cycleCountLine: {
+        update: jest.fn(),
+      },
       materialRequestItem: {
         findUnique: jest.fn(),
         updateMany: jest.fn().mockResolvedValue({ count: 1 }),
       },
       stockBalance: {
         upsert: jest.fn().mockResolvedValue({}),
+        create: jest.fn().mockResolvedValue({}),
         updateMany: jest.fn().mockResolvedValue({ count: 1 }),
         update: jest.fn().mockResolvedValue({}),
         findUnique: jest.fn().mockResolvedValue({
@@ -86,11 +95,17 @@ describe('InventoryService', () => {
           useValue: {
             material: {
               findUnique: jest.fn(),
+              findMany: jest.fn(),
             },
             store: {
               findFirst: jest.fn(),
             },
             goodsReceipt: {
+              create: jest.fn(),
+              findUnique: jest.fn(),
+              update: jest.fn(),
+            },
+            cycleCount: {
               create: jest.fn(),
               findUnique: jest.fn(),
               update: jest.fn(),
@@ -341,6 +356,90 @@ describe('InventoryService', () => {
         'Only INSPECTED receipts can be posted',
       );
       expect(prisma._mockTx.stockBalance.upsert).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('cycle counts', () => {
+    const actor = {
+      id: 'keeper-1',
+      role: Role.STOREKEEPER,
+      scopeType: ScopeType.STORE,
+      storeId: 'store-1',
+    } as any;
+
+    it('snapshots store quantities when creating a count', async () => {
+      prisma.store.findFirst.mockResolvedValue({ id: 'store-1', status: 'ACTIVE' });
+      prisma.material.findMany.mockResolvedValue([
+        { id: 'mat-uuid-1', stockBalances: [{ remainingQuantity: 30 }] },
+      ]);
+      prisma.cycleCount.create.mockResolvedValue({ id: 'count-1', status: 'DRAFT' });
+
+      await service.createCycleCount(actor, {
+        storeId: 'store-1',
+        lines: [{ materialId: 'mat-uuid-1' }],
+      });
+
+      expect(prisma.cycleCount.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            storeId: 'store-1',
+            lines: { create: [{ materialId: 'mat-uuid-1', systemQuantity: 30 }] },
+          }),
+        }),
+      );
+    });
+
+    it('requires a reason for every non-zero variance', async () => {
+      prisma.cycleCount.findUnique.mockResolvedValue({
+        id: 'count-1',
+        storeId: 'store-1',
+        status: 'DRAFT',
+        lines: [{ id: 'line-1', materialId: 'mat-uuid-1', systemQuantity: 30 }],
+      });
+
+      await expect(
+        service.submitCycleCount('count-1', actor, {
+          lines: [{ lineId: 'line-1', physicalQuantity: 28 }],
+        }),
+      ).rejects.toThrow('A variance reason is required');
+    });
+
+    it('posts an approved variance to the store balance and ledger', async () => {
+      prisma.cycleCount.findUnique.mockResolvedValue({
+        id: 'count-1',
+        countCode: 'CC-12345678-123',
+        storeId: 'store-1',
+        status: 'COUNTED',
+        lines: [{
+          id: 'line-1',
+          materialId: 'mat-uuid-1',
+          systemQuantity: 30,
+          physicalQuantity: 28,
+          variance: -2,
+          varianceReason: 'Two damaged units found',
+        }],
+      });
+
+      await service.approveCycleCount('count-1', {
+        ...actor,
+        role: Role.STORE_MANAGER,
+      });
+
+      expect(prisma._mockTx.stockBalance.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ remainingQuantity: 30 }),
+          data: { remainingQuantity: 28 },
+        }),
+      );
+      expect(prisma._mockTx.inventoryTransaction.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            type: TransactionType.ADJUSTMENT,
+            quantity: 2,
+            storeId: 'store-1',
+          }),
+        }),
+      );
     });
   });
 

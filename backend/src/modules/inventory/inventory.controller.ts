@@ -7,10 +7,12 @@ import {
 import {
   AdjustmentDto,
   CreateGoodsReceiptDto,
+  CreateCycleCountDto,
   InspectGoodsReceiptDto,
   ReturnDto,
   StockInDto,
   StockOutDto,
+  SubmitCycleCountDto,
   TransferDto,
 } from './dto/inventory.dto';
 import { Roles } from '../auth/decorators/roles.decorator';
@@ -49,6 +51,34 @@ export class InventoryController {
   @Roles(Role.STORE_MANAGER, Role.ADMINISTRATOR)
   postGoodsReceipt(@Req() req: any, @Param('id', ParseUUIDPipe) id: string) {
     return this.inventoryService.postGoodsReceipt(id, req.user);
+  }
+
+  @Post('cycle-counts')
+  @Roles(Role.STOREKEEPER, Role.STORE_MANAGER, Role.ADMINISTRATOR)
+  createCycleCount(@Req() req: any, @Body() dto: CreateCycleCountDto) {
+    return this.inventoryService.createCycleCount(req.user, dto);
+  }
+
+  @Post('cycle-counts/:id/submit')
+  @Roles(Role.STOREKEEPER, Role.STORE_MANAGER, Role.ADMINISTRATOR)
+  submitCycleCount(
+    @Req() req: any,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: SubmitCycleCountDto,
+  ) {
+    return this.inventoryService.submitCycleCount(id, req.user, dto);
+  }
+
+  @Post('cycle-counts/:id/recount')
+  @Roles(Role.STORE_MANAGER, Role.ADMINISTRATOR)
+  requestCycleCountRecount(@Req() req: any, @Param('id', ParseUUIDPipe) id: string) {
+    return this.inventoryService.requestCycleCountRecount(id, req.user);
+  }
+
+  @Post('cycle-counts/:id/approve')
+  @Roles(Role.STORE_MANAGER, Role.ADMINISTRATOR)
+  approveCycleCount(@Req() req: any, @Param('id', ParseUUIDPipe) id: string) {
+    return this.inventoryService.approveCycleCount(id, req.user);
   }
 
   @Post('stock-out')

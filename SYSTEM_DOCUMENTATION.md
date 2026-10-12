@@ -141,6 +141,8 @@ Inter-store movement uses `InventoryTransfer` documents. Creating a transfer rec
 
 Receiving from a supplier or other source can use `GoodsReceipt` documents. A receipt begins as `DRAFT` and does not change inventory. Inspection records accepted and rejected quantities; those quantities must reconcile to the received quantity, and rejected units require a condition note. Posting is allowed only after inspection, atomically adds accepted units to the receiving store and aggregate compatibility balance, records a `STOCK_IN` transaction, and marks the receipt `POSTED`. Rejected units never enter available inventory.
 
+Cycle counts use `CycleCount` sessions. Creating a session snapshots each selected material's store quantity without changing stock. Submission requires every line to be counted and requires a variance reason whenever physical quantity differs from the snapshot. Managers can request a recount before approval. Approval is atomic, refuses stale balances that changed after the snapshot, posts each variance as an `ADJUSTMENT` ledger transaction, updates the store balance and compatibility aggregate, and records the approving user.
+
 For exact fields, relations, and enum values, see [`backend/prisma/schema.prisma`](backend/prisma/schema.prisma). The schema and migrations define persisted behavior; this summary is intentionally compact.
 
 ## Architecture and operation

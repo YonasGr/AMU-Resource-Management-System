@@ -1,17 +1,19 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
-import { Role, ScopeType, TransactionType, TransferStatus } from '@prisma/client';
+import { CycleCountStatus, Role, ScopeType, TransactionType, TransferStatus } from '@prisma/client';
 import { NotificationsService } from '../notifications/notifications.service';
 import { AuditService } from '../audit/audit.service';
 import { AccessControlService } from '../auth/access-control.service';
 import { SafeUser } from '../auth/decorators/current-user.decorator';
 import {
   AdjustmentDto,
+  CreateCycleCountDto,
   CreateGoodsReceiptDto,
   InspectGoodsReceiptDto,
   ReturnDto,
   StockInDto,
   StockOutDto,
+  SubmitCycleCountDto,
   TransferDto,
 } from './dto/inventory.dto';
 
@@ -296,6 +298,175 @@ export class InventoryService {
     });
     await this.auditService.log(user.id, 'POST_GOODS_RECEIPT', 'INVENTORY', `Posted goods receipt ${receipt.receiptCode}`);
     return posted;
+  }
+
+  async createCycleCount(actor: SafeUser | string, dto: CreateCycleCountDto) {
+    const user = this.normalizeActor(actor);
+    const storeId = this.resolveStoreId(user, dto.storeId);
+    const materialIds = dto.lines.map((line) => line.materialId);
+    if (new Set(materialIds).size !== materialIds.length) {
+      throw new BadRequestException('A cycle count cannot contain the same material more than once');
+    }
+    const [store, materials] = await Promise.all([
+      this.prisma.store.findFirst({ where: { id: storeId, status: 'ACTIVE' } }),
+      this.prisma.material.findMany({
+        where: { id: { in: materialIds }, status: 'ACTIVE' },
+        include: { stockBalances: { where: { storeId }, select: { remainingQuantity: true } } },
+      }),
+    ]);
+    if (!store) throw new BadRequestException('The counting store is not active');
+    if (materials.length !== materialIds.length) {
+      throw new NotFoundException('One or more cycle count materials were not found or are inactive');
+    }
+
+    const countCode = `CC-${Date.now().toString().slice(-8)}-${Math.floor(100 + Math.random() * 900)}`;
+    const count = await this.prisma.cycleCount.create({
+      data: {
+        countCode,
+        storeId,
+        createdById: user.id,
+        remarks: dto.remarks,
+        lines: {
+          create: materials.map((material) => ({
+            materialId: material.id,
+            systemQuantity: material.stockBalances[0]?.remainingQuantity ?? 0,
+          })),
+        },
+      },
+      include: { lines: { include: { material: true } }, store: true },
+    });
+    await this.auditService.log(user.id, 'CREATE_CYCLE_COUNT', 'INVENTORY', `Created cycle count ${countCode}`);
+    return count;
+  }
+
+  async requestCycleCountRecount(id: string, actor: SafeUser | string) {
+    const user = this.normalizeActor(actor);
+    const count = await this.prisma.cycleCount.findUnique({ where: { id } });
+    if (!count) throw new NotFoundException(`Cycle count ${id} not found`);
+    this.resolveStoreId(user, count.storeId);
+    if (count.status !== CycleCountStatus.COUNTED) {
+      throw new BadRequestException(`Only COUNTED cycle counts can be sent for recount. Current status is ${count.status}`);
+    }
+    const result = await this.prisma.cycleCount.update({
+      where: { id },
+      data: { status: CycleCountStatus.RECOUNT_REQUIRED },
+      include: { lines: { include: { material: true } }, store: true },
+    });
+    await this.auditService.log(user.id, 'REQUEST_CYCLE_COUNT_RECOUNT', 'INVENTORY', `Requested recount for ${count.countCode}`);
+    return result;
+  }
+
+  async submitCycleCount(id: string, actor: SafeUser | string, dto: SubmitCycleCountDto) {
+    const user = this.normalizeActor(actor);
+    const count = await this.prisma.cycleCount.findUnique({ where: { id }, include: { lines: true } });
+    if (!count) throw new NotFoundException(`Cycle count ${id} not found`);
+    this.resolveStoreId(user, count.storeId);
+    if (count.status !== CycleCountStatus.DRAFT && count.status !== CycleCountStatus.RECOUNT_REQUIRED) {
+      throw new BadRequestException(`Only DRAFT or RECOUNT_REQUIRED cycle counts can be submitted. Current status is ${count.status}`);
+    }
+    const submittedIds = dto.lines.map((line) => line.lineId);
+    if (
+      new Set(submittedIds).size !== submittedIds.length ||
+      submittedIds.length !== count.lines.length ||
+      count.lines.some((line) => !submittedIds.includes(line.id))
+    ) {
+      throw new BadRequestException('Every cycle count line must be submitted exactly once');
+    }
+    const updates = dto.lines.map((submitted) => {
+      const line = count.lines.find((candidate) => candidate.id === submitted.lineId)!;
+      const variance = submitted.physicalQuantity - line.systemQuantity;
+      if (variance !== 0 && !submitted.varianceReason?.trim()) {
+        throw new BadRequestException(`A variance reason is required for ${line.materialId}`);
+      }
+      return { line, submitted, variance };
+    });
+    const result = await this.prisma.$transaction(async (tx) => {
+      for (const { line, submitted, variance } of updates) {
+        await tx.cycleCountLine.update({
+          where: { id: line.id },
+          data: {
+            physicalQuantity: submitted.physicalQuantity,
+            variance,
+            varianceReason: submitted.varianceReason?.trim() || null,
+          },
+        });
+      }
+      return tx.cycleCount.update({
+        where: { id },
+        data: { status: CycleCountStatus.COUNTED },
+        include: { lines: { include: { material: true } }, store: true },
+      });
+    });
+    await this.auditService.log(user.id, 'SUBMIT_CYCLE_COUNT', 'INVENTORY', `Submitted cycle count ${count.countCode}`);
+    return result;
+  }
+
+  async approveCycleCount(id: string, actor: SafeUser | string) {
+    const user = this.normalizeActor(actor);
+    const count = await this.prisma.cycleCount.findUnique({ where: { id }, include: { lines: true } });
+    if (!count) throw new NotFoundException(`Cycle count ${id} not found`);
+    this.resolveStoreId(user, count.storeId);
+    if (count.status !== CycleCountStatus.COUNTED) {
+      throw new BadRequestException(`Only COUNTED cycle counts can be approved. Current status is ${count.status}`);
+    }
+
+    const result = await this.prisma.$transaction(async (tx) => {
+      const claimed = await tx.cycleCount.updateMany({
+        where: { id, status: CycleCountStatus.COUNTED },
+        data: { status: CycleCountStatus.APPROVED, approvedById: user.id, approvedAt: new Date() },
+      });
+      if (claimed.count !== 1) throw new BadRequestException('This cycle count has already been processed');
+
+      for (const line of count.lines) {
+        if (line.physicalQuantity === null || line.variance === 0) continue;
+        const balance = await tx.stockBalance.findUnique({
+          where: { storeId_materialId: { storeId: count.storeId, materialId: line.materialId } },
+        });
+        if (balance) {
+          const changed = await tx.stockBalance.updateMany({
+            where: { id: balance.id, remainingQuantity: line.systemQuantity },
+            data: { remainingQuantity: line.physicalQuantity },
+          });
+          if (changed.count !== 1) {
+            throw new BadRequestException(`Stock changed for material ${line.materialId}; recount is required`);
+          }
+        } else if (line.systemQuantity === 0) {
+          await tx.stockBalance.create({
+            data: {
+              storeId: count.storeId,
+              materialId: line.materialId,
+              quantityReceived: line.physicalQuantity,
+              remainingQuantity: line.physicalQuantity,
+            },
+          });
+        } else {
+          throw new BadRequestException(`Stock balance missing for material ${line.materialId}; recount is required`);
+        }
+        const summary = await tx.stockSummary.updateMany({
+          where: { materialId: line.materialId },
+          data: { remainingQuantity: { increment: line.variance } },
+        });
+        if (summary.count !== 1) throw new BadRequestException(`Stock summary missing for material ${line.materialId}`);
+        await tx.inventoryTransaction.create({
+          data: {
+            transactionCode: `CNT-${count.countCode}-${line.id}`,
+            type: TransactionType.ADJUSTMENT,
+            materialId: line.materialId,
+            storeId: count.storeId,
+            quantity: Math.abs(line.variance),
+            issuedById: user.id,
+            purpose: 'Cycle Count Variance',
+            remarks: `Adjusted from ${line.systemQuantity} to ${line.physicalQuantity}. Reason: ${line.varianceReason}`,
+          },
+        });
+      }
+      return tx.cycleCount.findUnique({
+        where: { id },
+        include: { lines: { include: { material: true } }, store: true },
+      });
+    });
+    await this.auditService.log(user.id, 'APPROVE_CYCLE_COUNT', 'INVENTORY', `Approved cycle count ${count.countCode}`);
+    return result;
   }
 
   /** Direct Stock Out (Issue materials directly to employee / department) */

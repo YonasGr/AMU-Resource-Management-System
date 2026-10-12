@@ -64,6 +64,7 @@ model Store {
   outgoingTransfers InventoryTransfer[] @relation("TransferSource")
   incomingTransfers InventoryTransfer[] @relation("TransferDestination")
   goodsReceipts GoodsReceipt[]
+  cycleCounts CycleCount[]
   createdAt    DateTime        @default(now()) @map("created_at")
   updatedAt    DateTime        @updatedAt @map("updated_at")
 
@@ -85,6 +86,8 @@ model User {
   createdGoodsReceipts GoodsReceipt[] @relation("ReceiptCreator")
   inspectedGoodsReceipts GoodsReceipt[] @relation("ReceiptInspector")
   postedGoodsReceipts GoodsReceipt[] @relation("ReceiptPoster")
+  createdCycleCounts CycleCount[] @relation("CycleCountCreator")
+  approvedCycleCounts CycleCount[] @relation("CycleCountApprover")
 
   departmentId String?     @map("department_id")
   department   Department? @relation(fields: [departmentId], references: [id])
@@ -185,6 +188,7 @@ model Material {
   transactions InventoryTransaction[]
   transfers InventoryTransfer[]
   goodsReceipts GoodsReceipt[]
+  cycleCountLines CycleCountLine[]
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -303,6 +307,52 @@ enum ReceiptStatus {
   INSPECTED
   POSTED
   REJECTED
+}
+
+enum CycleCountStatus {
+  DRAFT
+  COUNTED
+  APPROVED
+  RECOUNT_REQUIRED
+  CANCELLED
+}
+
+model CycleCount {
+  id          String          @id @default(uuid())
+  countCode   String          @unique @map("count_code")
+  storeId     String          @map("store_id")
+  store       Store            @relation(fields: [storeId], references: [id])
+  status      CycleCountStatus @default(DRAFT)
+  createdById String          @map("created_by_id")
+  createdBy   User            @relation("CycleCountCreator", fields: [createdById], references: [id])
+  approvedById String?        @map("approved_by_id")
+  approvedBy  User?           @relation("CycleCountApprover", fields: [approvedById], references: [id])
+  approvedAt  DateTime?       @map("approved_at")
+  remarks     String?
+  lines       CycleCountLine[]
+  createdAt   DateTime        @default(now()) @map("created_at")
+  updatedAt   DateTime        @updatedAt @map("updated_at")
+
+  @@index([storeId, status])
+  @@map("cycle_counts")
+}
+
+model CycleCountLine {
+  id               String     @id @default(uuid())
+  cycleCountId     String     @map("cycle_count_id")
+  cycleCount       CycleCount @relation(fields: [cycleCountId], references: [id], onDelete: Cascade)
+  materialId       String     @map("material_id")
+  material         Material   @relation(fields: [materialId], references: [id])
+  systemQuantity   Int        @map("system_quantity")
+  physicalQuantity Int?       @map("physical_quantity")
+  variance         Int        @default(0)
+  varianceReason   String?    @map("variance_reason")
+  createdAt        DateTime   @default(now()) @map("created_at")
+  updatedAt        DateTime   @updatedAt @map("updated_at")
+
+  @@unique([cycleCountId, materialId])
+  @@index([materialId])
+  @@map("cycle_count_lines")
 }
 
 model GoodsReceipt {

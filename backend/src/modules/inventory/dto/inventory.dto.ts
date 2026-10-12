@@ -154,6 +154,45 @@ export class ReturnDto {
   remarks?: string;
 }
 
+export class CreateReturnInspectionDto {
+  @IsUUID()
+  requestId!: string;
+
+  @IsUUID()
+  requestItemId!: string;
+
+  @IsUUID()
+  @IsOptional()
+  storeId?: string;
+
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  quantity!: number;
+
+  @IsString()
+  @IsOptional()
+  condition?: string;
+
+  @IsString()
+  @IsOptional()
+  remarks?: string;
+}
+
+export class InspectReturnDto {
+  @IsString()
+  @IsNotEmpty()
+  disposition!: 'ACCEPT_TO_STOCK' | 'QUARANTINE' | 'SCRAP';
+
+  @IsString()
+  @IsOptional()
+  condition?: string;
+
+  @IsString()
+  @IsOptional()
+  remarks?: string;
+}
+
 export class AdjustmentDto {
   @IsUUID()
   materialId!: string;

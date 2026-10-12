@@ -65,6 +65,7 @@ model Store {
   incomingTransfers InventoryTransfer[] @relation("TransferDestination")
   goodsReceipts GoodsReceipt[]
   cycleCounts CycleCount[]
+  materialReturns MaterialReturn[]
   createdAt    DateTime        @default(now()) @map("created_at")
   updatedAt    DateTime        @updatedAt @map("updated_at")
 
@@ -88,6 +89,9 @@ model User {
   postedGoodsReceipts GoodsReceipt[] @relation("ReceiptPoster")
   createdCycleCounts CycleCount[] @relation("CycleCountCreator")
   approvedCycleCounts CycleCount[] @relation("CycleCountApprover")
+  createdMaterialReturns MaterialReturn[] @relation("ReturnCreator")
+  inspectedMaterialReturns MaterialReturn[] @relation("ReturnInspector")
+  postedMaterialReturns MaterialReturn[] @relation("ReturnPoster")
 
   departmentId String?     @map("department_id")
   department   Department? @relation(fields: [departmentId], references: [id])
@@ -189,6 +193,7 @@ model Material {
   transfers InventoryTransfer[]
   goodsReceipts GoodsReceipt[]
   cycleCountLines CycleCountLine[]
+  materialReturns MaterialReturn[]
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -257,6 +262,7 @@ model MaterialRequest {
 
   items        MaterialRequestItem[]
   transactions InventoryTransaction[]
+  materialReturns MaterialReturn[]
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -283,6 +289,7 @@ model MaterialRequestItem {
   quantityReserved  Int             @default(0) @map("quantity_reserved")
   quantityReturned  Int             @default(0) @map("quantity_returned")
   transactions      InventoryTransaction[]
+  materialReturns   MaterialReturn[]
 
   @@map("material_request_items")
 }
@@ -315,6 +322,19 @@ enum CycleCountStatus {
   APPROVED
   RECOUNT_REQUIRED
   CANCELLED
+}
+
+enum MaterialReturnStatus {
+  DRAFT
+  INSPECTED
+  POSTED
+  CANCELLED
+}
+
+enum ReturnDisposition {
+  ACCEPT_TO_STOCK
+  QUARANTINE
+  SCRAP
 }
 
 model CycleCount {
@@ -385,6 +405,38 @@ model GoodsReceipt {
   @@index([storeId, status])
   @@index([supplierId])
   @@map("goods_receipts")
+}
+
+model MaterialReturn {
+  id            String              @id @default(uuid())
+  returnCode    String              @unique @map("return_code")
+  requestId     String              @map("request_id")
+  request       MaterialRequest     @relation(fields: [requestId], references: [id])
+  requestItemId String              @map("request_item_id")
+  requestItem   MaterialRequestItem @relation(fields: [requestItemId], references: [id])
+  materialId    String              @map("material_id")
+  material     Material             @relation(fields: [materialId], references: [id])
+  storeId       String              @map("store_id")
+  store         Store               @relation(fields: [storeId], references: [id])
+  quantity      Int
+  condition     String?
+  disposition   ReturnDisposition?
+  status        MaterialReturnStatus @default(DRAFT)
+  createdById   String               @map("created_by_id")
+  createdBy     User                 @relation("ReturnCreator", fields: [createdById], references: [id])
+  inspectedById String?              @map("inspected_by_id")
+  inspectedBy   User?                @relation("ReturnInspector", fields: [inspectedById], references: [id])
+  inspectedAt   DateTime?            @map("inspected_at")
+  postedById    String?              @map("posted_by_id")
+  postedBy      User?                @relation("ReturnPoster", fields: [postedById], references: [id])
+  postedAt      DateTime?             @map("posted_at")
+  remarks       String?
+  createdAt     DateTime              @default(now()) @map("created_at")
+  updatedAt     DateTime              @updatedAt @map("updated_at")
+
+  @@index([storeId, status])
+  @@index([requestId, requestItemId])
+  @@map("material_returns")
 }
 
 model InventoryTransfer {

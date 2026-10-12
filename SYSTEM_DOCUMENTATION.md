@@ -143,6 +143,8 @@ Receiving from a supplier or other source can use `GoodsReceipt` documents. A re
 
 Cycle counts use `CycleCount` sessions. Creating a session snapshots each selected material's store quantity without changing stock. Submission requires every line to be counted and requires a variance reason whenever physical quantity differs from the snapshot. Managers can request a recount before approval. Approval is atomic, refuses stale balances that changed after the snapshot, posts each variance as an `ADJUSTMENT` ledger transaction, updates the store balance and compatibility aggregate, and records the approving user.
 
+Returns can use `MaterialReturn` inspection documents without changing stock at intake. The request item and store are derived and validated from the original issued request, and outstanding quantities include other open return inspections. Inspection assigns `ACCEPT_TO_STOCK`, `QUARANTINE`, or `SCRAP`. Posting increments the request item's returned quantity; accepted returns restore store stock and write a `RETURN` ledger transaction, while quarantine and scrap dispositions do not inflate available stock. The existing immediate return endpoint remains available for legacy clients.
+
 For exact fields, relations, and enum values, see [`backend/prisma/schema.prisma`](backend/prisma/schema.prisma). The schema and migrations define persisted behavior; this summary is intentionally compact.
 
 ## Architecture and operation

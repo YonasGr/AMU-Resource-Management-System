@@ -9,6 +9,8 @@ import {
   CreateGoodsReceiptDto,
   CreateCycleCountDto,
   InspectGoodsReceiptDto,
+  CreateReturnInspectionDto,
+  InspectReturnDto,
   ReturnDto,
   StockInDto,
   StockOutDto,
@@ -119,6 +121,24 @@ export class InventoryController {
   @Roles(Role.STOREKEEPER, Role.STORE_MANAGER, Role.ADMINISTRATOR)
   receiveTransfer(@Req() req: any, @Param('id', ParseUUIDPipe) id: string) {
     return this.inventoryService.receiveTransfer(id, req.user);
+  }
+
+  @Post('return-inspections')
+  @Roles(Role.STOREKEEPER, Role.STORE_MANAGER, Role.ADMINISTRATOR)
+  createReturnInspection(@Req() req: any, @Body() dto: CreateReturnInspectionDto) {
+    return this.inventoryService.createReturnInspection(req.user, dto);
+  }
+
+  @Post('return-inspections/:id/inspect')
+  @Roles(Role.STORE_MANAGER, Role.ADMINISTRATOR)
+  inspectReturn(@Req() req: any, @Param('id', ParseUUIDPipe) id: string, @Body() dto: InspectReturnDto) {
+    return this.inventoryService.inspectReturn(id, req.user, dto);
+  }
+
+  @Post('return-inspections/:id/post')
+  @Roles(Role.STORE_MANAGER, Role.ADMINISTRATOR)
+  postReturnInspection(@Req() req: any, @Param('id', ParseUUIDPipe) id: string) {
+    return this.inventoryService.postReturnInspection(id, req.user);
   }
 
   @Get('transactions')

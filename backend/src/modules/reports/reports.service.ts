@@ -1,12 +1,27 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import { ReportQueryDto } from './dto/report-query.dto';
+
+const reportDateFilter = (query: ReportQueryDto) => ({
+  ...(query.from || query.to
+    ? {
+        gte: query.from ? new Date(query.from) : undefined,
+        lte: query.to ? new Date(query.to) : undefined,
+      }
+    : {}),
+});
+
+const pagination = (query: ReportQueryDto) => ({
+  skip: (query.page - 1) * query.pageSize,
+  take: query.pageSize,
+});
 
 @Injectable()
 export class ReportsService {
   constructor(private readonly prisma: PrismaService) {}
 
   /** 1. Current Stock Report */
-  async getCurrentStockReport() {
+  async getCurrentStockReport(query: ReportQueryDto) {
     const materials = await this.prisma.material.findMany({
       select: {
         id: true,
@@ -17,6 +32,7 @@ export class ReportsService {
         minimumStock: true,
         category: { select: { name: true } },
         stockBalances: {
+          where: query.storeId ? { storeId: query.storeId } : undefined,
           select: {
             quantityReceived: true,
             quantityIssued: true,
@@ -25,6 +41,7 @@ export class ReportsService {
         },
       },
       orderBy: { name: 'asc' },
+      ...pagination(query),
     });
 
     return materials.map(({ stockBalances, ...material }) => ({
@@ -41,22 +58,31 @@ export class ReportsService {
   }
 
   /** 2. Stock In Report */
-  async getStockInReport() {
+  async getStockInReport(query: ReportQueryDto) {
     return this.prisma.inventoryTransaction.findMany({
-      where: { type: 'STOCK_IN' },
+      where: {
+        type: 'STOCK_IN',
+        storeId: query.storeId,
+        createdAt: reportDateFilter(query),
+      },
       include: {
         material: { select: { materialCode: true, name: true, unit: true } },
         supplier: { select: { name: true, contactPerson: true } },
         issuedBy: { select: { fullName: true } },
       },
       orderBy: { createdAt: 'desc' },
+      ...pagination(query),
     });
   }
 
   /** 3. Stock Out Report */
-  async getStockOutReport() {
+  async getStockOutReport(query: ReportQueryDto) {
     return this.prisma.inventoryTransaction.findMany({
-      where: { type: 'STOCK_OUT' },
+      where: {
+        type: 'STOCK_OUT',
+        storeId: query.storeId,
+        createdAt: reportDateFilter(query),
+      },
       include: {
         material: { select: { materialCode: true, name: true, unit: true } },
         department: { select: { name: true } },
@@ -65,17 +91,19 @@ export class ReportsService {
         approvedBy: { select: { fullName: true } },
       },
       orderBy: { createdAt: 'desc' },
+      ...pagination(query),
     });
   }
 
   /** 4. Material Balance Report */
-  async getMaterialBalanceReport() {
+  async getMaterialBalanceReport(query: ReportQueryDto) {
     const materials = await this.prisma.material.findMany({
       include: {
         category: true,
-        stockBalances: true,
+        stockBalances: query.storeId ? { where: { storeId: query.storeId } } : true,
       },
       orderBy: { name: 'asc' },
+      ...pagination(query),
     });
 
     return materials.map((m) => ({
@@ -94,13 +122,14 @@ export class ReportsService {
   }
 
   /** 5. Low Stock Report */
-  async getLowStockReport() {
+  async getLowStockReport(query: ReportQueryDto) {
     const materials = await this.prisma.material.findMany({
       include: {
         category: true,
-        stockBalances: true,
+        stockBalances: query.storeId ? { where: { storeId: query.storeId } } : true,
       },
       orderBy: { name: 'asc' },
+      take: Math.min(query.page * query.pageSize, 500),
     });
 
     return materials
@@ -109,6 +138,7 @@ export class ReportsService {
         remainingQuantity: m.stockBalances.reduce((sum, balance) => sum + balance.remainingQuantity, 0),
       }))
       .filter(({ material, remainingQuantity }) => remainingQuantity <= material.minimumStock)
+      .slice((query.page - 1) * query.pageSize, query.page * query.pageSize)
       .map((m) => ({
         materialCode: m.material.materialCode,
         name: m.material.name,
@@ -122,8 +152,12 @@ export class ReportsService {
   }
 
   /** 6. Employee Issue Report */
-  async getEmployeeIssueReport(employeeId?: string) {
-    const where: any = { type: 'STOCK_OUT' };
+  async getEmployeeIssueReport(employeeId: string | undefined, query: ReportQueryDto) {
+    const where: any = {
+      type: 'STOCK_OUT',
+      storeId: query.storeId,
+      createdAt: reportDateFilter(query),
+    };
     if (employeeId) where.employeeId = employeeId;
 
     return this.prisma.inventoryTransaction.findMany({
@@ -135,20 +169,26 @@ export class ReportsService {
         issuedBy: { select: { fullName: true } },
       },
       orderBy: { createdAt: 'desc' },
+      ...pagination(query),
     });
   }
 
   /** 7. Supplier Report */
-  async getSupplierReport() {
+  async getSupplierReport(query: ReportQueryDto) {
     const suppliers = await this.prisma.supplier.findMany({
       include: {
         transactions: {
+          where: {
+            storeId: query.storeId,
+            createdAt: reportDateFilter(query),
+          },
           include: {
             material: { select: { materialCode: true, name: true } },
           },
         },
       },
       orderBy: { name: 'asc' },
+      ...pagination(query),
     });
 
     return suppliers.map((s) => ({
@@ -163,8 +203,12 @@ export class ReportsService {
   }
 
   /** 8. Full Transaction History Report */
-  async getTransactionHistoryReport() {
+  async getTransactionHistoryReport(query: ReportQueryDto) {
     return this.prisma.inventoryTransaction.findMany({
+      where: {
+        storeId: query.storeId,
+        createdAt: reportDateFilter(query),
+      },
       include: {
         material: { select: { materialCode: true, name: true, unit: true } },
         supplier: { select: { name: true } },
@@ -174,6 +218,7 @@ export class ReportsService {
         approvedBy: { select: { fullName: true } },
       },
       orderBy: { createdAt: 'desc' },
+      ...pagination(query),
     });
   }
 }

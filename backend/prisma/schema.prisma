@@ -231,6 +231,7 @@ model StockBalance {
 
   @@unique([storeId, materialId])
   @@index([materialId])
+  @@index([storeId, materialId])
   @@map("stock_balances")
 }
 
@@ -524,6 +525,8 @@ model InventoryTransaction {
   createdAt DateTime @default(now()) @map("created_at")
 
   @@index([requestItemId])
+  @@index([storeId, createdAt])
+  @@index([type, createdAt])
   @@map("inventory_transactions")
 }
 

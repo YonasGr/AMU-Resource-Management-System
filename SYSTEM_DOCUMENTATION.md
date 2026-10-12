@@ -129,7 +129,9 @@ The reports API exposes the following endpoints:
 | `GET /reports/supplier` | Supplier and recorded supply summary |
 | `GET /reports/transaction-history` | Inventory transaction history |
 
-The frontend provides report views and export/print actions. These are operational inventory reports, not financial valuation reports.
+All report endpoints accept bounded query controls: `page` (1-based, default `1`), `pageSize` (default `100`, maximum `500`), `storeId`, `from`, and `to`. Transaction-oriented reports apply the store and inclusive date filters to transaction timestamps. Material and supplier reports paginate at the database query; low-stock results are filtered before the requested page is returned and are capped at 500 candidate materials per request. This prevents unbounded exports and keeps report queries reproducible for a selected page/filter set while preserving the existing array response shape for current clients.
+
+The frontend provides report views and export/print actions. These are operational inventory reports, not financial valuation reports. For larger exports, clients should request sequential pages rather than raising `pageSize` beyond the server maximum.
 
 ## Data model
 

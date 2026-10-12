@@ -39,6 +39,7 @@ services:
       JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:?JWT_REFRESH_SECRET is required}
       CORS_ORIGIN: ${CORS_ORIGIN:?CORS_ORIGIN is required}
       AUTO_SEED: ${AUTO_SEED:-false}
+      SEED_CATALOG: ${SEED_CATALOG:-false}
       ALLOW_DEFAULT_SEED_PASSWORDS: "false"
     ports:
       - "3000:3000"

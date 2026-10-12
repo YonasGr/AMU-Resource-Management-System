@@ -54,6 +54,10 @@ describe('InventoryService', () => {
       cycleCountLine: {
         update: jest.fn(),
       },
+      materialReturn: {
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+        update: jest.fn().mockImplementation(({ data }) => ({ id: 'return-1', status: 'POSTED', ...data })),
+      },
       materialRequestItem: {
         findUnique: jest.fn(),
         updateMany: jest.fn().mockResolvedValue({ count: 1 }),
@@ -107,6 +111,12 @@ describe('InventoryService', () => {
             },
             cycleCount: {
               create: jest.fn(),
+              findUnique: jest.fn(),
+              update: jest.fn(),
+            },
+            materialReturn: {
+              create: jest.fn(),
+              findMany: jest.fn().mockResolvedValue([]),
               findUnique: jest.fn(),
               update: jest.fn(),
             },
@@ -440,6 +450,127 @@ describe('InventoryService', () => {
           }),
         }),
       );
+    });
+  });
+
+  describe('return inspections', () => {
+    const actor = {
+      id: 'keeper-1',
+      role: Role.STOREKEEPER,
+      scopeType: ScopeType.STORE,
+      storeId: 'store-1',
+    } as any;
+
+    const requestItem = {
+      id: 'item-1',
+      requestId: 'request-1',
+      materialId: 'mat-uuid-1',
+      quantityIssued: 10,
+      quantityReturned: 2,
+      request: { id: 'request-1', requestNumber: 'REQ-2026-001', status: 'ISSUED', storeId: 'store-1' },
+      material: mockMaterial,
+    };
+
+    it('creates an inspection record without increasing stock or returned quantity', async () => {
+      prisma.materialRequestItem.findUnique.mockResolvedValue(requestItem);
+      prisma.materialReturn.findMany.mockResolvedValue([]);
+      prisma.materialReturn.create.mockResolvedValue({ id: 'return-1', status: 'DRAFT' });
+
+      await service.createReturnInspection(actor, {
+        requestId: 'request-1',
+        requestItemId: 'item-1',
+        quantity: 3,
+      });
+
+      expect(prisma.materialReturn.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            requestId: 'request-1',
+            requestItemId: 'item-1',
+            materialId: 'mat-uuid-1',
+            storeId: 'store-1',
+            quantity: 3,
+          }),
+        }),
+      );
+      expect(prisma._mockTx.stockBalance.upsert).not.toHaveBeenCalled();
+      expect(prisma._mockTx.materialRequestItem.updateMany).not.toHaveBeenCalled();
+    });
+
+    it('rejects return inspections that exceed issued and pending quantities', async () => {
+      prisma.materialRequestItem.findUnique.mockResolvedValue(requestItem);
+      prisma.materialReturn.findMany.mockResolvedValue([{ quantity: 7 }]);
+
+      await expect(
+        service.createReturnInspection(actor, {
+          requestId: 'request-1',
+          requestItemId: 'item-1',
+          quantity: 2,
+        }),
+      ).rejects.toThrow('Only 1 item(s) remain eligible for inspection');
+    });
+
+    it('posts accepted returns into the store balance and request ledger', async () => {
+      prisma.materialReturn.findUnique.mockResolvedValue({
+        id: 'return-1',
+        returnCode: 'RET-12345678-123',
+        requestId: 'request-1',
+        requestItemId: 'item-1',
+        materialId: 'mat-uuid-1',
+        storeId: 'store-1',
+        quantity: 3,
+        status: 'INSPECTED',
+        disposition: 'ACCEPT_TO_STOCK',
+        requestItem: { quantityIssued: 10, quantityReturned: 2 },
+      });
+
+      await service.postReturnInspection('return-1', {
+        ...actor,
+        role: Role.STORE_MANAGER,
+      });
+
+      expect(prisma._mockTx.materialRequestItem.updateMany).toHaveBeenCalled();
+      expect(prisma._mockTx.stockBalance.upsert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          update: {
+            quantityIssued: { decrement: 3 },
+            remainingQuantity: { increment: 3 },
+          },
+        }),
+      );
+      expect(prisma._mockTx.inventoryTransaction.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            type: TransactionType.RETURN,
+            quantity: 3,
+            storeId: 'store-1',
+          }),
+        }),
+      );
+    });
+
+    it('posts quarantine returns without adding available stock', async () => {
+      prisma.materialReturn.findUnique.mockResolvedValue({
+        id: 'return-1',
+        returnCode: 'RET-12345678-123',
+        requestId: 'request-1',
+        requestItemId: 'item-1',
+        materialId: 'mat-uuid-1',
+        storeId: 'store-1',
+        quantity: 3,
+        status: 'INSPECTED',
+        disposition: 'QUARANTINE',
+        requestItem: { quantityIssued: 10, quantityReturned: 2 },
+      });
+
+      await service.postReturnInspection('return-1', {
+        ...actor,
+        role: Role.STORE_MANAGER,
+      });
+
+      expect(prisma._mockTx.materialRequestItem.updateMany).toHaveBeenCalled();
+      expect(prisma._mockTx.stockBalance.upsert).not.toHaveBeenCalled();
+      expect(prisma._mockTx.inventoryTransaction.create).not.toHaveBeenCalled();
     });
   });
 

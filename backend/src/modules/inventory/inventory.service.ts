@@ -1,6 +1,14 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
-import { CycleCountStatus, Role, ScopeType, TransactionType, TransferStatus } from '@prisma/client';
+import {
+  CycleCountStatus,
+  MaterialReturnStatus,
+  ReturnDisposition,
+  Role,
+  ScopeType,
+  TransactionType,
+  TransferStatus,
+} from '@prisma/client';
 import { NotificationsService } from '../notifications/notifications.service';
 import { AuditService } from '../audit/audit.service';
 import { AccessControlService } from '../auth/access-control.service';
@@ -9,7 +17,9 @@ import {
   AdjustmentDto,
   CreateCycleCountDto,
   CreateGoodsReceiptDto,
+  CreateReturnInspectionDto,
   InspectGoodsReceiptDto,
+  InspectReturnDto,
   ReturnDto,
   StockInDto,
   StockOutDto,
@@ -466,6 +476,156 @@ export class InventoryService {
       });
     });
     await this.auditService.log(user.id, 'APPROVE_CYCLE_COUNT', 'INVENTORY', `Approved cycle count ${count.countCode}`);
+    return result;
+  }
+
+  async createReturnInspection(actor: SafeUser | string, dto: CreateReturnInspectionDto) {
+    const user = this.normalizeActor(actor);
+    const requestItem = await this.prisma.materialRequestItem.findUnique({
+      where: { id: dto.requestItemId },
+      include: {
+        request: { select: { id: true, requestNumber: true, status: true, storeId: true } },
+        material: true,
+      },
+    });
+    if (!requestItem || requestItem.requestId !== dto.requestId) {
+      throw new NotFoundException('Issued request item was not found');
+    }
+    if (requestItem.request.status !== 'ISSUED') {
+      throw new BadRequestException('Materials can only be returned against an issued request');
+    }
+    const storeId = this.resolveStoreId(user, requestItem.request.storeId ?? dto.storeId);
+    const pendingReturns = await this.prisma.materialReturn.findMany({
+      where: { requestItemId: dto.requestItemId, status: { in: [MaterialReturnStatus.DRAFT, MaterialReturnStatus.INSPECTED] } },
+      select: { quantity: true },
+    });
+    const pendingQuantity = pendingReturns.reduce((sum, current) => sum + current.quantity, 0);
+    const outstanding = requestItem.quantityIssued - requestItem.quantityReturned - pendingQuantity;
+    if (dto.quantity > outstanding) {
+      throw new BadRequestException(`Only ${Math.max(0, outstanding)} item(s) remain eligible for inspection`);
+    }
+
+    const returnCode = `RET-${Date.now().toString().slice(-8)}-${Math.floor(100 + Math.random() * 900)}`;
+    const result = await this.prisma.materialReturn.create({
+      data: {
+        returnCode,
+        requestId: dto.requestId,
+        requestItemId: dto.requestItemId,
+        materialId: requestItem.materialId,
+        storeId,
+        quantity: dto.quantity,
+        condition: dto.condition,
+        remarks: dto.remarks,
+        createdById: user.id,
+      },
+      include: { material: true, store: true, request: true, requestItem: true },
+    });
+    await this.auditService.log(user.id, 'CREATE_RETURN_INSPECTION', 'INVENTORY', `Created return inspection ${returnCode}`);
+    return result;
+  }
+
+  async inspectReturn(id: string, actor: SafeUser | string, dto: InspectReturnDto) {
+    const user = this.normalizeActor(actor);
+    const returnRecord = await this.prisma.materialReturn.findUnique({
+      where: { id },
+      include: { requestItem: { select: { quantityIssued: true, quantityReturned: true } } },
+    });
+    if (!returnRecord) throw new NotFoundException(`Return inspection ${id} not found`);
+    this.resolveStoreId(user, returnRecord.storeId);
+    if (returnRecord.status !== MaterialReturnStatus.DRAFT) {
+      throw new BadRequestException(`Only DRAFT returns can be inspected. Current status is ${returnRecord.status}`);
+    }
+    const inspected = await this.prisma.materialReturn.update({
+      where: { id },
+      data: {
+        status: MaterialReturnStatus.INSPECTED,
+        disposition: dto.disposition as ReturnDisposition,
+        condition: dto.condition ?? returnRecord.condition,
+        remarks: dto.remarks ?? returnRecord.remarks,
+        inspectedById: user.id,
+        inspectedAt: new Date(),
+      },
+      include: { material: true, store: true, request: true, requestItem: true },
+    });
+    await this.auditService.log(user.id, 'INSPECT_RETURN', 'INVENTORY', `Inspected return ${returnRecord.returnCode} as ${dto.disposition}`);
+    return inspected;
+  }
+
+  async postReturnInspection(id: string, actor: SafeUser | string) {
+    const user = this.normalizeActor(actor);
+    const returnRecord = await this.prisma.materialReturn.findUnique({
+      where: { id },
+      include: { requestItem: { select: { quantityIssued: true, quantityReturned: true } } },
+    });
+    if (!returnRecord) throw new NotFoundException(`Return inspection ${id} not found`);
+    this.resolveStoreId(user, returnRecord.storeId);
+    if (returnRecord.status !== MaterialReturnStatus.INSPECTED || !returnRecord.disposition) {
+      throw new BadRequestException(`Only inspected returns with a disposition can be posted. Current status is ${returnRecord.status}`);
+    }
+
+    const result = await this.prisma.$transaction(async (tx) => {
+      const claimed = await tx.materialReturn.updateMany({
+        where: { id, status: MaterialReturnStatus.INSPECTED },
+        data: { status: MaterialReturnStatus.POSTED, postedById: user.id, postedAt: new Date() },
+      });
+      if (claimed.count !== 1) throw new BadRequestException('This return has already been posted or is no longer inspectable');
+
+      const updatedItem = await tx.materialRequestItem.updateMany({
+        where: {
+          id: returnRecord.requestItemId,
+          requestId: returnRecord.requestId,
+          quantityReturned: { lte: returnRecord.requestItem.quantityIssued - returnRecord.requestItem.quantityReturned - returnRecord.quantity },
+        },
+        data: { quantityReturned: { increment: returnRecord.quantity } },
+      });
+      if (updatedItem.count !== 1) {
+        throw new BadRequestException('Return exceeds the remaining quantity for this request item');
+      }
+
+      if (returnRecord.disposition === ReturnDisposition.ACCEPT_TO_STOCK) {
+        await tx.stockBalance.upsert({
+          where: { storeId_materialId: { storeId: returnRecord.storeId, materialId: returnRecord.materialId } },
+          update: {
+            quantityIssued: { decrement: returnRecord.quantity },
+            remainingQuantity: { increment: returnRecord.quantity },
+          },
+          create: {
+            storeId: returnRecord.storeId,
+            materialId: returnRecord.materialId,
+            quantityReceived: returnRecord.quantity,
+            remainingQuantity: returnRecord.quantity,
+          },
+        });
+        await tx.stockSummary.update({
+          where: { materialId: returnRecord.materialId },
+          data: {
+            quantityIssued: { decrement: returnRecord.quantity },
+            remainingQuantity: { increment: returnRecord.quantity },
+          },
+        });
+        await tx.inventoryTransaction.create({
+          data: {
+            transactionCode: `${returnRecord.returnCode}-IN`,
+            type: TransactionType.RETURN,
+            materialId: returnRecord.materialId,
+            storeId: returnRecord.storeId,
+            requestId: returnRecord.requestId,
+            requestItemId: returnRecord.requestItemId,
+            quantity: returnRecord.quantity,
+            issuedById: user.id,
+            purpose: 'Inspected material return',
+            remarks: `Accepted return ${returnRecord.returnCode} into stock`,
+          },
+        });
+      }
+
+      return tx.materialReturn.update({
+        where: { id },
+        data: {},
+        include: { material: true, store: true, request: true, requestItem: true },
+      });
+    });
+    await this.auditService.log(user.id, 'POST_RETURN_INSPECTION', 'INVENTORY', `Posted return ${returnRecord.returnCode} as ${returnRecord.disposition}`);
     return result;
   }
 

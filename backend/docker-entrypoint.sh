@@ -14,12 +14,13 @@ npx prisma migrate deploy
 if [ "$AUTO_SEED" = "true" ]; then
   echo "==> [AMU Store] AUTO_SEED is enabled. Seeding initial database records..."
   if [ -f "dist/prisma/seed.js" ]; then
-    node dist/prisma/seed.js || echo "==> [AMU Store] Seeding completed or skipped."
+    node dist/prisma/seed.js
   elif [ -f "dist/seed.js" ]; then
-    node dist/seed.js || echo "==> [AMU Store] Seeding completed or skipped."
+    node dist/seed.js
   else
-    pnpm prisma:seed || echo "==> [AMU Store] Seeding completed or skipped."
+    pnpm prisma:seed
   fi
+  echo "==> [AMU Store] Production seed completed successfully."
 fi
 
 echo "==> [AMU Store] Starting NestJS production application..."

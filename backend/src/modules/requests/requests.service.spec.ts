@@ -53,6 +53,7 @@ describe('RequestsService Store-Scope Enforcement Verification', () => {
       },
       materialRequestItem: {
         update: jest.fn(),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
       },
     };
 
@@ -359,6 +360,94 @@ describe('RequestsService Store-Scope Enforcement Verification', () => {
         expect(prisma._mockTx.materialRequestItem.update).toHaveBeenCalledWith({
           where: { id: 'item-1' },
           data: { quantityIssued: { increment: 2 } },
+        });
+      });
+
+      describe('request lifecycle closure', () => {
+        it('moves an approved request to backorder without changing stock', async () => {
+          prisma.materialRequest.findUnique.mockResolvedValue({
+            ...mockPendingRequest,
+            status: RequestStatus.APPROVED,
+            items: [],
+          });
+          prisma.materialRequest.update.mockResolvedValue({
+            ...mockPendingRequest,
+            status: RequestStatus.BACKORDERED,
+          });
+
+          const result = await service.backorder('req-1', createMockUser(), 'Awaiting replenishment');
+
+          expect(result.status).toBe(RequestStatus.BACKORDERED);
+          expect(prisma._mockTx.stockBalance.updateMany).not.toHaveBeenCalled();
+        });
+
+        it('cancels an approved request and releases its reservations', async () => {
+          prisma.materialRequest.findUnique.mockResolvedValue({
+            ...mockPendingRequest,
+            status: RequestStatus.APPROVED,
+            items: [{
+              id: 'item-1',
+              materialId: 'material-1',
+              quantityIssued: 0,
+              quantityReserved: 4,
+            }],
+          });
+          prisma._mockTx.materialRequest.update.mockResolvedValue({
+            ...mockPendingRequest,
+            status: RequestStatus.CANCELLED,
+          });
+          prisma.materialRequest.update.mockResolvedValue({
+            ...mockPendingRequest,
+            status: RequestStatus.CANCELLED,
+          });
+
+          const result = await service.cancel('req-1', createMockUser(), 'No longer required');
+
+          expect(result.status).toBe(RequestStatus.CANCELLED);
+          expect(prisma._mockTx.stockBalance.updateMany).toHaveBeenCalledWith({
+            where: { storeId: 'store-a', materialId: 'material-1', reservedQuantity: { gte: 4 } },
+            data: { reservedQuantity: { decrement: 4 } },
+          });
+          expect(prisma._mockTx.materialRequestItem.updateMany).toHaveBeenCalledWith({
+            where: { requestId: 'req-1' },
+            data: { quantityReserved: 0 },
+          });
+        });
+
+        it('requires handover evidence before requester confirmation', async () => {
+          prisma.materialRequest.findUnique.mockResolvedValue({
+            ...mockPendingRequest,
+            status: RequestStatus.ISSUED,
+            requesterId: 'requester-1',
+            items: [{ quantityRequested: 2, quantityIssued: 2, quantityReturned: 0 }],
+            materialReturns: [],
+            handoverEvidence: null,
+          });
+
+          await expect(
+            service.confirm('req-1', createMockUser({ id: 'requester-1', role: Role.REQUESTER }),),
+          ).rejects.toThrow('handover evidence');
+        });
+
+        it('closes an issued request after handover and requester confirmation', async () => {
+          prisma.materialRequest.findUnique.mockResolvedValue({
+            ...mockPendingRequest,
+            status: RequestStatus.ISSUED,
+            requesterId: 'requester-1',
+            handoverEvidence: 'Signed handover form HH-001',
+            items: [{ quantityRequested: 2, quantityIssued: 2, quantityReturned: 0 }],
+            materialReturns: [],
+          });
+          prisma.materialRequest.update.mockResolvedValue({ ...mockPendingRequest, status: RequestStatus.CLOSED });
+
+          const result = await service.confirm('req-1', createMockUser({ id: 'requester-1', role: Role.REQUESTER }));
+
+          expect(result.status).toBe(RequestStatus.CLOSED);
+          expect(prisma.materialRequest.update).toHaveBeenCalledWith(
+            expect.objectContaining({
+              data: expect.objectContaining({ status: RequestStatus.CLOSED, confirmedById: 'requester-1' }),
+            }),
+          );
         });
       });
     });

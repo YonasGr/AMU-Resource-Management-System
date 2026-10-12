@@ -300,7 +300,11 @@ export class RequestsService {
       throw new NotFoundException(`Request ${id} not found`);
     }
 
-    if (request.status !== RequestStatus.APPROVED && request.status !== RequestStatus.PARTIALLY_ISSUED) {
+    if (
+      request.status !== RequestStatus.APPROVED &&
+      request.status !== RequestStatus.PARTIALLY_ISSUED &&
+      request.status !== RequestStatus.BACKORDERED
+    ) {
       throw new BadRequestException(
         `Only APPROVED or PARTIALLY_ISSUED requests can be issued. Current status is ${request.status}`,
       );
@@ -414,7 +418,9 @@ export class RequestsService {
       return tx.materialRequest.update({
         where: { id },
         data: {
-          status: fullyIssued ? RequestStatus.ISSUED : RequestStatus.PARTIALLY_ISSUED,
+          status: fullyIssued ? RequestStatus.ISSUED : request.status === RequestStatus.BACKORDERED
+            ? RequestStatus.BACKORDERED
+            : RequestStatus.PARTIALLY_ISSUED,
         },
         include: {
           requester: { select: { fullName: true, email: true, id: true } },
@@ -457,6 +463,122 @@ export class RequestsService {
       );
     }
 
+    return result;
+  }
+
+  async backorder(id: string, user: SafeUser, remarks?: string) {
+    const request = await this.prisma.materialRequest.findUnique({
+      where: { id },
+      include: { items: true },
+    });
+    if (!request || !this.accessControlService.canViewRequest(user, request)) {
+      throw new NotFoundException(`Material request ${id} not found`);
+    }
+    if (request.status !== RequestStatus.APPROVED && request.status !== RequestStatus.PARTIALLY_ISSUED) {
+      throw new BadRequestException(`Only APPROVED or PARTIALLY_ISSUED requests can be backordered. Current status is ${request.status}`);
+    }
+    const result = await this.prisma.materialRequest.update({
+      where: { id },
+      data: { status: RequestStatus.BACKORDERED, managerRemarks: remarks },
+      include: { items: { include: { material: true } }, requester: true, store: true },
+    });
+    await this.auditService.log(user.id, 'BACKORDER_REQUEST', 'REQUESTS', `Backordered request ${request.requestNumber}`);
+    return result;
+  }
+
+  async cancel(id: string, user: SafeUser, reason: string) {
+    const request = await this.prisma.materialRequest.findUnique({
+      where: { id },
+      include: { items: true },
+    });
+    if (!request || !this.accessControlService.canViewRequest(user, request)) {
+      throw new NotFoundException(`Material request ${id} not found`);
+    }
+    if (
+      request.status !== RequestStatus.PENDING &&
+      request.status !== RequestStatus.APPROVED &&
+      request.status !== RequestStatus.PARTIALLY_ISSUED &&
+      request.status !== RequestStatus.BACKORDERED
+    ) {
+      throw new BadRequestException(`Request cannot be cancelled from status ${request.status}`);
+    }
+    if (request.items.some((item) => item.quantityIssued > 0)) {
+      throw new BadRequestException('Issued request lines must be returned before cancellation');
+    }
+    const result = await this.prisma.$transaction(async (tx) => {
+      if (request.status === RequestStatus.APPROVED || request.status === RequestStatus.PARTIALLY_ISSUED || request.status === RequestStatus.BACKORDERED) {
+        if (request.storeId) {
+          for (const item of request.items) {
+            if (item.quantityReserved <= 0) continue;
+            const released = await tx.stockBalance.updateMany({
+              where: {
+                storeId: request.storeId,
+                materialId: item.materialId,
+                reservedQuantity: { gte: item.quantityReserved },
+              },
+              data: { reservedQuantity: { decrement: item.quantityReserved } },
+            });
+            if (released.count !== 1) throw new BadRequestException('Reserved stock changed; refresh and retry');
+          }
+        }
+        await tx.materialRequestItem.updateMany({
+          where: { requestId: id },
+          data: { quantityReserved: 0 },
+        });
+      }
+      return tx.materialRequest.update({
+        where: { id },
+        data: {
+          status: RequestStatus.CANCELLED,
+          cancelledById: user.id,
+          cancelledAt: new Date(),
+          cancellationReason: reason,
+        },
+        include: { items: true, requester: true, store: true },
+      });
+    });
+    await this.auditService.log(user.id, 'CANCEL_REQUEST', 'REQUESTS', `Cancelled request ${request.requestNumber}: ${reason}`);
+    return result;
+  }
+
+  async handover(id: string, user: SafeUser, evidence: string) {
+    const request = await this.prisma.materialRequest.findUnique({ where: { id } });
+    if (!request || !this.accessControlService.canViewRequest(user, request)) {
+      throw new NotFoundException(`Material request ${id} not found`);
+    }
+    if (request.status !== RequestStatus.ISSUED) {
+      throw new BadRequestException(`Only ISSUED requests can be handed over. Current status is ${request.status}`);
+    }
+    const result = await this.prisma.materialRequest.update({
+      where: { id },
+      data: { handoverEvidence: evidence, handedOverById: user.id, handedOverAt: new Date() },
+    });
+    await this.auditService.log(user.id, 'HANDOVER_REQUEST', 'REQUESTS', `Recorded handover for request ${request.requestNumber}`);
+    return result;
+  }
+
+  async confirm(id: string, user: SafeUser) {
+    const request = await this.prisma.materialRequest.findUnique({
+      where: { id },
+      include: { items: true, materialReturns: { where: { status: { in: ['DRAFT', 'INSPECTED'] } } } },
+    });
+    if (!request || request.requesterId !== user.id) {
+      throw new NotFoundException(`Material request ${id} not found`);
+    }
+    if (request.status !== RequestStatus.ISSUED || !request.handoverEvidence) {
+      throw new BadRequestException('An issued request must have handover evidence before confirmation');
+    }
+    if (request.items.some((item) => item.quantityIssued < item.quantityRequested || item.quantityReturned > item.quantityIssued)) {
+      throw new BadRequestException('All requested quantities must be issued before confirmation');
+    }
+    if (request.materialReturns.length > 0) {
+      throw new BadRequestException('Open return inspections must be completed before confirmation');
+    }
+    const result = await this.prisma.materialRequest.update({
+      where: { id },
+      data: { status: RequestStatus.CLOSED, confirmedById: user.id, confirmedAt: new Date(), closedAt: new Date() },
+    });
+    await this.auditService.log(user.id, 'CONFIRM_REQUEST', 'REQUESTS', `Requester confirmed and closed ${request.requestNumber}`);
     return result;
   }
 }

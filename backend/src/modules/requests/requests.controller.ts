@@ -4,7 +4,9 @@ import { RequestStatus, Role } from '@prisma/client';
 import { RequestsService } from './requests.service';
 import {
   ApproveRejectRequestDto,
+  CancelRequestDto,
   CreateRequestDto,
+  HandoverRequestDto,
   IssueRequestDto,
 } from './dto/request.dto';
 import { CurrentUser, SafeUser } from '../auth/decorators/current-user.decorator';
@@ -60,5 +62,35 @@ export class RequestsController {
     @Body() body: IssueRequestDto,
   ) {
     return this.requestsService.issueItems(id, user, body.employeeId, body.remarks, body.items);
+  }
+
+  @Post(':id/cancel')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Cancel a request before fulfillment' })
+  cancel(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: SafeUser, @Body() body: CancelRequestDto) {
+    return this.requestsService.cancel(id, user, body.reason);
+  }
+
+  @Post(':id/backorder')
+  @HttpCode(HttpStatus.OK)
+  @Roles(Role.STORE_MANAGER, Role.ADMINISTRATOR)
+  @ApiOperation({ summary: 'Move an approved request to backorder' })
+  backorder(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: SafeUser, @Body() body: ApproveRejectRequestDto) {
+    return this.requestsService.backorder(id, user, body.remarks);
+  }
+
+  @Post(':id/handover')
+  @HttpCode(HttpStatus.OK)
+  @Roles(Role.STOREKEEPER, Role.STORE_MANAGER, Role.ADMINISTRATOR)
+  @ApiOperation({ summary: 'Record request handover evidence' })
+  handover(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: SafeUser, @Body() body: HandoverRequestDto) {
+    return this.requestsService.handover(id, user, body.evidence);
+  }
+
+  @Post(':id/confirm')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Requester confirms receipt and closes request' })
+  confirm(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: SafeUser) {
+    return this.requestsService.confirm(id, user);
   }
 }

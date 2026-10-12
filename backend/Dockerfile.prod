@@ -12,6 +12,7 @@ RUN pnpm install
 COPY . .
 RUN pnpm prisma:generate
 RUN pnpm build
+RUN pnpm build:catalog-seed
 
 # Stage 2: Production Runner
 FROM node:20-alpine AS runner

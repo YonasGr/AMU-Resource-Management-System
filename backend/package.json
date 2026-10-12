@@ -17,7 +17,8 @@
     "prisma:deploy": "prisma migrate deploy",
     "prisma:studio": "prisma studio",
     "prisma:seed": "node dist/prisma/seed.js || ts-node prisma/seed.ts",
-    "prisma:seed:catalog": "node dist/prisma/seed-catalog.js || ts-node prisma/seed-catalog.ts"
+    "prisma:seed:catalog": "node dist/prisma/seed-catalog.js || ts-node prisma/seed-catalog.ts",
+    "build:catalog-seed": "tsc prisma/seed-catalog.ts --outDir dist/prisma --module commonjs --target ES2021 --esModuleInterop --skipLibCheck"
   },
   "dependencies": {
     "@nestjs/bullmq": "^10.2.0",

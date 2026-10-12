@@ -242,6 +242,8 @@ Production configuration is fail-fast: `NODE_ENV=production` requires explicit J
 
 Production seeding is disabled by default. If a reviewed one-time seed is required, set `AUTO_SEED=true` only for that deployment and supply all seeded account passwords through the `SEED_*_PASSWORD` variables; default demo passwords are never accepted in production. A seed failure stops the container and must be corrected before the API can start.
 
+Catalog initialization is separate from demo-data seeding. Set `SEED_CATALOG=true` for a one-time catalog initialization; it creates the material categories, material master records, store, and zero-quantity balance rows without creating users, requests, transactions, or fictitious stock. Disable it after the deployment succeeds. Real inventory quantities must enter through receiving or approved adjustment workflows.
+
 ### Recovery and observability
 
 Every HTTP request receives an `X-Correlation-Id` response header. A caller may supply a bounded correlation ID, otherwise the API generates one. Include this value in support tickets, deployment incidents, and audit investigations. The readiness endpoint at `/health/readiness` checks both PostgreSQL and Redis; a `not_ready` result means the service should not receive traffic.

@@ -23,6 +23,16 @@ if [ "$AUTO_SEED" = "true" ]; then
   echo "==> [AMU Store] Production seed completed successfully."
 fi
 
+if [ "$SEED_CATALOG" = "true" ]; then
+  echo "==> [AMU Store] SEED_CATALOG is enabled. Seeding catalog master data..."
+  if [ -f "dist/prisma/seed-catalog.js" ]; then
+    node dist/prisma/seed-catalog.js
+  else
+    pnpm prisma:seed:catalog
+  fi
+  echo "==> [AMU Store] Catalog seed completed successfully."
+fi
+
 echo "==> [AMU Store] Starting NestJS production application..."
 if [ -f "dist/src/main.js" ]; then
   exec node dist/src/main.js

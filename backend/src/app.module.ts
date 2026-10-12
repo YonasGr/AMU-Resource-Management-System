@@ -19,6 +19,7 @@ import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { RedisModule } from './common/redis/redis.module';
 import { OutboxModule } from './modules/outbox/outbox.module';
+import { ProcurementModule } from './modules/procurement/procurement.module';
 
 @Module({
   imports: [
@@ -39,6 +40,7 @@ import { OutboxModule } from './modules/outbox/outbox.module';
     DashboardModule,
     NotificationsModule,
     OutboxModule,
+    ProcurementModule,
   ],
   controllers: [AppController],
   providers: [

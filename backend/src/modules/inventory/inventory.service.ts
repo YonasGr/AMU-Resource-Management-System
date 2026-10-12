@@ -9,6 +9,7 @@ import {
   TransactionType,
   TransferStatus,
 } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 import { NotificationsService } from '../notifications/notifications.service';
 import { AuditService } from '../audit/audit.service';
 import { AccessControlService } from '../auth/access-control.service';
@@ -225,6 +226,27 @@ export class InventoryService {
     if (!store) throw new BadRequestException('The receiving store is not active');
     this.validateTraceability(material, dto, dto.quantityReceived);
 
+    let purchaseOrderId: string | undefined;
+    if (dto.purchaseOrderLineId) {
+      const line = await this.prisma.purchaseOrderLine.findUnique({
+        where: { id: dto.purchaseOrderLineId },
+        include: { purchaseOrder: true },
+      });
+      if (!line) throw new NotFoundException(`Purchase order line ${dto.purchaseOrderLineId} not found`);
+      if (!['APPROVED', 'PARTIALLY_RECEIVED'].includes(line.purchaseOrder.status)) {
+        throw new BadRequestException('Goods can only be received against an approved purchase order');
+      }
+      if (line.purchaseOrder.storeId !== dto.storeId || line.materialId !== dto.materialId) {
+        throw new BadRequestException('The receipt does not match the purchase order line destination or material');
+      }
+      if (dto.supplierId && dto.supplierId !== line.purchaseOrder.supplierId) {
+        throw new BadRequestException('The receipt supplier does not match the purchase order supplier');
+      }
+      if (line.quantityReceived + dto.quantityReceived > line.quantityOrdered) {
+        throw new BadRequestException('Received quantity cannot exceed the ordered quantity');
+      }
+      purchaseOrderId = line.purchaseOrderId;
+    }
     const receiptCode = `GRN-${Date.now().toString().slice(-8)}-${Math.floor(100 + Math.random() * 900)}`;
     const receipt = await this.prisma.goodsReceipt.create({
       data: {
@@ -232,6 +254,8 @@ export class InventoryService {
         materialId: dto.materialId,
         storeId: dto.storeId,
         supplierId: dto.supplierId,
+        purchaseOrderId,
+        purchaseOrderLineId: dto.purchaseOrderLineId,
         quantityReceived: dto.quantityReceived,
         deliveryReference: dto.deliveryReference,
         condition: dto.condition,
@@ -250,7 +274,7 @@ export class InventoryService {
 
   async inspectGoodsReceipt(id: string, actor: SafeUser | string, dto: InspectGoodsReceiptDto) {
     const user = this.normalizeActor(actor);
-    const receipt = await this.prisma.goodsReceipt.findUnique({ where: { id } });
+    const receipt = await this.prisma.goodsReceipt.findUnique({ where: { id }, include: { purchaseOrderLine: true } });
     if (!receipt) throw new NotFoundException(`Goods receipt ${id} not found`);
     this.resolveStoreId(user, receipt.storeId);
     if (receipt.status !== 'DRAFT') {
@@ -338,12 +362,27 @@ export class InventoryService {
           remarks: receipt.remarks,
         } as never,
       });
+      if (receipt.purchaseOrderLineId) {
+        const currentLine = await tx.purchaseOrderLine.findUnique({ where: { id: receipt.purchaseOrderLineId } });
+        if (!currentLine || currentLine.quantityReceived + receipt.quantityAccepted > currentLine.quantityOrdered) {
+          throw new BadRequestException('Posting this receipt would exceed the purchase order quantity');
+        }
+        const line = await tx.purchaseOrderLine.update({
+          where: { id: receipt.purchaseOrderLineId },
+          data: { quantityReceived: { increment: receipt.quantityAccepted } },
+        });
+        const remaining = line.quantityOrdered - line.quantityReceived;
+        await tx.purchaseOrder.update({
+          where: { id: line.purchaseOrderId },
+          data: { status: remaining === 0 ? 'RECEIVED' : 'PARTIALLY_RECEIVED' },
+        });
+      }
       return tx.goodsReceipt.update({
         where: { id },
         data: {},
         include: { material: true, store: true, supplier: true },
       });
-    });
+    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
     await this.auditService.log(user.id, 'POST_GOODS_RECEIPT', 'INVENTORY', `Posted goods receipt ${receipt.receiptCode}`);
     return posted;
   }

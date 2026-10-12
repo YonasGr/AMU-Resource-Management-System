@@ -79,6 +79,10 @@ export class CreateGoodsReceiptDto {
   @IsOptional()
   supplierId?: string;
 
+  @IsUUID()
+  @IsOptional()
+  purchaseOrderLineId?: string;
+
   @Type(() => Number)
   @IsInt()
   @Min(1)

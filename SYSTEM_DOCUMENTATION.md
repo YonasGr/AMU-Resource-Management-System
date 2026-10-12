@@ -33,14 +33,19 @@ The system supports university store operations: maintaining a material catalog,
 - Stock-in, stock-out, returns, adjustments, and transaction history
 - Department material requests, manager decisions, and storekeeper issuance
 - Supplier, employee, and department records
+- Purchase orders with supplier/store destination, approval, cancellation, partial delivery, and receipt-line linkage
 - Low-stock reporting, notifications, audit logs, and dashboard metrics
 
 ### Not implemented in the current schema
 
-Purchase orders, goods-receipt documents, distribution plans, individually tracked fixed assets, borrowing, maintenance, and disposal are not part of the current application. Older project notes described these as completed; that description was inaccurate.
+Distribution plans, individually tracked fixed assets, borrowing, maintenance, and disposal are not part of the current application. Goods receipts remain available without a purchase order for legacy/direct receiving, but receipts linked to an order must use an approved order line and cannot exceed the ordered quantity.
 
-> [!WARNING]
-> **Store records do not currently mean separate store stock.** `Store` exists and requests may reference a store, but `StockSummary` is unique per material. Inventory transactions also have no source-store or destination-store fields. The balance is therefore material-wide, not maintained independently for each store.
+> [!NOTE]
+> `StockBalance` is the authoritative store/material balance. `StockSummary` remains a compatibility aggregate projection for existing consumers.
+
+### Procurement workflow
+
+Purchase orders are created in `DRAFT`, submitted for approval, and approved or rejected by an administrator or store manager. Approved orders may be cancelled before receipt. Goods receipts can optionally reference a purchase-order line; linked receipts must match the supplier, destination store, and material and are rejected when they would exceed the ordered quantity. Posting an inspected linked receipt increments the line's received quantity and moves the order to `PARTIALLY_RECEIVED` or `RECEIVED`.
 
 ## Operational workflow
 

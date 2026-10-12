@@ -64,6 +64,11 @@ export class UsersService {
       'CREATE_USER',
       'USERS',
       `Registered new user "${user.fullName}" (${user.email}) with role [${user.role}] and scope [${user.scopeType}]`,
+      {
+        entityType: 'User',
+        entityId: user.id,
+        afterData: this.auditSnapshot(user),
+      },
     );
 
     return this.stripPassword(user);
@@ -185,6 +190,12 @@ export class UsersService {
       'UPDATE_USER',
       'USERS',
       `Updated user "${updated.fullName}" (${updated.email}). Modified fields: [${changeSummary || 'password'}]`,
+      {
+        entityType: 'User',
+        entityId: updated.id,
+        beforeData: this.auditSnapshot(user),
+        afterData: this.auditSnapshot(updated),
+      },
     );
 
     return this.stripPassword(updated);
@@ -220,7 +231,27 @@ export class UsersService {
       'DELETE_USER',
       'USERS',
       `Deleted user account "${user.fullName}" (${user.email}, role: ${user.role})`,
+      {
+        entityType: 'User',
+        entityId: user.id,
+        beforeData: this.auditSnapshot(user),
+        reason: 'Administrative user deletion',
+      },
     );
+  }
+
+  private auditSnapshot(user: Pick<User, 'id' | 'fullName' | 'email' | 'phone' | 'role' | 'status' | 'scopeType' | 'departmentId' | 'storeId'>) {
+    return {
+      id: user.id,
+      fullName: user.fullName,
+      email: user.email,
+      phone: user.phone,
+      role: user.role,
+      status: user.status,
+      scopeType: user.scopeType,
+      departmentId: user.departmentId,
+      storeId: user.storeId,
+    };
   }
 
   private stripPassword(user: any): any {

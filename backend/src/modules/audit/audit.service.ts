@@ -1,13 +1,52 @@
 import { Injectable } from '@nestjs/common';
+import { randomUUID } from 'node:crypto';
 import { PrismaService } from '../../prisma/prisma.service';
 import { OutboxService } from '../outbox/outbox.service';
+
+export interface AuditLogOptions {
+  actorRole?: string;
+  entityType?: string;
+  entityId?: string;
+  correlationId?: string;
+  reason?: string;
+  source?: string;
+  ipAddress?: string;
+  userAgent?: string;
+  beforeData?: Record<string, unknown>;
+  afterData?: Record<string, unknown>;
+}
 
 @Injectable()
 export class AuditService {
   constructor(private readonly prisma: PrismaService, private readonly outbox: OutboxService) {}
 
-  async log(userId: string | null, action: string, module: string, details?: string, ipAddress?: string) {
-    await this.outbox.enqueue('AUDIT_LOG', { userId, action, module, details, ipAddress });
+  async log(
+    userId: string | null,
+    action: string,
+    module: string,
+    details?: string,
+    optionsOrIpAddress: AuditLogOptions | string = {},
+  ) {
+    const options =
+      typeof optionsOrIpAddress === 'string'
+        ? { ipAddress: optionsOrIpAddress }
+        : optionsOrIpAddress;
+    await this.outbox.enqueue('AUDIT_LOG', {
+      userId,
+      action,
+      module,
+      details,
+      actorRole: options.actorRole,
+      entityType: options.entityType,
+      entityId: options.entityId,
+      correlationId: options.correlationId || randomUUID(),
+      reason: options.reason,
+      source: options.source || 'api',
+      ipAddress: options.ipAddress,
+      userAgent: options.userAgent,
+      beforeData: options.beforeData,
+      afterData: options.afterData,
+    });
     return { queued: true };
   }
 

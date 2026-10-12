@@ -40,6 +40,8 @@ describe('OutboxService', () => {
       userId: 'user-1',
       action: 'CREATE',
       module: 'requests',
+      correlationId: 'correlation-1',
+      source: 'api',
     });
 
     expect(outboxEvent.createMany).toHaveBeenCalledWith({
@@ -50,6 +52,8 @@ describe('OutboxService', () => {
           userId: 'user-1',
           action: 'CREATE',
           module: 'requests',
+          correlationId: 'correlation-1',
+          source: 'api',
         },
       },
       skipDuplicates: true,
@@ -61,7 +65,13 @@ describe('OutboxService', () => {
 
     await service.enqueue(
       'AUDIT_LOG',
-      { userId: null, action: 'UPDATE', module: 'inventory' },
+      {
+        userId: null,
+        action: 'UPDATE',
+        module: 'inventory',
+        correlationId: 'correlation-2',
+        source: 'api',
+      },
       '11111111-1111-4111-8111-111111111111',
     );
 
@@ -69,7 +79,13 @@ describe('OutboxService', () => {
       data: {
         eventKey: '11111111-1111-4111-8111-111111111111',
         eventType: 'AUDIT_LOG',
-        payload: { userId: null, action: 'UPDATE', module: 'inventory' },
+        payload: {
+          userId: null,
+          action: 'UPDATE',
+          module: 'inventory',
+          correlationId: 'correlation-2',
+          source: 'api',
+        },
       },
       skipDuplicates: true,
     });

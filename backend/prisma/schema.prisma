@@ -560,6 +560,7 @@ model MaterialReturn {
 model InventoryTransfer {
   id                 String         @id @default(uuid())
   transferCode       String         @unique @map("transfer_code")
+  idempotencyKey     String?        @unique @map("idempotency_key")
   materialId         String         @map("material_id")
   material           Material       @relation(fields: [materialId], references: [id])
   quantity           Int

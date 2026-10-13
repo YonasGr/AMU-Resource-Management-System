@@ -1,4 +1,9 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import {
   CycleCountStatus,
@@ -61,19 +66,32 @@ export class InventoryService {
     if (data.expiryDate && new Date(data.expiryDate) <= new Date()) {
       throw new BadRequestException('Expiry date must be in the future');
     }
-    if (material.requiresSerialTracking === true && (!data.serialNumber?.trim() || quantity !== 1)) {
-      throw new BadRequestException('Serial-tracked material movements must provide one serial number per unit');
+    if (
+      material.requiresSerialTracking === true &&
+      (!data.serialNumber?.trim() || quantity !== 1)
+    ) {
+      throw new BadRequestException(
+        'Serial-tracked material movements must provide one serial number per unit',
+      );
     }
   }
 
   private normalizeActor(actor: SafeUser | InventoryActor | string): InventoryActor {
     if (typeof actor === 'string') {
-      return { id: actor, storeId: 'legacy-store', scopeType: ScopeType.STORE, role: Role.STOREKEEPER };
+      return {
+        id: actor,
+        storeId: 'legacy-store',
+        scopeType: ScopeType.STORE,
+        role: Role.STOREKEEPER,
+      };
     }
     return actor;
   }
 
-  private resolveStoreId(actor: SafeUser | InventoryActor | string, requestedStoreId?: string): string {
+  private resolveStoreId(
+    actor: SafeUser | InventoryActor | string,
+    requestedStoreId?: string,
+  ): string {
     const user = this.normalizeActor(actor);
     if (
       requestedStoreId &&
@@ -107,7 +125,9 @@ export class InventoryService {
       existing.materialId !== expected.materialId ||
       existing.storeId !== expected.storeId
     ) {
-      throw new BadRequestException('The idempotency key was already used for a different inventory operation');
+      throw new BadRequestException(
+        'The idempotency key was already used for a different inventory operation',
+      );
     }
     return existing;
   }
@@ -133,7 +153,12 @@ export class InventoryService {
         'LOW_STOCK_ALERT',
         `⚠️ Low Stock: ${material.name}`,
         `"${material.name}" (${material.materialCode}) is low: ${remainingQuantity} ${material.unit}(s) remaining, minimum is ${material.minimumStock}.`,
-        { materialId, materialCode: material.materialCode, remainingQuantity, minimumStock: material.minimumStock },
+        {
+          materialId,
+          materialCode: material.materialCode,
+          remainingQuantity,
+          minimumStock: material.minimumStock,
+        },
       );
     }
   }
@@ -149,6 +174,7 @@ export class InventoryService {
     if (!material) {
       throw new NotFoundException(`Material ${dto.materialId} not found`);
     }
+
     this.validateTraceability(material, dto, dto.quantity);
     const existing = await this.findExistingTransaction(this.prisma, dto.idempotencyKey, {
       type: TransactionType.STOCK_IN,
@@ -268,15 +294,22 @@ export class InventoryService {
         where: { id: dto.purchaseOrderLineId },
         include: { purchaseOrder: true },
       });
-      if (!line) throw new NotFoundException(`Purchase order line ${dto.purchaseOrderLineId} not found`);
+      if (!line)
+        throw new NotFoundException(`Purchase order line ${dto.purchaseOrderLineId} not found`);
       if (!['APPROVED', 'PARTIALLY_RECEIVED'].includes(line.purchaseOrder.status)) {
-        throw new BadRequestException('Goods can only be received against an approved purchase order');
+        throw new BadRequestException(
+          'Goods can only be received against an approved purchase order',
+        );
       }
       if (line.purchaseOrder.storeId !== dto.storeId || line.materialId !== dto.materialId) {
-        throw new BadRequestException('The receipt does not match the purchase order line destination or material');
+        throw new BadRequestException(
+          'The receipt does not match the purchase order line destination or material',
+        );
       }
       if (dto.supplierId && dto.supplierId !== line.purchaseOrder.supplierId) {
-        throw new BadRequestException('The receipt supplier does not match the purchase order supplier');
+        throw new BadRequestException(
+          'The receipt supplier does not match the purchase order supplier',
+        );
       }
       if (line.quantityReceived + dto.quantityReceived > line.quantityOrdered) {
         throw new BadRequestException('Received quantity cannot exceed the ordered quantity');
@@ -304,23 +337,35 @@ export class InventoryService {
       } as never,
       include: { material: true, store: true, supplier: true },
     });
-    await this.auditService.log(user.id, 'CREATE_GOODS_RECEIPT', 'INVENTORY', `Created goods receipt ${receiptCode}`);
+    await this.auditService.log(
+      user.id,
+      'CREATE_GOODS_RECEIPT',
+      'INVENTORY',
+      `Created goods receipt ${receiptCode}`,
+    );
     return receipt;
   }
 
   async inspectGoodsReceipt(id: string, actor: SafeUser | string, dto: InspectGoodsReceiptDto) {
     const user = this.normalizeActor(actor);
-    const receipt = await this.prisma.goodsReceipt.findUnique({ where: { id }, include: { purchaseOrderLine: true } });
+    const receipt = await this.prisma.goodsReceipt.findUnique({
+      where: { id },
+      include: { purchaseOrderLine: true },
+    });
     if (!receipt) throw new NotFoundException(`Goods receipt ${id} not found`);
     this.resolveStoreId(user, receipt.storeId);
     if (receipt.createdById === user.id) {
       throw new ForbiddenException('The person who created a goods receipt cannot inspect it');
     }
     if (receipt.status !== 'DRAFT') {
-      throw new BadRequestException(`Only DRAFT receipts can be inspected. Current status is ${receipt.status}`);
+      throw new BadRequestException(
+        `Only DRAFT receipts can be inspected. Current status is ${receipt.status}`,
+      );
     }
     if (dto.quantityAccepted + dto.quantityRejected !== receipt.quantityReceived) {
-      throw new BadRequestException('Accepted and rejected quantities must equal the received quantity');
+      throw new BadRequestException(
+        'Accepted and rejected quantities must equal the received quantity',
+      );
     }
     if (dto.quantityRejected > 0 && !dto.condition?.trim()) {
       throw new BadRequestException('A condition note is required when quantities are rejected');
@@ -338,7 +383,12 @@ export class InventoryService {
       } as never,
       include: { material: true, store: true, supplier: true },
     });
-    await this.auditService.log(user.id, 'INSPECT_GOODS_RECEIPT', 'INVENTORY', `Inspected goods receipt ${receipt.receiptCode}`);
+    await this.auditService.log(
+      user.id,
+      'INSPECT_GOODS_RECEIPT',
+      'INVENTORY',
+      `Inspected goods receipt ${receipt.receiptCode}`,
+    );
     return inspected;
   }
 
@@ -351,100 +401,116 @@ export class InventoryService {
       throw new ForbiddenException('Goods receipt posting requires an independent operator');
     }
     if (receipt.status !== 'INSPECTED') {
-      throw new BadRequestException(`Only INSPECTED receipts can be posted. Current status is ${receipt.status}`);
+      throw new BadRequestException(
+        `Only INSPECTED receipts can be posted. Current status is ${receipt.status}`,
+      );
     }
     const transactionCode = `TXN-IN-${receipt.receiptCode}`;
-    const posted = await this.prisma.$transaction(async (tx) => {
-      const claimed = await tx.goodsReceipt.updateMany({
-        where: { id, status: 'INSPECTED' },
-        data: { status: 'POSTED', postedById: user.id, postedAt: new Date() },
-      });
-      if (claimed.count !== 1) {
-        throw new BadRequestException('This goods receipt has already been posted or is no longer inspectable');
-      }
-      await tx.stockBalance.upsert({
-        where: { storeId_materialId: { storeId: receipt.storeId, materialId: receipt.materialId } },
-        update: {
-          quantityReceived: { increment: receipt.quantityAccepted },
-          remainingQuantity: { increment: receipt.quantityAccepted },
-        },
-        create: {
-          storeId: receipt.storeId,
-          materialId: receipt.materialId,
-          quantityReceived: receipt.quantityAccepted,
-          remainingQuantity: receipt.quantityAccepted,
-        },
-      });
-      await tx.stockSummary.upsert({
-        where: { materialId: receipt.materialId },
-        update: {
-          quantityReceived: { increment: receipt.quantityAccepted },
-          remainingQuantity: { increment: receipt.quantityAccepted },
-        },
-        create: {
-          materialId: receipt.materialId,
-          quantityReceived: receipt.quantityAccepted,
-          remainingQuantity: receipt.quantityAccepted,
-        },
-      });
-      await tx.inventoryTransaction.create({
-        data: {
-          transactionCode,
-          type: TransactionType.STOCK_IN,
-          materialId: receipt.materialId,
-          storeId: receipt.storeId,
-          supplierId: receipt.supplierId,
-          lotNumber: receipt.lotNumber,
-          batchNumber: receipt.batchNumber,
-          expiryDate: receipt.expiryDate,
-          serialNumber: receipt.serialNumber,
-          quantity: receipt.quantityAccepted,
-          issuedById: user.id,
-          purpose: `Goods receipt ${receipt.receiptCode}`,
-          remarks: receipt.remarks,
-        } as never,
-      });
-      if (receipt.purchaseOrderLineId) {
-        const currentLine = await tx.purchaseOrderLine.findUnique({ where: { id: receipt.purchaseOrderLineId } });
-        if (!currentLine || currentLine.quantityReceived + receipt.quantityAccepted > currentLine.quantityOrdered) {
-          throw new BadRequestException('Posting this receipt would exceed the purchase order quantity');
+    const posted = await this.prisma.$transaction(
+      async (tx) => {
+        const claimed = await tx.goodsReceipt.updateMany({
+          where: { id, status: 'INSPECTED' },
+          data: { status: 'POSTED', postedById: user.id, postedAt: new Date() },
+        });
+        if (claimed.count !== 1) {
+          throw new BadRequestException(
+            'This goods receipt has already been posted or is no longer inspectable',
+          );
         }
-        const line = await tx.purchaseOrderLine.update({
-          where: { id: receipt.purchaseOrderLineId },
-          data: { quantityReceived: { increment: receipt.quantityAccepted } },
-        });
-        const remaining = line.quantityOrdered - line.quantityReceived;
-        await tx.purchaseOrder.update({
-          where: { id: line.purchaseOrderId },
-          data: { status: remaining === 0 ? 'RECEIVED' : 'PARTIALLY_RECEIVED' },
-        });
-      }
-      const postedReceipt = await tx.goodsReceipt.update({
-        where: { id },
-        data: {},
-        include: { material: true, store: true, supplier: true },
-      });
-      await this.auditService.logInTransaction(
-        tx,
-        user.id,
-        'POST_GOODS_RECEIPT',
-        'INVENTORY',
-        `Posted goods receipt ${receipt.receiptCode}`,
-        {
-          actorRole: user.role,
-          storeId: receipt.storeId,
-          entityType: 'GOODS_RECEIPT',
-          entityId: receipt.id,
-          beforeData: { status: receipt.status },
-          afterData: {
-            status: 'POSTED',
-            quantityAccepted: receipt.quantityAccepted,
-            transactionCode,
+        await tx.stockBalance.upsert({
+          where: {
+            storeId_materialId: { storeId: receipt.storeId, materialId: receipt.materialId },
           },
-        },
-      );
-      return postedReceipt;
-    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+          update: {
+            quantityReceived: { increment: receipt.quantityAccepted },
+            remainingQuantity: { increment: receipt.quantityAccepted },
+          },
+          create: {
+            storeId: receipt.storeId,
+            materialId: receipt.materialId,
+            quantityReceived: receipt.quantityAccepted,
+            remainingQuantity: receipt.quantityAccepted,
+          },
+        });
+        await tx.stockSummary.upsert({
+          where: { materialId: receipt.materialId },
+          update: {
+            quantityReceived: { increment: receipt.quantityAccepted },
+            remainingQuantity: { increment: receipt.quantityAccepted },
+          },
+          create: {
+            materialId: receipt.materialId,
+            quantityReceived: receipt.quantityAccepted,
+            remainingQuantity: receipt.quantityAccepted,
+          },
+        });
+        await tx.inventoryTransaction.create({
+          data: {
+            transactionCode,
+            type: TransactionType.STOCK_IN,
+            materialId: receipt.materialId,
+            storeId: receipt.storeId,
+            supplierId: receipt.supplierId,
+            lotNumber: receipt.lotNumber,
+            batchNumber: receipt.batchNumber,
+            expiryDate: receipt.expiryDate,
+            serialNumber: receipt.serialNumber,
+            quantity: receipt.quantityAccepted,
+            issuedById: user.id,
+            purpose: `Goods receipt ${receipt.receiptCode}`,
+            remarks: receipt.remarks,
+          } as never,
+        });
+        if (receipt.purchaseOrderLineId) {
+          const currentLine = await tx.purchaseOrderLine.findUnique({
+            where: { id: receipt.purchaseOrderLineId },
+          });
+          if (
+            !currentLine ||
+            currentLine.quantityReceived + receipt.quantityAccepted > currentLine.quantityOrdered
+          ) {
+            throw new BadRequestException(
+              'Posting this receipt would exceed the purchase order quantity',
+            );
+          }
+          const line = await tx.purchaseOrderLine.update({
+            where: { id: receipt.purchaseOrderLineId },
+            data: { quantityReceived: { increment: receipt.quantityAccepted } },
+          });
+          const remaining = line.quantityOrdered - line.quantityReceived;
+          await tx.purchaseOrder.update({
+            where: { id: line.purchaseOrderId },
+            data: { status: remaining === 0 ? 'RECEIVED' : 'PARTIALLY_RECEIVED' },
+          });
+        }
+        const postedReceipt = await tx.goodsReceipt.update({
+          where: { id },
+          data: {},
+          include: { material: true, store: true, supplier: true },
+        });
+        await this.auditService.logInTransaction(
+          tx,
+          user.id,
+          'POST_GOODS_RECEIPT',
+          'INVENTORY',
+          `Posted goods receipt ${receipt.receiptCode}`,
+          {
+            actorRole: user.role,
+            storeId: receipt.storeId,
+            entityType: 'GOODS_RECEIPT',
+            entityId: receipt.id,
+            beforeData: { status: receipt.status },
+            afterData: {
+              status: 'POSTED',
+              quantityAccepted: receipt.quantityAccepted,
+              transactionCode,
+            },
+          },
+        );
+        return postedReceipt;
+      },
+      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+    );
     return posted;
   }
 
@@ -461,7 +527,9 @@ export class InventoryService {
       throw new ForbiddenException('The person who created a goods receipt cannot reject it');
     }
     if (receipt.status !== 'DRAFT') {
-      throw new BadRequestException(`Only DRAFT receipts can be rejected. Current status is ${receipt.status}`);
+      throw new BadRequestException(
+        `Only DRAFT receipts can be rejected. Current status is ${receipt.status}`,
+      );
     }
 
     const rejected = await this.prisma.goodsReceipt.updateMany({
@@ -475,11 +543,14 @@ export class InventoryService {
       } as never,
     });
     if (rejected.count !== 1) {
-      throw new StockConflictException('Goods receipt changed before rejection; refresh and retry', {
-        operation: 'REJECT_GOODS_RECEIPT',
-        materialId: receipt.materialId,
-        storeId: receipt.storeId,
-      });
+      throw new StockConflictException(
+        'Goods receipt changed before rejection; refresh and retry',
+        {
+          operation: 'REJECT_GOODS_RECEIPT',
+          materialId: receipt.materialId,
+          storeId: receipt.storeId,
+        },
+      );
     }
 
     const result = await this.prisma.goodsReceipt.findUnique({
@@ -508,7 +579,9 @@ export class InventoryService {
     const storeId = this.resolveStoreId(user, dto.storeId);
     const materialIds = dto.lines.map((line) => line.materialId);
     if (new Set(materialIds).size !== materialIds.length) {
-      throw new BadRequestException('A cycle count cannot contain the same material more than once');
+      throw new BadRequestException(
+        'A cycle count cannot contain the same material more than once',
+      );
     }
     const [store, materials] = await Promise.all([
       this.prisma.store.findFirst({ where: { id: storeId, status: 'ACTIVE' } }),
@@ -519,7 +592,9 @@ export class InventoryService {
     ]);
     if (!store) throw new BadRequestException('The counting store is not active');
     if (materials.length !== materialIds.length) {
-      throw new NotFoundException('One or more cycle count materials were not found or are inactive');
+      throw new NotFoundException(
+        'One or more cycle count materials were not found or are inactive',
+      );
     }
 
     const countCode = `CC-${Date.now().toString().slice(-8)}-${Math.floor(100 + Math.random() * 900)}`;
@@ -538,7 +613,12 @@ export class InventoryService {
       },
       include: { lines: { include: { material: true } }, store: true },
     });
-    await this.auditService.log(user.id, 'CREATE_CYCLE_COUNT', 'INVENTORY', `Created cycle count ${countCode}`);
+    await this.auditService.log(
+      user.id,
+      'CREATE_CYCLE_COUNT',
+      'INVENTORY',
+      `Created cycle count ${countCode}`,
+    );
     return count;
   }
 
@@ -548,27 +628,44 @@ export class InventoryService {
     if (!count) throw new NotFoundException(`Cycle count ${id} not found`);
     this.resolveStoreId(user, count.storeId);
     if (count.createdById === user.id) {
-      throw new ForbiddenException('The person who created a cycle count cannot approve its variance');
+      throw new ForbiddenException(
+        'The person who created a cycle count cannot approve its variance',
+      );
     }
     if (count.status !== CycleCountStatus.COUNTED) {
-      throw new BadRequestException(`Only COUNTED cycle counts can be sent for recount. Current status is ${count.status}`);
+      throw new BadRequestException(
+        `Only COUNTED cycle counts can be sent for recount. Current status is ${count.status}`,
+      );
     }
     const result = await this.prisma.cycleCount.update({
       where: { id },
       data: { status: CycleCountStatus.RECOUNT_REQUIRED },
       include: { lines: { include: { material: true } }, store: true },
     });
-    await this.auditService.log(user.id, 'REQUEST_CYCLE_COUNT_RECOUNT', 'INVENTORY', `Requested recount for ${count.countCode}`);
+    await this.auditService.log(
+      user.id,
+      'REQUEST_CYCLE_COUNT_RECOUNT',
+      'INVENTORY',
+      `Requested recount for ${count.countCode}`,
+    );
     return result;
   }
 
   async submitCycleCount(id: string, actor: SafeUser | string, dto: SubmitCycleCountDto) {
     const user = this.normalizeActor(actor);
-    const count = await this.prisma.cycleCount.findUnique({ where: { id }, include: { lines: true } });
+    const count = await this.prisma.cycleCount.findUnique({
+      where: { id },
+      include: { lines: true },
+    });
     if (!count) throw new NotFoundException(`Cycle count ${id} not found`);
     this.resolveStoreId(user, count.storeId);
-    if (count.status !== CycleCountStatus.DRAFT && count.status !== CycleCountStatus.RECOUNT_REQUIRED) {
-      throw new BadRequestException(`Only DRAFT or RECOUNT_REQUIRED cycle counts can be submitted. Current status is ${count.status}`);
+    if (
+      count.status !== CycleCountStatus.DRAFT &&
+      count.status !== CycleCountStatus.RECOUNT_REQUIRED
+    ) {
+      throw new BadRequestException(
+        `Only DRAFT or RECOUNT_REQUIRED cycle counts can be submitted. Current status is ${count.status}`,
+      );
     }
     const submittedIds = dto.lines.map((line) => line.lineId);
     if (
@@ -603,20 +700,32 @@ export class InventoryService {
         include: { lines: { include: { material: true } }, store: true },
       });
     });
-    await this.auditService.log(user.id, 'SUBMIT_CYCLE_COUNT', 'INVENTORY', `Submitted cycle count ${count.countCode}`);
+    await this.auditService.log(
+      user.id,
+      'SUBMIT_CYCLE_COUNT',
+      'INVENTORY',
+      `Submitted cycle count ${count.countCode}`,
+    );
     return result;
   }
 
   async approveCycleCount(id: string, actor: SafeUser | string) {
     const user = this.normalizeActor(actor);
-    const count = await this.prisma.cycleCount.findUnique({ where: { id }, include: { lines: true } });
+    const count = await this.prisma.cycleCount.findUnique({
+      where: { id },
+      include: { lines: true },
+    });
     if (!count) throw new NotFoundException(`Cycle count ${id} not found`);
     this.resolveStoreId(user, count.storeId);
     if (count.createdById === user.id) {
-      throw new ForbiddenException('The person who created a cycle count cannot approve its variance');
+      throw new ForbiddenException(
+        'The person who created a cycle count cannot approve its variance',
+      );
     }
     if (count.status !== CycleCountStatus.COUNTED) {
-      throw new BadRequestException(`Only COUNTED cycle counts can be approved. Current status is ${count.status}`);
+      throw new BadRequestException(
+        `Only COUNTED cycle counts can be approved. Current status is ${count.status}`,
+      );
     }
 
     const result = await this.prisma.$transaction(async (tx) => {
@@ -624,7 +733,8 @@ export class InventoryService {
         where: { id, status: CycleCountStatus.COUNTED },
         data: { status: CycleCountStatus.APPROVED, approvedById: user.id, approvedAt: new Date() },
       });
-      if (claimed.count !== 1) throw new BadRequestException('This cycle count has already been processed');
+      if (claimed.count !== 1)
+        throw new BadRequestException('This cycle count has already been processed');
 
       for (const line of count.lines) {
         if (line.physicalQuantity === null || line.variance === 0) continue;
@@ -637,7 +747,9 @@ export class InventoryService {
             data: { remainingQuantity: line.physicalQuantity },
           });
           if (changed.count !== 1) {
-            throw new BadRequestException(`Stock changed for material ${line.materialId}; recount is required`);
+            throw new BadRequestException(
+              `Stock changed for material ${line.materialId}; recount is required`,
+            );
           }
         } else if (line.systemQuantity === 0) {
           await tx.stockBalance.create({
@@ -649,13 +761,16 @@ export class InventoryService {
             },
           });
         } else {
-          throw new BadRequestException(`Stock balance missing for material ${line.materialId}; recount is required`);
+          throw new BadRequestException(
+            `Stock balance missing for material ${line.materialId}; recount is required`,
+          );
         }
         const summary = await tx.stockSummary.updateMany({
           where: { materialId: line.materialId },
           data: { remainingQuantity: { increment: line.variance } },
         });
-        if (summary.count !== 1) throw new BadRequestException(`Stock summary missing for material ${line.materialId}`);
+        if (summary.count !== 1)
+          throw new BadRequestException(`Stock summary missing for material ${line.materialId}`);
         await tx.inventoryTransaction.create({
           data: {
             transactionCode: `CNT-${count.countCode}-${line.id}`,
@@ -721,13 +836,18 @@ export class InventoryService {
     const storeId = this.resolveStoreId(user, requestItem.request.storeId ?? dto.storeId);
     this.validateTraceability(requestItem.material, dto, dto.quantity);
     const pendingReturns = await this.prisma.materialReturn.findMany({
-      where: { requestItemId: dto.requestItemId, status: { in: [MaterialReturnStatus.DRAFT, MaterialReturnStatus.INSPECTED] } },
+      where: {
+        requestItemId: dto.requestItemId,
+        status: { in: [MaterialReturnStatus.DRAFT, MaterialReturnStatus.INSPECTED] },
+      },
       select: { quantity: true },
     });
     const pendingQuantity = pendingReturns.reduce((sum, current) => sum + current.quantity, 0);
     const outstanding = requestItem.quantityIssued - requestItem.quantityReturned - pendingQuantity;
     if (dto.quantity > outstanding) {
-      throw new BadRequestException(`Only ${Math.max(0, outstanding)} item(s) remain eligible for inspection`);
+      throw new BadRequestException(
+        `Only ${Math.max(0, outstanding)} item(s) remain eligible for inspection`,
+      );
     }
 
     const returnCode = `RET-${Date.now().toString().slice(-8)}-${Math.floor(100 + Math.random() * 900)}`;
@@ -749,7 +869,12 @@ export class InventoryService {
       },
       include: { material: true, store: true, request: true, requestItem: true },
     });
-    await this.auditService.log(user.id, 'CREATE_RETURN_INSPECTION', 'INVENTORY', `Created return inspection ${returnCode}`);
+    await this.auditService.log(
+      user.id,
+      'CREATE_RETURN_INSPECTION',
+      'INVENTORY',
+      `Created return inspection ${returnCode}`,
+    );
     return result;
   }
 
@@ -765,7 +890,9 @@ export class InventoryService {
       throw new ForbiddenException('The person who created a return inspection cannot inspect it');
     }
     if (returnRecord.status !== MaterialReturnStatus.DRAFT) {
-      throw new BadRequestException(`Only DRAFT returns can be inspected. Current status is ${returnRecord.status}`);
+      throw new BadRequestException(
+        `Only DRAFT returns can be inspected. Current status is ${returnRecord.status}`,
+      );
     }
     const inspected = await this.prisma.materialReturn.update({
       where: { id },
@@ -779,7 +906,12 @@ export class InventoryService {
       },
       include: { material: true, store: true, request: true, requestItem: true },
     });
-    await this.auditService.log(user.id, 'INSPECT_RETURN', 'INVENTORY', `Inspected return ${returnRecord.returnCode} as ${dto.disposition}`);
+    await this.auditService.log(
+      user.id,
+      'INSPECT_RETURN',
+      'INVENTORY',
+      `Inspected return ${returnRecord.returnCode} as ${dto.disposition}`,
+    );
     return inspected;
   }
 
@@ -795,7 +927,9 @@ export class InventoryService {
       throw new ForbiddenException('Return posting requires an independent operator');
     }
     if (returnRecord.status !== MaterialReturnStatus.INSPECTED || !returnRecord.disposition) {
-      throw new BadRequestException(`Only inspected returns with a disposition can be posted. Current status is ${returnRecord.status}`);
+      throw new BadRequestException(
+        `Only inspected returns with a disposition can be posted. Current status is ${returnRecord.status}`,
+      );
     }
 
     const result = await this.prisma.$transaction(async (tx) => {
@@ -803,23 +937,38 @@ export class InventoryService {
         where: { id, status: MaterialReturnStatus.INSPECTED },
         data: { status: MaterialReturnStatus.POSTED, postedById: user.id, postedAt: new Date() },
       });
-      if (claimed.count !== 1) throw new BadRequestException('This return has already been posted or is no longer inspectable');
+      if (claimed.count !== 1)
+        throw new BadRequestException(
+          'This return has already been posted or is no longer inspectable',
+        );
 
       const updatedItem = await tx.materialRequestItem.updateMany({
         where: {
           id: returnRecord.requestItemId,
           requestId: returnRecord.requestId,
-          quantityReturned: { lte: returnRecord.requestItem.quantityIssued - returnRecord.requestItem.quantityReturned - returnRecord.quantity },
+          quantityReturned: {
+            lte:
+              returnRecord.requestItem.quantityIssued -
+              returnRecord.requestItem.quantityReturned -
+              returnRecord.quantity,
+          },
         },
         data: { quantityReturned: { increment: returnRecord.quantity } },
       });
       if (updatedItem.count !== 1) {
-        throw new BadRequestException('Return exceeds the remaining quantity for this request item');
+        throw new BadRequestException(
+          'Return exceeds the remaining quantity for this request item',
+        );
       }
 
       if (returnRecord.disposition === ReturnDisposition.ACCEPT_TO_STOCK) {
         await tx.stockBalance.upsert({
-          where: { storeId_materialId: { storeId: returnRecord.storeId, materialId: returnRecord.materialId } },
+          where: {
+            storeId_materialId: {
+              storeId: returnRecord.storeId,
+              materialId: returnRecord.materialId,
+            },
+          },
           update: {
             quantityIssued: { decrement: returnRecord.quantity },
             remainingQuantity: { increment: returnRecord.quantity },
@@ -884,6 +1033,96 @@ export class InventoryService {
       });
     });
     return result;
+  }
+
+  async processBatch(
+    actor: SafeUser | string,
+    dto: {
+      operation: 'RECEIPT' | 'STOCK_OUT' | 'TRANSFER';
+      lines: Array<{
+        materialId: string;
+        idempotencyKey: string;
+        quantity: number;
+        supplierId?: string;
+        employeeId?: string;
+        departmentId?: string;
+        sourceStoreId?: string;
+        destinationStoreId?: string;
+        purpose?: string;
+        remarks?: string;
+        deliveryReference?: string;
+        lotNumber?: string;
+        batchNumber?: string;
+        expiryDate?: string;
+        serialNumber?: string;
+      }>;
+    },
+  ) {
+    const results = [];
+    const user = this.normalizeActor(actor);
+    const storeId = this.resolveStoreId(user);
+
+    for (const [index, line] of dto.lines.entries()) {
+      try {
+        const result =
+          dto.operation === 'RECEIPT'
+            ? await this.stockIn(actor, {
+                materialId: line.materialId,
+                idempotencyKey: line.idempotencyKey,
+                storeId,
+                quantity: line.quantity,
+                supplierId: line.supplierId,
+                purpose: line.purpose,
+                remarks: line.remarks,
+                lotNumber: line.lotNumber,
+                batchNumber: line.batchNumber,
+                expiryDate: line.expiryDate,
+                serialNumber: line.serialNumber,
+              })
+            : dto.operation === 'STOCK_OUT'
+              ? await this.stockOut(actor, {
+                  materialId: line.materialId,
+                  idempotencyKey: line.idempotencyKey,
+                  quantity: line.quantity,
+                  employeeId: line.employeeId,
+                  departmentId: line.departmentId,
+                  purpose: line.purpose,
+                  remarks: line.remarks,
+                  lotNumber: line.lotNumber,
+                  batchNumber: line.batchNumber,
+                  expiryDate: line.expiryDate,
+                  serialNumber: line.serialNumber,
+                })
+              : await this.transferMaterial(actor, {
+                  materialId: line.materialId,
+                  idempotencyKey: line.idempotencyKey,
+                  sourceStoreId: line.sourceStoreId || storeId,
+                  destinationStoreId: line.destinationStoreId!,
+                  quantity: line.quantity,
+                  purpose: line.purpose,
+                  remarks: line.remarks,
+                  lotNumber: line.lotNumber,
+                  batchNumber: line.batchNumber,
+                  expiryDate: line.expiryDate,
+                });
+
+        results.push({ index, status: 'SUCCEEDED', result });
+      } catch (error) {
+        results.push({
+          index,
+          status: 'FAILED',
+          message: error instanceof Error ? error.message : 'Movement line failed',
+        });
+      }
+    }
+
+    return {
+      operation: dto.operation,
+      total: results.length,
+      succeeded: results.filter((result) => result.status === 'SUCCEEDED').length,
+      failed: results.filter((result) => result.status === 'FAILED').length,
+      results,
+    };
   }
 
   /** Direct Stock Out (Issue materials directly to employee / department) */
@@ -1018,7 +1257,15 @@ export class InventoryService {
     const requestItem = await this.prisma.materialRequestItem.findUnique({
       where: { id: dto.requestItemId },
       include: {
-        request: { select: { id: true, requestNumber: true, status: true, departmentId: true, storeId: true } },
+        request: {
+          select: {
+            id: true,
+            requestNumber: true,
+            status: true,
+            departmentId: true,
+            storeId: true,
+          },
+        },
         material: { include: { stockSummary: true } },
       },
     });
@@ -1033,7 +1280,9 @@ export class InventoryService {
     }
     const outstanding = requestItem.quantityIssued - requestItem.quantityReturned;
     if (dto.quantity > outstanding) {
-      throw new BadRequestException(`Only ${outstanding} item(s) remain eligible for return on this request`);
+      throw new BadRequestException(
+        `Only ${outstanding} item(s) remain eligible for return on this request`,
+      );
     }
     const requestStoreId = requestItem.request.storeId;
     if (!requestStoreId) {
@@ -1071,7 +1320,9 @@ export class InventoryService {
         data: { quantityReturned: { increment: dto.quantity } },
       });
       if (updatedItem.count !== 1) {
-        throw new BadRequestException('Return exceeds the remaining quantity for this request item');
+        throw new BadRequestException(
+          'Return exceeds the remaining quantity for this request item',
+        );
       }
 
       const txn = await tx.inventoryTransaction.create({
@@ -1173,10 +1424,7 @@ export class InventoryService {
     });
     const currentRemaining = storeBalance?.remainingQuantity ?? 0;
     const diff = dto.newQuantity - currentRemaining;
-    if (
-      user.role === Role.STORE_MANAGER &&
-      Math.abs(diff) > DIRECT_ADJUSTMENT_ADMIN_THRESHOLD
-    ) {
+    if (user.role === Role.STORE_MANAGER && Math.abs(diff) > DIRECT_ADJUSTMENT_ADMIN_THRESHOLD) {
       throw new ForbiddenException(
         `Adjustments greater than ${DIRECT_ADJUSTMENT_ADMIN_THRESHOLD} units require administrator approval`,
       );
@@ -1283,10 +1531,18 @@ export class InventoryService {
     if (!material) throw new NotFoundException(`Material ${dto.materialId} not found`);
     this.validateTraceability(material, dto, dto.quantity);
 
+    if (dto.idempotencyKey) {
+      const existing = await this.prisma.inventoryTransfer.findUnique({
+        where: { idempotencyKey: dto.idempotencyKey },
+      });
+      if (existing) return existing;
+    }
+
     const transferCode = `TRF-${Date.now().toString().slice(-8)}-${Math.floor(100 + Math.random() * 900)}`;
     const transfer = await this.prisma.inventoryTransfer.create({
       data: {
         transferCode,
+        idempotencyKey: dto.idempotencyKey,
         materialId: dto.materialId,
         sourceStoreId: dto.sourceStoreId,
         destinationStoreId: dto.destinationStoreId,
@@ -1300,7 +1556,12 @@ export class InventoryService {
       },
       include: { material: true, sourceStore: true, destinationStore: true },
     });
-    await this.auditService.log(user.id, 'CREATE_TRANSFER', 'INVENTORY', `Created transfer ${transferCode}`);
+    await this.auditService.log(
+      user.id,
+      'CREATE_TRANSFER',
+      'INVENTORY',
+      `Created transfer ${transferCode}`,
+    );
     return transfer;
   }
 
@@ -1311,12 +1572,18 @@ export class InventoryService {
     this.resolveStoreId(user, transfer.sourceStoreId);
     if (transfer.status === TransferStatus.DISPATCHED) return transfer;
     if (transfer.status !== TransferStatus.DRAFT) {
-      throw new BadRequestException(`Only DRAFT transfers can be dispatched. Current status is ${transfer.status}`);
+      throw new BadRequestException(
+        `Only DRAFT transfers can be dispatched. Current status is ${transfer.status}`,
+      );
     }
     const result = await this.prisma.$transaction(async (tx) => {
       const claimed = await tx.inventoryTransfer.updateMany({
         where: { id, status: TransferStatus.DRAFT },
-        data: { status: TransferStatus.DISPATCHED, dispatchedById: user.id, dispatchedAt: new Date() },
+        data: {
+          status: TransferStatus.DISPATCHED,
+          dispatchedById: user.id,
+          dispatchedAt: new Date(),
+        },
       });
       if (claimed.count !== 1) {
         const current = await tx.inventoryTransfer.findUnique({ where: { id } });
@@ -1329,15 +1596,26 @@ export class InventoryService {
       }
 
       const balance = await tx.stockBalance.findUnique({
-        where: { storeId_materialId: { storeId: transfer.sourceStoreId, materialId: transfer.materialId } },
+        where: {
+          storeId_materialId: { storeId: transfer.sourceStoreId, materialId: transfer.materialId },
+        },
       });
       const available = (balance?.remainingQuantity ?? 0) - (balance?.reservedQuantity ?? 0);
       if (!balance || available < transfer.quantity) {
-        throw new BadRequestException(`Insufficient transferable stock. Available: ${Math.max(0, available)}`);
+        throw new BadRequestException(
+          `Insufficient transferable stock. Available: ${Math.max(0, available)}`,
+        );
       }
       const moved = await tx.stockBalance.updateMany({
-        where: { id: balance.id, remainingQuantity: { gte: transfer.quantity }, reservedQuantity: balance.reservedQuantity },
-        data: { remainingQuantity: { decrement: transfer.quantity }, quantityIssued: { increment: transfer.quantity } },
+        where: {
+          id: balance.id,
+          remainingQuantity: { gte: transfer.quantity },
+          reservedQuantity: balance.reservedQuantity,
+        },
+        data: {
+          remainingQuantity: { decrement: transfer.quantity },
+          quantityIssued: { increment: transfer.quantity },
+        },
       });
       if (moved.count !== 1) {
         throw new StockConflictException('Stock changed while dispatching; refresh and retry', {
@@ -1392,7 +1670,9 @@ export class InventoryService {
     this.resolveStoreId(user, transfer.destinationStoreId);
     if (transfer.status === TransferStatus.RECEIVED) return transfer;
     if (transfer.status !== TransferStatus.DISPATCHED) {
-      throw new BadRequestException(`Only DISPATCHED transfers can be received. Current status is ${transfer.status}`);
+      throw new BadRequestException(
+        `Only DISPATCHED transfers can be received. Current status is ${transfer.status}`,
+      );
     }
     const result = await this.prisma.$transaction(async (tx) => {
       const claimed = await tx.inventoryTransfer.updateMany({
@@ -1410,9 +1690,22 @@ export class InventoryService {
       }
 
       await tx.stockBalance.upsert({
-        where: { storeId_materialId: { storeId: transfer.destinationStoreId, materialId: transfer.materialId } },
-        update: { quantityReceived: { increment: transfer.quantity }, remainingQuantity: { increment: transfer.quantity } },
-        create: { storeId: transfer.destinationStoreId, materialId: transfer.materialId, quantityReceived: transfer.quantity, remainingQuantity: transfer.quantity },
+        where: {
+          storeId_materialId: {
+            storeId: transfer.destinationStoreId,
+            materialId: transfer.materialId,
+          },
+        },
+        update: {
+          quantityReceived: { increment: transfer.quantity },
+          remainingQuantity: { increment: transfer.quantity },
+        },
+        create: {
+          storeId: transfer.destinationStoreId,
+          materialId: transfer.materialId,
+          quantityReceived: transfer.quantity,
+          remainingQuantity: transfer.quantity,
+        },
       });
       const transaction = await tx.inventoryTransaction.create({
         data: {
@@ -1463,7 +1756,9 @@ export class InventoryService {
     if (!transfer) throw new NotFoundException(`Transfer ${id} not found`);
     this.resolveStoreId(user, transfer.sourceStoreId);
     if (transfer.status !== TransferStatus.DRAFT) {
-      throw new BadRequestException(`Only DRAFT transfers can be cancelled. Current status is ${transfer.status}`);
+      throw new BadRequestException(
+        `Only DRAFT transfers can be cancelled. Current status is ${transfer.status}`,
+      );
     }
 
     const result = await this.prisma.$transaction(async (tx) => {
@@ -1478,11 +1773,14 @@ export class InventoryService {
         },
       });
       if (cancelled.count !== 1) {
-        throw new StockConflictException('Transfer changed before cancellation; refresh and retry', {
-          operation: 'TRANSFER_CANCEL',
-          materialId: transfer.materialId,
-          storeId: transfer.sourceStoreId,
-        });
+        throw new StockConflictException(
+          'Transfer changed before cancellation; refresh and retry',
+          {
+            operation: 'TRANSFER_CANCEL',
+            materialId: transfer.materialId,
+            storeId: transfer.sourceStoreId,
+          },
+        );
       }
       return tx.inventoryTransfer.findUnique({
         where: { id },
@@ -1508,13 +1806,16 @@ export class InventoryService {
   }
 
   /** Get all inventory transactions with filter */
-  async findAllTransactions(user: SafeUser, query?: {
-    type?: TransactionType;
-    materialId?: string;
-    departmentId?: string;
-    employeeId?: string;
-    supplierId?: string;
-  }) {
+  async findAllTransactions(
+    user: SafeUser,
+    query?: {
+      type?: TransactionType;
+      materialId?: string;
+      departmentId?: string;
+      employeeId?: string;
+      supplierId?: string;
+    },
+  ) {
     const where: any = { ...this.accessControlService.getTransactionVisibilityWhere(user) };
     if (query?.type) where.type = query.type;
     if (query?.materialId) where.materialId = query.materialId;

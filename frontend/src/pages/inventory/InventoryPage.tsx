@@ -39,6 +39,10 @@ import { AdjustmentWorkspace } from '../../components/inventory/AdjustmentWorksp
 import { TransferWorkspace } from '../../components/inventory/TransferWorkspace';
 import { InventoryHistoryWorkspace } from '../../components/inventory/InventoryHistoryWorkspace';
 import { InventoryItemPreview } from '../../components/inventory/InventoryItemPreview';
+import {
+  InventoryTrackingValue,
+} from '../../components/inventory/InventoryTrackingFields';
+import { WarehouseMaterial } from '../../components/inventory/WarehouseMaterialPicker';
 
 export default function InventoryPage() {
   const queryClient = useQueryClient();
@@ -74,6 +78,12 @@ export default function InventoryPage() {
   const [returnRequestId, setReturnRequestId] = useState('');
   const [returnRequestItemId, setReturnRequestItemId] = useState('');
   const [returnQuantity, setReturnQuantity] = useState(1);
+  const [tracking, setTracking] = useState<InventoryTrackingValue>({
+    lotNumber: '',
+    batchNumber: '',
+    expiryDate: '',
+    serialNumber: '',
+  });
 
   // Ledger Filter State
   const [historySearch, setHistorySearch] = useState('');
@@ -99,6 +109,7 @@ export default function InventoryPage() {
     setReturnRequestId('');
     setReturnRequestItemId('');
     setReturnQuantity(1);
+    setTracking({ lotNumber: '', batchNumber: '', expiryDate: '', serialNumber: '' });
   };
 
   // Fetch Materials
@@ -306,6 +317,7 @@ export default function InventoryPage() {
     setAdjustReasonCode('');
     setAdjustRemarks('');
     setBreakGlass(false);
+    setTracking({ lotNumber: '', batchNumber: '', expiryDate: '', serialNumber: '' });
   };
 
   const handleReceiptSubmit = (e: React.FormEvent) => {
@@ -318,6 +330,10 @@ export default function InventoryPage() {
       supplierId: supplierId || undefined,
       deliveryReference: deliveryReference || undefined,
       remarks,
+      lotNumber: tracking.lotNumber || undefined,
+      batchNumber: tracking.batchNumber || undefined,
+      expiryDate: tracking.expiryDate || undefined,
+      serialNumber: tracking.serialNumber || undefined,
     });
   };
 
@@ -331,6 +347,10 @@ export default function InventoryPage() {
       departmentId: departmentId || undefined,
       purpose,
       remarks,
+      lotNumber: tracking.lotNumber || undefined,
+      batchNumber: tracking.batchNumber || undefined,
+      expiryDate: tracking.expiryDate || undefined,
+      serialNumber: tracking.serialNumber || undefined,
     });
   };
 
@@ -344,6 +364,10 @@ export default function InventoryPage() {
       quantity: Number(returnQuantity),
       departmentId: selectedReturnRequest?.departmentId,
       remarks,
+      lotNumber: tracking.lotNumber || undefined,
+      batchNumber: tracking.batchNumber || undefined,
+      expiryDate: tracking.expiryDate || undefined,
+      serialNumber: tracking.serialNumber || undefined,
     });
   };
 
@@ -356,6 +380,10 @@ export default function InventoryPage() {
       toDepartmentId: departmentId,
       purpose,
       remarks,
+      lotNumber: tracking.lotNumber || undefined,
+      batchNumber: tracking.batchNumber || undefined,
+      expiryDate: tracking.expiryDate || undefined,
+      serialNumber: tracking.serialNumber || undefined,
     });
   };
 
@@ -371,7 +399,7 @@ export default function InventoryPage() {
     });
   };
 
-  const selectedMaterialObj = materials?.find((m: any) => m.id === materialId);
+  const selectedMaterialObj = materials?.find((m: any) => m.id === materialId) as WarehouseMaterial | undefined;
 
   // Filter transactions
   const filteredTransactions = (transactions || []).filter((txn: any) => {
@@ -468,6 +496,7 @@ export default function InventoryPage() {
                   supplierId={supplierId}
                   deliveryReference={deliveryReference}
                   remarks={remarks}
+                  tracking={tracking}
                   isKeeper={isKeeper}
                   isPending={receiptMutation.isPending}
                   onMaterialChange={setMaterialId}
@@ -475,6 +504,7 @@ export default function InventoryPage() {
                   onSupplierChange={setSupplierId}
                   onDeliveryReferenceChange={setDeliveryReference}
                   onRemarksChange={setRemarks}
+                  onTrackingChange={setTracking}
                   onSubmit={handleReceiptSubmit}
                 />
               )}
@@ -490,6 +520,7 @@ export default function InventoryPage() {
                     departmentId={departmentId}
                     purpose={purpose}
                     remarks={remarks}
+                    tracking={tracking}
                     isKeeper={isKeeper}
                     isPending={stockOutMutation.isPending}
                     onMaterialChange={setMaterialId}
@@ -498,6 +529,7 @@ export default function InventoryPage() {
                     onDepartmentChange={setDepartmentId}
                     onPurposeChange={setPurpose}
                     onRemarksChange={setRemarks}
+                    onTrackingChange={setTracking}
                     onSubmit={handleStockOutSubmit}
                   />
                 )}
@@ -512,6 +544,8 @@ export default function InventoryPage() {
                     requestItemId={returnRequestItemId}
                     quantity={returnQuantity}
                     remarks={remarks}
+                    materials={materials}
+                    tracking={tracking}
                     isKeeper={isKeeper}
                     isPending={returnMutation.isPending}
                     onRequestChange={(requestId) => {
@@ -532,6 +566,7 @@ export default function InventoryPage() {
                     }}
                     onQuantityChange={setReturnQuantity}
                     onRemarksChange={setRemarks}
+                    onTrackingChange={setTracking}
                     onSubmit={handleReturnSubmit}
                   />
                 )}
@@ -565,6 +600,7 @@ export default function InventoryPage() {
                     departmentId={departmentId}
                     purpose={purpose}
                     remarks={remarks}
+                    tracking={tracking}
                     isKeeper={isKeeper}
                     isPending={transferMutation.isPending}
                     onMaterialChange={setMaterialId}
@@ -572,6 +608,7 @@ export default function InventoryPage() {
                     onDepartmentChange={setDepartmentId}
                     onPurposeChange={setPurpose}
                     onRemarksChange={setRemarks}
+                    onTrackingChange={setTracking}
                     onSubmit={handleTransferSubmit}
                   />
                 )}

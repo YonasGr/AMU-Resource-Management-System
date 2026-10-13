@@ -7,7 +7,7 @@ interface InventoryMaterial {
   name: string;
   description?: string;
   unit: string;
-  minimumStock: number;
+  minimumStock?: number;
   location?: string;
   category?: { name?: string };
   stockSummary?: {
@@ -53,7 +53,7 @@ export function InventoryItemPreview({ material }: InventoryItemPreviewProps) {
               <PreviewRow label="Current Remaining" value={`${material.stockSummary?.remainingQuantity ?? 0} ${material.unit}s`} strong />
               <PreviewRow label="Total Stock Received" value={`${material.stockSummary?.quantityReceived ?? 0} ${material.unit}s`} />
               <PreviewRow label="Total Stock Issued" value={`${material.stockSummary?.quantityIssued ?? 0} ${material.unit}s`} />
-              <PreviewRow label="Min Alert Limit" value={`${material.minimumStock} ${material.unit}s`} valueClassName="text-coral-600" />
+              <PreviewRow label="Min Alert Limit" value={`${material.minimumStock ?? 0} ${material.unit}s`} valueClassName="text-coral-600" />
               <PreviewRow label="Store Shelf Location" value={material.location || 'Central Store'} last />
             </div>
           </div>

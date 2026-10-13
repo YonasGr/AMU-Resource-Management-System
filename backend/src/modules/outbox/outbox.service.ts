@@ -163,13 +163,17 @@ export class OutboxService implements OnModuleInit, OnModuleDestroy {
   private async dispatch(eventType: string, payload: unknown) {
     if (eventType === 'AUDIT_LOG') {
       const event = payload as AuditEvent | LegacyAuditEvent;
-      await this.prisma.auditLog.create({
-        data: {
-          ...event,
-          beforeData: event.beforeData as Prisma.InputJsonValue | undefined,
-          afterData: event.afterData as Prisma.InputJsonValue | undefined,
-        },
-      });
+      try {
+        await this.prisma.auditLog.create({
+          data: {
+            ...event,
+            beforeData: event.beforeData as Prisma.InputJsonValue | undefined,
+            afterData: event.afterData as Prisma.InputJsonValue | undefined,
+          },
+        });
+      } catch (error) {
+        if (!this.isUniqueConstraintError(error)) throw error;
+      }
       return;
     }
     if (eventType === 'NOTIFICATION_BATCH') {
@@ -187,5 +191,14 @@ export class OutboxService implements OnModuleInit, OnModuleDestroy {
       return;
     }
     throw new Error(`Unsupported outbox event type: ${eventType}`);
+  }
+
+  private isUniqueConstraintError(error: unknown): boolean {
+    return (
+      typeof error === 'object' &&
+      error !== null &&
+      'code' in error &&
+      error.code === 'P2002'
+    );
   }
 }

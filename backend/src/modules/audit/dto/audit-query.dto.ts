@@ -29,6 +29,14 @@ export class AuditQueryDto {
 
   @IsOptional()
   @IsUUID()
+  storeId?: string;
+
+  @IsOptional()
+  @IsString()
+  deviceId?: string;
+
+  @IsOptional()
+  @IsUUID()
   actorId?: string;
 
   @IsOptional()

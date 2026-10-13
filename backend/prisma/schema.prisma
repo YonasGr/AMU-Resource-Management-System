@@ -649,6 +649,8 @@ model AuditLog {
   userId        String?  @map("user_id")
   user          User?    @relation(fields: [userId], references: [id])
   actorRole     String?  @map("actor_role")
+  storeId       String?  @map("store_id")
+  deviceId      String?  @map("device_id")
   action        String
   module        String
   entityType    String?  @map("entity_type")
@@ -668,6 +670,8 @@ model AuditLog {
 
   @@index([correlationId])
   @@index([entityType, entityId])
+  @@index([storeId, createdAt])
+  @@index([deviceId, createdAt])
   @@index([reversalOfId])
   @@index([createdAt])
   @@map("audit_logs")

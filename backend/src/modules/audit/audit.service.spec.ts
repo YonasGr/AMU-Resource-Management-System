@@ -148,6 +148,8 @@ describe('AuditService', () => {
         action: 'STOCK_OUT',
         actorId: '11111111-1111-4111-8111-111111111111',
         entityType: 'INVENTORY_TRANSACTION',
+        storeId: 'store-1',
+        deviceId: 'scanner-7',
         search: 'issued',
         from: '2026-10-01T00:00:00.000Z',
         to: '2026-10-13T23:59:59.999Z',
@@ -165,6 +167,8 @@ describe('AuditService', () => {
         action: 'STOCK_OUT',
         userId: '11111111-1111-4111-8111-111111111111',
         entityType: 'INVENTORY_TRANSACTION',
+        storeId: 'store-1',
+        deviceId: 'scanner-7',
         OR: [
           { details: { contains: 'issued', mode: 'insensitive' } },
           { reason: { contains: 'issued', mode: 'insensitive' } },

@@ -161,6 +161,15 @@ export class InspectGoodsReceiptDto {
   serialNumber?: string;
 }
 
+export class RejectGoodsReceiptDto {
+  @IsIn(['DAMAGED', 'INCORRECT_ITEM', 'OVER_DELIVERED', 'QUALITY_FAILURE', 'DUPLICATE_DELIVERY', 'OTHER'])
+  reasonCode!: 'DAMAGED' | 'INCORRECT_ITEM' | 'OVER_DELIVERED' | 'QUALITY_FAILURE' | 'DUPLICATE_DELIVERY' | 'OTHER';
+
+  @IsString()
+  @IsNotEmpty()
+  remarks!: string;
+}
+
 export class StockOutDto {
   @IsUUID()
   materialId!: string;

@@ -465,6 +465,7 @@ model GoodsReceipt {
   postedById        String?      @map("posted_by_id")
   postedBy          User?        @relation("ReceiptPoster", fields: [postedById], references: [id])
   postedAt          DateTime?    @map("posted_at")
+  rejectionReasonCode String?     @map("rejection_reason_code")
   remarks           String?
   createdAt         DateTime     @default(now()) @map("created_at")
   updatedAt         DateTime     @updatedAt @map("updated_at")

@@ -11,6 +11,7 @@ import {
   CreateGoodsReceiptDto,
   CreateCycleCountDto,
   InspectGoodsReceiptDto,
+  RejectGoodsReceiptDto,
   CreateReturnInspectionDto,
   InspectReturnDto,
   ReturnDto,
@@ -50,6 +51,12 @@ export class InventoryController {
   @Roles(Role.STORE_MANAGER, Role.ADMINISTRATOR)
   postGoodsReceipt(@Req() req: any, @Param('id', ParseUUIDPipe) id: string) {
     return this.inventoryService.postGoodsReceipt(id, req.user);
+  }
+
+  @Post('receipts/:id/reject')
+  @Roles(Role.STORE_MANAGER, Role.ADMINISTRATOR)
+  rejectGoodsReceipt(@Req() req: any, @Param('id', ParseUUIDPipe) id: string, @Body() dto: RejectGoodsReceiptDto) {
+    return this.inventoryService.rejectGoodsReceipt(id, req.user, dto);
   }
 
   @Post('cycle-counts')

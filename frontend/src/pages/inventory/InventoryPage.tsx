@@ -41,8 +41,8 @@ export default function InventoryPage() {
   const canMutateStock = isKeeper;
 
   const [activeTab, setActiveTab] = useState<
-    'in' | 'out' | 'return' | 'transfer' | 'adjust' | 'history'
-  >(isAuditor ? 'history' : 'in');
+    'receipt' | 'out' | 'return' | 'transfer' | 'adjust' | 'history'
+  >(isAuditor ? 'history' : 'receipt');
 
   const [feedback, setFeedback] = useState<{
     type: 'success' | 'error';
@@ -52,11 +52,11 @@ export default function InventoryPage() {
   // Common Form States
   const [materialId, setMaterialId] = useState('');
   const [quantity, setQuantity] = useState(1);
-  const [unitPrice, setUnitPrice] = useState<number | undefined>(undefined);
   const [supplierId, setSupplierId] = useState('');
   const [employeeId, setEmployeeId] = useState('');
   const [departmentId, setDepartmentId] = useState('');
   const [purpose, setPurpose] = useState('');
+  const [deliveryReference, setDeliveryReference] = useState('');
   const [remarks, setRemarks] = useState('');
   const [newQuantity, setNewQuantity] = useState(0);
   const [adjustReasonCode, setAdjustReasonCode] = useState('');
@@ -72,7 +72,7 @@ export default function InventoryPage() {
 
   // Clear feedback when switching tabs
   const handleTabChange = (
-    tab: 'in' | 'out' | 'return' | 'transfer' | 'adjust' | 'history',
+    tab: 'receipt' | 'out' | 'return' | 'transfer' | 'adjust' | 'history',
   ) => {
     setActiveTab(tab);
     setFeedback(null);
@@ -146,26 +146,26 @@ export default function InventoryPage() {
   });
 
   // Mutations
-  const stockInMutation = useMutation({
+  const receiptMutation = useMutation({
     mutationFn: async (data: any) => {
-      const res = await api.post('/inventory/stock-in', data);
+      const res = await api.post('/inventory/receipts', data);
       return res.data;
     },
     onSuccess: (data: any) => {
       queryClient.invalidateQueries({ queryKey: ['materials'] });
       queryClient.invalidateQueries({ queryKey: ['inventory-transactions'] });
       queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] });
-      const code = data?.data?.transactionCode || data?.transactionCode || '';
+      const code = data?.data?.receiptCode || data?.receiptCode || '';
       setFeedback({
         type: 'success',
-        message: `Stock In recorded successfully! ${code ? `Transaction Code: ${code}` : ''}`,
+        message: `Goods receipt draft created successfully. ${code ? `Receipt Code: ${code}` : ''}`,
       });
       resetForm();
     },
     onError: (err: any) => {
       setFeedback({
         type: 'error',
-        message: err.response?.data?.message || err.message || 'Failed to record Stock In',
+        message: err.response?.data?.message || err.message || 'Failed to create goods receipt draft',
       });
     },
   });
@@ -273,11 +273,11 @@ export default function InventoryPage() {
   const resetForm = () => {
     setMaterialId('');
     setQuantity(1);
-    setUnitPrice(undefined);
     setSupplierId('');
     setEmployeeId('');
     setDepartmentId('');
     setPurpose('');
+    setDeliveryReference('');
     setRemarks('');
     setNewQuantity(0);
     setAdjustReasonCode('');
@@ -285,15 +285,15 @@ export default function InventoryPage() {
     setBreakGlass(false);
   };
 
-  const handleStockInSubmit = (e: React.FormEvent) => {
+  const handleReceiptSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setFeedback(null);
-    stockInMutation.mutate({
+    receiptMutation.mutate({
       materialId,
-      quantity: Number(quantity),
-      unitPrice: unitPrice ? Number(unitPrice) : undefined,
+      storeId: user?.storeId,
+      quantityReceived: Number(quantity),
       supplierId: supplierId || undefined,
-      purpose,
+      deliveryReference: deliveryReference || undefined,
       remarks,
     });
   };
@@ -390,15 +390,15 @@ export default function InventoryPage() {
           <>
             <button
               type="button"
-              onClick={() => handleTabChange('in')}
+              onClick={() => handleTabChange('receipt')}
               className={`flex min-h-11 shrink-0 snap-start items-center gap-2 rounded-xl px-3 py-2 text-xs font-bold transition-all sm:px-4 ${
-                activeTab === 'in'
+                activeTab === 'receipt'
                   ? 'bg-emerald-600 text-white shadow-xs'
                   : 'bg-white text-slate-600 border border-slate-200/80 hover:bg-slate-50'
               }`}
             >
               <ArrowDownLeft className="h-3.5 w-3.5" />
-              <span>Stock In (Receiving)</span>
+              <span>Goods Receipt Draft</span>
             </button>
 
             <button
@@ -519,7 +519,7 @@ export default function InventoryPage() {
               <CardHeader>
                 <div>
                   <CardTitle>
-                    {activeTab === 'in' && 'Record Stock In (Supplier Shipment)'}
+                    {activeTab === 'receipt' && 'Create Goods Receipt Draft'}
                     {activeTab === 'out' && 'Record Direct Stock Out (Store Issuance)'}
                     {activeTab === 'return' && 'Record Return Against Request'}
                     {activeTab === 'adjust' && 'Manual Physical Stock Audit Adjustment'}
@@ -534,8 +534,8 @@ export default function InventoryPage() {
               </CardHeader>
 
               <CardBody>
-                {activeTab === 'in' && (
-                  <form onSubmit={handleStockInSubmit} className="space-y-4">
+                {activeTab === 'receipt' && (
+                  <form onSubmit={handleReceiptSubmit} className="space-y-4">
                     <div>
                       <Label required>Select Material</Label>
                       <Select
@@ -543,10 +543,10 @@ export default function InventoryPage() {
                         value={materialId}
                         onChange={(e) => setMaterialId(e.target.value)}
                       >
-                        <option value="">Choose item to stock in...</option>
+                        <option value="">Choose received item...</option>
                         {materials?.map((m: any) => (
                           <option key={m.id} value={m.id}>
-                            {m.name} ({m.materialCode}) — Remaining: {m.stockSummary?.remainingQuantity ?? 0} {m.unit}s
+                            {m.name} ({m.materialCode}) — Current: {m.stockSummary?.remainingQuantity ?? 0} {m.unit}s
                           </option>
                         ))}
                       </Select>
@@ -554,7 +554,7 @@ export default function InventoryPage() {
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div>
-                        <Label required>Quantity Received</Label>
+                        <Label required>Quantity Delivered</Label>
                         <Input
                           type="number"
                           required
@@ -565,15 +565,11 @@ export default function InventoryPage() {
                       </div>
 
                       <div>
-                        <Label>Unit Price (ETB)</Label>
+                        <Label>Delivery Reference</Label>
                         <Input
-                          type="number"
-                          step="0.01"
-                          placeholder="e.g. 450.00"
-                          value={unitPrice || ''}
-                          onChange={(e) =>
-                            setUnitPrice(e.target.value ? Number(e.target.value) : undefined)
-                          }
+                          placeholder="Supplier delivery note or invoice reference"
+                          value={deliveryReference}
+                          onChange={(e) => setDeliveryReference(e.target.value)}
                         />
                       </div>
                     </div>
@@ -594,16 +590,16 @@ export default function InventoryPage() {
                     </div>
 
                     <div>
-                      <Label>Purpose / Procurement Batch</Label>
+                      <Label>Inspection Notes</Label>
                       <Input
-                        placeholder="e.g. Annual Academic Procurement Batch 1"
-                        value={purpose}
-                        onChange={(e) => setPurpose(e.target.value)}
+                        placeholder="Condition, packaging, or receiving notes"
+                        value={remarks}
+                        onChange={(e) => setRemarks(e.target.value)}
                       />
                     </div>
 
                     <div>
-                      <Label>Remarks & Delivery Note Reference</Label>
+                      <Label>Additional Notes</Label>
                       <Textarea
                         rows={2}
                         placeholder="Delivery invoice reference, box condition..."
@@ -618,11 +614,11 @@ export default function InventoryPage() {
                         variant="success"
                         size="lg"
                         className="w-full"
-                        disabled={!isKeeper || stockInMutation.isPending}
-                        isLoading={stockInMutation.isPending}
+                        disabled={!isKeeper || receiptMutation.isPending}
+                        isLoading={receiptMutation.isPending}
                         leftIcon={<ArrowDownLeft className="h-4 w-4" />}
                       >
-                        Confirm Stock In & Update Balance
+                        Create Draft for Independent Inspection
                       </Button>
                     </div>
                   </form>

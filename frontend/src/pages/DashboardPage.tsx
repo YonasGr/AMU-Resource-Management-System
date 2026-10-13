@@ -19,6 +19,10 @@ import {
   Clock,
   Sparkles,
   CheckCircle2,
+  ClipboardCheck,
+  PackageSearch,
+  ShieldAlert,
+  Warehouse,
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -53,6 +57,15 @@ export default function DashboardPage() {
     refetchInterval: 10000,
   });
 
+  const { data: exceptions } = useQuery({
+    queryKey: ['dashboard-exceptions'],
+    queryFn: async () => {
+      const res = await api.get('/dashboard/exceptions');
+      return res.data.data ?? res.data;
+    },
+    refetchInterval: 30000,
+  });
+
   if (isLoading) {
     return (
       <div className="flex min-h-[400px] flex-col items-center justify-center gap-3">
@@ -78,6 +91,37 @@ export default function DashboardPage() {
     { name: 'Stock Out', count: overview?.stockOutCount ?? 0, fill: '#06B6D4' },
     { name: 'Pending Req', count: overview?.pendingRequests ?? 0, fill: '#F59E0B' },
     { name: 'Approved Req', count: overview?.approvedRequests ?? 0, fill: '#6366F1' },
+  ];
+
+  const exceptionQueues = [
+    {
+      label: 'Overdue receiving',
+      count: exceptions?.receiving?.length ?? 0,
+      icon: PackageSearch,
+      tone: 'text-amber-700 bg-amber-50 border-amber-200',
+      detail: 'Receipts waiting for inspection or posting beyond 3 days',
+    },
+    {
+      label: 'Overdue counts',
+      count: exceptions?.cycleCounts?.length ?? 0,
+      icon: ClipboardCheck,
+      tone: 'text-purple-700 bg-purple-50 border-purple-200',
+      detail: 'Cycle counts waiting beyond the seven-day review window',
+    },
+    {
+      label: 'Quarantine',
+      count: exceptions?.quarantine?.length ?? 0,
+      icon: ShieldAlert,
+      tone: 'text-coral-700 bg-coral-50 border-coral-200',
+      detail: 'Returned materials requiring disposition',
+    },
+    {
+      label: 'Approved variances',
+      count: exceptions?.variances?.length ?? 0,
+      icon: Warehouse,
+      tone: 'text-teal-700 bg-teal-50 border-teal-200',
+      detail: 'Recent count variances requiring operational follow-up',
+    },
   ];
 
   return (
@@ -324,6 +368,38 @@ export default function DashboardPage() {
       </div>
 
       {/* Two Column Grid: Low Stock Threshold Alerts & Recent Transactions */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <div className="flex h-7 w-7 items-center justify-center rounded-xl bg-amber-50 text-amber-700">
+              <ShieldAlert className="h-4 w-4" />
+            </div>
+            <div>
+              <CardTitle>Operational Exception Queues</CardTitle>
+              <CardDescription>Prioritized work that should not remain unresolved.</CardDescription>
+            </div>
+          </div>
+          <span className="text-[11px] font-semibold text-slate-400">
+            As of {exceptions?.asOf ? new Date(exceptions.asOf).toLocaleTimeString() : '—'}
+          </span>
+        </CardHeader>
+        <CardBody className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          {exceptionQueues.map((queue) => {
+            const Icon = queue.icon;
+            return (
+              <div key={queue.label} className={`rounded-2xl border p-4 ${queue.tone}`}>
+                <div className="flex items-center justify-between gap-3">
+                  <Icon className="h-5 w-5" />
+                  <span className="text-2xl font-extrabold">{queue.count}</span>
+                </div>
+                <p className="mt-3 text-sm font-extrabold">{queue.label}</p>
+                <p className="mt-1 text-[11px] leading-relaxed opacity-80">{queue.detail}</p>
+              </div>
+            );
+          })}
+        </CardBody>
+      </Card>
+
       <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
         {/* Low Stock Alerts */}
         <Card>
@@ -459,4 +535,3 @@ export default function DashboardPage() {
     </div>
   );
 }
-

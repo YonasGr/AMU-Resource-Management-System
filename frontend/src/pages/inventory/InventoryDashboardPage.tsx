@@ -18,7 +18,7 @@ interface StoreInventoryRow {
   id: string;
   quantity: number;
   minimumStock: number;
-  item: { id: string; name: string; unit: string };
+  item: { id: string; name: string; unit: string; location?: string | null };
 }
 interface Movement {
   id: string;
@@ -207,9 +207,10 @@ export default function InventoryDashboardPage() {
             )}
             {stock && stock.length > 0 && (
               <table className="w-full text-sm">
-                <thead>
+                <thead className="sticky top-0 z-10 bg-white">
                   <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-muted">
                     <th className="px-5 py-3 font-medium">Item</th>
+                    <th className="px-5 py-3 font-medium">Bin / location</th>
                     <th className="px-5 py-3 font-medium">Quantity</th>
                     <th className="px-5 py-3 font-medium">Reorder at</th>
                     <th className="px-5 py-3 font-medium">Actions</th>
@@ -219,6 +220,7 @@ export default function InventoryDashboardPage() {
                   {stock.map((row) => (
                     <tr key={row.id} className="border-b border-border last:border-0 hover:bg-surface-alt">
                       <td className="px-5 py-3 font-medium text-ink">{row.item.name}</td>
+                      <td className="px-5 py-3 text-xs text-muted">{row.item.location || 'Unassigned'}</td>
                       <td className="px-5 py-3">
                         <span className={`font-mono ${row.quantity <= row.minimumStock ? 'font-semibold text-accent' : ''}`}>
                           {row.quantity}
@@ -243,7 +245,7 @@ export default function InventoryDashboardPage() {
             {movements?.length === 0 && <EmptyState title="No movements yet" description="Nothing has happened at this store yet." />}
             {movements && movements.length > 0 && (
               <table className="w-full text-sm">
-                <thead>
+                <thead className="sticky top-0 z-10 bg-white">
                   <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-muted">
                     <th className="px-5 py-3 font-medium">When</th>
                     <th className="px-5 py-3 font-medium">Type</th>
@@ -259,7 +261,14 @@ export default function InventoryDashboardPage() {
                       <td className="px-5 py-3">
                         <Badge tone={MOVEMENT_TONE[m.movementType] ?? 'neutral'}>{m.movementType}</Badge>
                       </td>
-                      <td className="px-5 py-3">{m.item.name}</td>
+                      <td className="px-5 py-3">
+                        <p>{m.item.name}</p>
+                        {(m.fromStore || m.toStore) && (
+                          <p className="mt-0.5 text-[11px] text-muted">
+                            {m.fromStore?.name ?? 'External'} → {m.toStore?.name ?? 'External'}
+                          </p>
+                        )}
+                      </td>
                       <td className="px-5 py-3 font-mono">{m.quantity}</td>
                       <td className="px-5 py-3 text-muted">{m.createdBy.fullName}</td>
                     </tr>

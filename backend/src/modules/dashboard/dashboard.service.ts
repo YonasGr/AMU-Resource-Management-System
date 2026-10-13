@@ -59,4 +59,89 @@ export class DashboardService {
       recentTransactions,
     };
   }
+
+  async getExceptions() {
+    const now = Date.now();
+    const receiptCutoff = new Date(now - 3 * 24 * 60 * 60 * 1000);
+    const countCutoff = new Date(now - 7 * 24 * 60 * 60 * 1000);
+
+    const [receiving, cycleCounts, quarantine, varianceLines] = await Promise.all([
+      this.prisma.goodsReceipt.findMany({
+        where: {
+          status: { in: ['DRAFT', 'INSPECTED'] },
+          createdAt: { lt: receiptCutoff },
+        },
+        take: 20,
+        orderBy: { createdAt: 'asc' },
+        include: {
+          material: { select: { materialCode: true, name: true, unit: true } },
+          store: { select: { name: true } },
+        },
+      }),
+      this.prisma.cycleCount.findMany({
+        where: {
+          status: { in: ['DRAFT', 'COUNTED', 'RECOUNT_REQUIRED'] },
+          createdAt: { lt: countCutoff },
+        },
+        take: 20,
+        orderBy: { createdAt: 'asc' },
+        include: {
+          store: { select: { name: true } },
+          lines: { select: { materialId: true, physicalQuantity: true, variance: true } },
+        },
+      }),
+      this.prisma.materialReturn.findMany({
+        where: {
+          disposition: 'QUARANTINE',
+          status: { not: 'CANCELLED' },
+        },
+        take: 20,
+        orderBy: { createdAt: 'asc' },
+        include: {
+          material: { select: { materialCode: true, name: true, unit: true } },
+          store: { select: { name: true } },
+        },
+      }),
+      this.prisma.cycleCountLine.findMany({
+        where: {
+          variance: { not: 0 },
+          cycleCount: { status: 'APPROVED' },
+        },
+        take: 20,
+        orderBy: { updatedAt: 'desc' },
+        include: {
+          material: { select: { materialCode: true, name: true, unit: true } },
+          cycleCount: { select: { countCode: true, store: { select: { name: true } }, updatedAt: true } },
+        },
+      }),
+    ]);
+
+    return {
+      asOf: new Date().toISOString(),
+      receiving: receiving.map((item) => ({
+        id: item.id,
+        code: item.receiptCode,
+        status: item.status,
+        ageDays: Math.floor((now - item.createdAt.getTime()) / 86400000),
+        material: item.material,
+        store: item.store,
+      })),
+      cycleCounts: cycleCounts.map((item) => ({
+        id: item.id,
+        code: item.countCode,
+        status: item.status,
+        ageDays: Math.floor((now - item.createdAt.getTime()) / 86400000),
+        lineCount: item.lines.length,
+        store: item.store,
+      })),
+      quarantine,
+      variances: varianceLines.map((line) => ({
+        id: line.id,
+        variance: line.variance,
+        physicalQuantity: line.physicalQuantity,
+        material: line.material,
+        count: line.cycleCount,
+      })),
+    };
+  }
 }

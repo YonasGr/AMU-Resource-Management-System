@@ -2,21 +2,22 @@ import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/commo
 import { randomUUID } from 'node:crypto';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
+import { AuditEvent } from '../audit/audit-event.contract';
 
-type AuditPayload = {
+type LegacyAuditEvent = {
   userId: string | null;
+  action: string;
+  module: string;
+  correlationId: string;
+  source: string;
   actorRole?: string;
   storeId?: string;
   deviceId?: string;
-  action: string;
-  module: string;
   entityType?: string;
   entityId?: string;
-  correlationId: string;
   reversalOfId?: string;
   details?: string;
   reason?: string;
-  source: string;
   ipAddress?: string;
   userAgent?: string;
   beforeData?: Record<string, unknown>;
@@ -100,7 +101,11 @@ export class OutboxService implements OnModuleInit, OnModuleDestroy {
     if (this.timer) clearInterval(this.timer);
   }
 
-  async enqueue(eventType: string, payload: AuditPayload | NotificationPayload, eventKey = randomUUID()) {
+  async enqueue(
+    eventType: string,
+    payload: AuditEvent | LegacyAuditEvent | NotificationPayload,
+    eventKey = randomUUID(),
+  ) {
     const outbox = this.getOutboxClient();
     return outbox.createMany({
       data: { eventKey, eventType, payload },
@@ -157,7 +162,7 @@ export class OutboxService implements OnModuleInit, OnModuleDestroy {
 
   private async dispatch(eventType: string, payload: unknown) {
     if (eventType === 'AUDIT_LOG') {
-      const event = payload as AuditPayload;
+      const event = payload as AuditEvent | LegacyAuditEvent;
       await this.prisma.auditLog.create({
         data: {
           ...event,

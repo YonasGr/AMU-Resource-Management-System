@@ -724,12 +724,7 @@ export default function InventoryPage() {
   return (
     <InventoryDocumentShell
       title={
-        isAuditor ? "Inventory Audit Ledger" : "Inventory Operations & Ledger"
-      }
-      description={
-        isAuditor
-          ? "Independent compliance inspection ledger of all university physical stock transactions, supplier deliveries, and departmental issuances."
-          : "Execute physical stock movements, supplier shipments, direct issues, departmental transfers, and audit adjustments."
+        isAuditor ? "Audit ledger" : "Inventory operations"
       }
       headerIcon={Repeat}
       breadcrumbs={[
@@ -762,40 +757,28 @@ export default function InventoryPage() {
         ) : null
       }
     >
-      <div className={`mb-4 flex flex-col gap-2 rounded-2xl border p-4 text-xs sm:flex-row sm:items-center sm:justify-between ${
-        isOnline
-          ? "border-emerald-200 bg-emerald-50 text-emerald-900"
-          : "border-amber-200 bg-amber-50 text-amber-900"
-      }`}>
-        <div>
-          <p className="font-bold">{isOnline ? "Online sync active" : "Offline mode"}</p>
-          <p className="mt-0.5 opacity-80">
-            {isOnline
-              ? operations.length
-                ? `${operations.length} operation${operations.length === 1 ? "" : "s"} waiting for confirmation.`
-                : "Physical postings will replay safely if connectivity drops."
-              : "Idempotent stock postings are saved locally and will replay when connectivity returns."}
+      {operations.length > 0 && (
+        <div className={`mb-4 flex flex-col gap-2 rounded-2xl border p-3 text-xs sm:flex-row sm:items-center sm:justify-between ${
+          isOnline
+            ? "border-amber-200 bg-amber-50 text-amber-900"
+            : "border-slate-300 bg-slate-100 text-slate-800"
+        }`}>
+          <p className="font-bold">
+            {operations.filter((operation) => operation.status === "conflict").length
+              ? "Inventory updates need review"
+              : `${operations.length} inventory update${operations.length === 1 ? "" : "s"} pending`}
           </p>
+          {isOnline && (
+            <button
+              type="button"
+              onClick={() => void replay()}
+              className="rounded-lg bg-white px-2.5 py-1 font-bold shadow-sm hover:text-teal-700"
+            >
+              Retry
+            </button>
+          )}
         </div>
-        {operations.length > 0 && (
-          <div className="flex items-center gap-2">
-            <span className="rounded-full bg-white/80 px-2.5 py-1 font-bold">
-              {operations.filter((operation) => operation.status === "conflict").length
-                ? "Conflict needs review"
-                : `${operations.length} queued`}
-            </span>
-            {isOnline && (
-              <button
-                type="button"
-                onClick={() => void replay()}
-                className="rounded-lg bg-white px-2.5 py-1 font-bold shadow-sm hover:text-teal-700"
-              >
-                Retry
-              </button>
-            )}
-          </div>
-        )}
-      </div>
+      )}
       {operations.some((operation) => operation.status === "conflict" || operation.status === "failed") && (
         <div className="mb-4 space-y-2 rounded-2xl border border-rose-200 bg-rose-50 p-4 text-xs text-rose-900">
           <p className="font-bold">Queued operations need attention</p>

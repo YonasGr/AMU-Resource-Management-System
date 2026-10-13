@@ -54,7 +54,6 @@ export function PageHeader({
               <h1 className="break-words text-xl font-bold tracking-tight text-slate-900 sm:text-2xl">{title}</h1>
               {badge}
             </div>
-            {description && <p className="mt-1 max-w-3xl text-xs font-medium leading-relaxed text-slate-500 sm:text-sm">{description}</p>}
           </div>
         </div>
       </div>

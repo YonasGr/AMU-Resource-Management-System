@@ -1,5 +1,5 @@
 import React from 'react';
-import { NavLink, useNavigate } from 'react-router-dom';
+import { NavLink } from 'react-router-dom';
 import {
   LayoutDashboard,
   Package,
@@ -9,7 +9,6 @@ import {
   Building,
   BarChart3,
   ShieldAlert,
-  LogOut,
   Boxes,
   Sparkles,
   X,
@@ -37,8 +36,6 @@ interface NavGroup {
 
 export function Sidebar({ isOpen = false, onNavigate }: { isOpen?: boolean; onNavigate?: () => void }) {
   const user = useAuthStore((state) => state.user);
-  const clearSession = useAuthStore((state) => state.clearSession);
-  const navigate = useNavigate();
 
   // Fetch quick counts for sidebar badges
   const { data: stats } = useQuery({
@@ -129,20 +126,6 @@ export function Sidebar({ isOpen = false, onNavigate }: { isOpen?: boolean; onNa
     },
   ];
 
-  const handleLogout = () => {
-    clearSession();
-    navigate('/login');
-  };
-
-  const userInitials = user?.fullName
-    ? user.fullName
-        .split(' ')
-        .map((n) => n[0])
-        .join('')
-        .toUpperCase()
-        .slice(0, 2)
-    : 'AM';
-
   return (
     <aside
       id="primary-navigation"
@@ -176,25 +159,6 @@ export function Sidebar({ isOpen = false, onNavigate }: { isOpen?: boolean; onNa
           </button>
         </div>
       </div>
-
-      {/* User Info Card */}
-      {user && (
-        <div className="mx-4 mt-4 p-3.5 rounded-2xl bg-brand-800/70 border border-brand-700/60 shadow-xs">
-          <div className="flex items-center gap-3">
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-tr from-teal-500 to-cyan-600 text-white text-xs font-bold ring-2 ring-brand-700">
-              {userInitials}
-            </div>
-            <div className="min-w-0 flex-1">
-              <p className="text-xs font-bold text-white truncate">{user.fullName}</p>
-              <div className="mt-0.5 flex items-center gap-1.5">
-                <span className="inline-flex items-center rounded-full bg-teal-500/20 px-2 py-0.5 text-[10px] font-bold text-teal-300 uppercase tracking-wide">
-                  {user.role.replace('_', ' ')}
-                </span>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Nav groups */}
       <div className="flex-1 overflow-y-auto px-3.5 py-4 space-y-6">
@@ -248,16 +212,6 @@ export function Sidebar({ isOpen = false, onNavigate }: { isOpen?: boolean; onNa
         })}
       </div>
 
-      {/* Sidebar Footer */}
-      <div className="p-3.5 border-t border-brand-800/80 bg-brand-950/40">
-        <button
-          onClick={handleLogout}
-          className="flex w-full items-center justify-center gap-2 rounded-xl bg-brand-800/60 px-3 py-2 text-xs font-semibold text-slate-300 hover:bg-coral-500/20 hover:text-coral-300 hover:border-coral-500/30 border border-brand-700/50 transition-colors"
-        >
-          <LogOut className="h-4 w-4" />
-          <span>Sign Out</span>
-        </button>
-      </div>
     </aside>
   );
 }

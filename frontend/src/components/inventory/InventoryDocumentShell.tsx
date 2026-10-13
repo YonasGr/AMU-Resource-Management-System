@@ -14,7 +14,7 @@ export type InventoryTabId = 'receipt' | 'out' | 'return' | 'adjust' | 'transfer
 
 interface InventoryDocumentShellProps {
   title: string;
-  description: string;
+  description?: string;
   headerIcon: LucideIcon;
   breadcrumbs: Array<{ label: string; to?: string }>;
   headerActions?: React.ReactNode;

@@ -37,6 +37,7 @@ export default function InventoryPage() {
     user?.role === 'STOREKEEPER' ||
     user?.role === 'STORE_MANAGER' ||
     user?.role === 'ADMINISTRATOR';
+  const canAdjustStock = user?.role === 'STORE_MANAGER' || user?.role === 'ADMINISTRATOR';
   const canMutateStock = isKeeper;
 
   const [activeTab, setActiveTab] = useState<
@@ -892,7 +893,7 @@ export default function InventoryPage() {
                         variant="primary"
                         size="lg"
                         className="w-full bg-purple-600 hover:bg-purple-700 text-white"
-                        disabled={!isKeeper || adjustMutation.isPending}
+                        disabled={!canAdjustStock || adjustMutation.isPending}
                         isLoading={adjustMutation.isPending}
                         leftIcon={<Sliders className="h-4 w-4" />}
                       >

@@ -30,11 +30,15 @@ import {
   AuditorModeBadge,
   InventoryDocumentShell,
   InventoryDocumentTab,
+  InventoryTabId,
 } from '../../components/inventory/InventoryDocumentShell';
 import { ReceivingWorkspace } from '../../components/inventory/ReceivingWorkspace';
 import { StockOutWorkspace } from '../../components/inventory/StockOutWorkspace';
 import { ReturnsWorkspace, IssuedRequest } from '../../components/inventory/ReturnsWorkspace';
 import { AdjustmentWorkspace } from '../../components/inventory/AdjustmentWorkspace';
+import { TransferWorkspace } from '../../components/inventory/TransferWorkspace';
+import { InventoryHistoryWorkspace } from '../../components/inventory/InventoryHistoryWorkspace';
+import { InventoryItemPreview } from '../../components/inventory/InventoryItemPreview';
 
 export default function InventoryPage() {
   const queryClient = useQueryClient();
@@ -47,9 +51,7 @@ export default function InventoryPage() {
   const canAdjustStock = user?.role === 'STORE_MANAGER' || user?.role === 'ADMINISTRATOR';
   const canMutateStock = isKeeper;
 
-  const [activeTab, setActiveTab] = useState<
-    'receipt' | 'out' | 'return' | 'transfer' | 'adjust' | 'history'
-  >(isAuditor ? 'history' : 'receipt');
+  const [activeTab, setActiveTab] = useState<InventoryTabId>(isAuditor ? 'history' : 'receipt');
 
   const [feedback, setFeedback] = useState<{
     type: 'success' | 'error';
@@ -77,12 +79,26 @@ export default function InventoryPage() {
   const [historySearch, setHistorySearch] = useState('');
   const [historyTypeFilter, setHistoryTypeFilter] = useState('ALL');
 
-  // Clear feedback when switching tabs
-  const handleTabChange = (
-    tab: 'receipt' | 'out' | 'return' | 'transfer' | 'adjust' | 'history',
-  ) => {
+  // Each workflow owns its draft boundary; switching tabs must not carry quantities,
+  // recipients, or authorization fields into another inventory operation.
+  const handleTabChange = (tab: InventoryTabId) => {
     setActiveTab(tab);
     setFeedback(null);
+    setMaterialId('');
+    setQuantity(1);
+    setSupplierId('');
+    setEmployeeId('');
+    setDepartmentId('');
+    setPurpose('');
+    setDeliveryReference('');
+    setRemarks('');
+    setNewQuantity(0);
+    setAdjustReasonCode('');
+    setAdjustRemarks('');
+    setBreakGlass(false);
+    setReturnRequestId('');
+    setReturnRequestItemId('');
+    setReturnQuantity(1);
   };
 
   // Fetch Materials
@@ -370,15 +386,15 @@ export default function InventoryPage() {
   });
 
   const operationTabs: InventoryDocumentTab[] = [
-    ...(!isAuditor && canMutateStock
+    ...((!isAuditor && canMutateStock
       ? [
           { id: 'receipt', label: 'Goods Receipt Draft', icon: ArrowDownLeft, activeClassName: 'bg-emerald-600' },
           { id: 'out', label: 'Direct Stock Out', icon: ArrowUpRight, activeClassName: 'bg-cyan-600' },
           { id: 'return', label: 'Request Returns', icon: RotateCcw, activeClassName: 'bg-amber-600' },
           { id: 'adjust', label: 'Stock Adjustments', icon: Sliders, activeClassName: 'bg-purple-600' },
           { id: 'transfer', label: 'Store Transfer', icon: ArrowRightLeft, activeClassName: 'bg-teal-700' },
-        ]
-      : []),
+        ] as InventoryDocumentTab[]
+      : [])),
     {
       id: 'history',
       label: 'Transaction History Ledger',
@@ -401,7 +417,7 @@ export default function InventoryPage() {
       headerActions={isAuditor ? <AuditorModeBadge /> : undefined}
       tabs={operationTabs}
       activeTab={activeTab}
-      onTabChange={(tab) => handleTabChange(tab as typeof activeTab)}
+      onTabChange={handleTabChange}
       feedback={feedback}
       onDismissFeedback={() => setFeedback(null)}
       roleGuidance={
@@ -541,331 +557,40 @@ export default function InventoryPage() {
                 )}
 
                 {activeTab === 'transfer' && (
-                  <form onSubmit={handleTransferSubmit} className="space-y-4">
-                    <div>
-                      <Label required>Select Material</Label>
-                      <Select
-                        required
-                        value={materialId}
-                        onChange={(e) => setMaterialId(e.target.value)}
-                      >
-                        <option value="">Choose item to transfer...</option>
-                        {materials?.map((m: any) => (
-                          <option key={m.id} value={m.id}>
-                            {m.name} ({m.materialCode}) — Avail: {m.stockSummary?.remainingQuantity ?? 0} {m.unit}s
-                          </option>
-                        ))}
-                      </Select>
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      <div>
-                        <Label required>Quantity to Transfer</Label>
-                        <Input
-                          type="number"
-                          required
-                          min={1}
-                          value={quantity}
-                          onChange={(e) => setQuantity(Number(e.target.value))}
-                        />
-                      </div>
-
-                      <div>
-                        <Label required>Destination Department</Label>
-                        <Select
-                          required
-                          value={departmentId}
-                          onChange={(e) => setDepartmentId(e.target.value)}
-                        >
-                          <option value="">Select Department...</option>
-                          {departments?.map((d: any) => (
-                            <option key={d.id} value={d.id}>
-                              {d.name} ({d.code})
-                            </option>
-                          ))}
-                        </Select>
-                      </div>
-                    </div>
-
-                    <div>
-                      <Label>Purpose / Transfer Order</Label>
-                      <Input
-                        placeholder="e.g. Relocating computer monitors to Lab 3"
-                        value={purpose}
-                        onChange={(e) => setPurpose(e.target.value)}
-                      />
-                    </div>
-
-                    <div>
-                      <Label>Remarks</Label>
-                      <Textarea
-                        rows={2}
-                        placeholder="Transfer dispatch note or authorization code..."
-                        value={remarks}
-                        onChange={(e) => setRemarks(e.target.value)}
-                      />
-                    </div>
-
-                    <div className="pt-2">
-                      <Button
-                        type="submit"
-                        variant="primary"
-                        size="lg"
-                        className="w-full"
-                        disabled={!isKeeper || transferMutation.isPending}
-                        isLoading={transferMutation.isPending}
-                        leftIcon={<ArrowRightLeft className="h-4 w-4" />}
-                      >
-                        Record Material Transfer
-                      </Button>
-                    </div>
-                  </form>
+                  <TransferWorkspace
+                    materials={materials}
+                    departments={departments}
+                    materialId={materialId}
+                    quantity={quantity}
+                    departmentId={departmentId}
+                    purpose={purpose}
+                    remarks={remarks}
+                    isKeeper={isKeeper}
+                    isPending={transferMutation.isPending}
+                    onMaterialChange={setMaterialId}
+                    onQuantityChange={setQuantity}
+                    onDepartmentChange={setDepartmentId}
+                    onPurposeChange={setPurpose}
+                    onRemarksChange={setRemarks}
+                    onSubmit={handleTransferSubmit}
+                  />
                 )}
               </CardBody>
             </Card>
           </div>
 
           {/* Right Live Item Preview Card (1 col) */}
-          <div>
-            <Card>
-              <CardHeader>
-                <div className="flex items-center gap-2">
-                  <div className="flex h-7 w-7 items-center justify-center rounded-xl bg-teal-50 text-teal-700">
-                    <Sparkles className="h-4 w-4" />
-                  </div>
-                  <CardTitle>Selected Item Preview</CardTitle>
-                </div>
-              </CardHeader>
-
-              <CardBody className="space-y-4">
-                {selectedMaterialObj ? (
-                  <div className="space-y-4">
-                    <div className="p-4 rounded-2xl bg-teal-50/50 border border-teal-200/80">
-                      <div className="flex items-center justify-between">
-                        <span className="font-mono text-xs font-bold text-teal-900 bg-white px-2.5 py-1 rounded-lg border border-teal-200">
-                          {selectedMaterialObj.materialCode}
-                        </span>
-                        <Badge tone="teal" withDot={false}>
-                          {selectedMaterialObj.category?.name || 'General'}
-                        </Badge>
-                      </div>
-
-                      <h4 className="mt-3 font-extrabold text-slate-900 text-base">
-                        {selectedMaterialObj.name}
-                      </h4>
-                      <p className="text-xs text-slate-500 mt-1">
-                        {selectedMaterialObj.description || 'No description provided'}
-                      </p>
-                    </div>
-
-                    <div className="space-y-2 text-xs">
-                      <div className="flex justify-between py-2 border-b border-slate-100">
-                        <span className="text-slate-500">Current Remaining:</span>
-                        <span className="font-bold text-slate-900">
-                          {selectedMaterialObj.stockSummary?.remainingQuantity ?? 0}{' '}
-                          {selectedMaterialObj.unit}s
-                        </span>
-                      </div>
-
-                      <div className="flex justify-between py-2 border-b border-slate-100">
-                        <span className="text-slate-500">Total Stock Received:</span>
-                        <span className="font-semibold text-slate-700">
-                          {selectedMaterialObj.stockSummary?.quantityReceived ?? 0}{' '}
-                          {selectedMaterialObj.unit}s
-                        </span>
-                      </div>
-
-                      <div className="flex justify-between py-2 border-b border-slate-100">
-                        <span className="text-slate-500">Total Stock Issued:</span>
-                        <span className="font-semibold text-slate-700">
-                          {selectedMaterialObj.stockSummary?.quantityIssued ?? 0}{' '}
-                          {selectedMaterialObj.unit}s
-                        </span>
-                      </div>
-
-                      <div className="flex justify-between py-2 border-b border-slate-100">
-                        <span className="text-slate-500">Min Alert Limit:</span>
-                        <span className="font-semibold text-coral-600">
-                          {selectedMaterialObj.minimumStock} {selectedMaterialObj.unit}s
-                        </span>
-                      </div>
-
-                      <div className="flex justify-between py-2">
-                        <span className="text-slate-500">Store Shelf Location:</span>
-                        <span className="font-medium text-slate-700">
-                          {selectedMaterialObj.location || 'Central Store'}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="py-12 text-center text-xs text-slate-400">
-                    <Package className="mx-auto h-10 w-10 text-slate-300 mb-2" />
-                    Select a material from the dropdown to see live inventory balance and shelf location.
-                  </div>
-                )}
-              </CardBody>
-            </Card>
-          </div>
+          <InventoryItemPreview material={selectedMaterialObj} />
         </div>
       ) : (
-        /* Full History Ledger Table */
-        <Card className="overflow-hidden space-y-4">
-          <div className="p-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-b border-slate-200/80">
-            <div className="flex-1 max-w-md">
-              <SearchInput
-                value={historySearch}
-                onChange={(e) => setHistorySearch(e.target.value)}
-                onClear={() => setHistorySearch('')}
-                placeholder="Search transaction code, material, or actor..."
-              />
-            </div>
-
-            <div className="-mx-4 flex snap-x gap-1 overflow-x-auto rounded-xl border border-slate-200/80 bg-slate-100 p-1 sm:mx-0 sm:flex-wrap sm:overflow-visible">
-              {['ALL', 'STOCK_IN', 'STOCK_OUT', 'RETURN', 'ADJUSTMENT', 'TRANSFER'].map((t) => (
-                <button
-                  key={t}
-                  type="button"
-                  onClick={() => setHistoryTypeFilter(t)}
-                  className={`min-h-9 shrink-0 snap-start rounded-lg px-2.5 py-1 text-xs font-bold transition-all ${
-                    historyTypeFilter === t
-                      ? 'bg-white text-slate-900 shadow-xs'
-                      : 'text-slate-500 hover:text-slate-900'
-                  }`}
-                >
-                  {t.replace('_', ' ')}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {isLoading ? (
-            <div className="py-16 text-center">
-              <div className="mx-auto h-7 w-7 animate-spin rounded-full border-2 border-teal-600 border-t-transparent" />
-              <p className="mt-3 text-xs font-semibold text-slate-500">Loading ledger records...</p>
-            </div>
-          ) : filteredTransactions.length === 0 ? (
-            <div className="p-8">
-              <EmptyState
-                icon={History}
-                title="No transaction records found"
-                description="There are no inventory ledger movements matching your search query."
-              />
-            </div>
-          ) : (
-            <>
-            <div className="hidden overflow-x-auto sm:block">
-              <table className="w-full text-left text-sm text-slate-700">
-                <thead className="bg-slate-50/90 text-xs font-bold uppercase tracking-wider text-slate-500 border-b border-slate-200/80">
-                  <tr>
-                    <th className="px-6 py-4">Transaction Code</th>
-                    <th className="px-6 py-4">Type</th>
-                    <th className="px-6 py-4">Material Details</th>
-                    <th className="px-6 py-4 text-center">Quantity</th>
-                    <th className="px-6 py-4">Associated Party</th>
-                    <th className="px-6 py-4">Issued By</th>
-                    <th className="px-6 py-4 text-right">Date & Time</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {filteredTransactions.map((txn: any) => (
-                    <tr key={txn.id} className="hover:bg-slate-50/80 transition-colors">
-                      <td className="px-6 py-4 font-mono text-xs font-bold text-slate-900">
-                        <span className="bg-slate-100 text-slate-800 px-2 py-0.5 rounded-md border border-slate-200/60">
-                          {txn.transactionCode}
-                        </span>
-                      </td>
-
-                      <td className="px-6 py-4">
-                        <Badge
-                          tone={
-                            txn.type === 'STOCK_IN'
-                              ? 'success'
-                              : txn.type === 'STOCK_OUT'
-                              ? 'info'
-                              : txn.type === 'RETURN'
-                              ? 'warning'
-                              : 'purple'
-                          }
-                        >
-                          {txn.type.replace('_', ' ')}
-                        </Badge>
-                      </td>
-
-                      <td className="px-6 py-4">
-                        <p className="font-bold text-slate-900">{txn.material?.name}</p>
-                        <p className="text-xs text-slate-400 font-mono">{txn.material?.materialCode}</p>
-                      </td>
-
-                      <td className="px-6 py-4 text-center font-bold text-slate-900">
-                        {txn.type === 'STOCK_IN' || txn.type === 'RETURN' ? '+' : '-'}
-                        {txn.quantity} {txn.material?.unit}s
-                      </td>
-
-                      <td className="px-6 py-4 text-xs text-slate-600">
-                        {txn.supplier ? (
-                          <span className="inline-flex items-center gap-1 font-semibold text-slate-800">
-                            <Truck className="h-3.5 w-3.5 text-slate-400" />
-                            {txn.supplier.name}
-                          </span>
-                        ) : txn.employee ? (
-                          <span className="inline-flex items-center gap-1 font-semibold text-slate-800">
-                            <User className="h-3.5 w-3.5 text-slate-400" />
-                            {txn.employee.fullName}
-                          </span>
-                        ) : txn.department ? (
-                          <span className="inline-flex items-center gap-1 font-semibold text-slate-800">
-                            <Building2 className="h-3.5 w-3.5 text-slate-400" />
-                            {txn.department.name}{txn.request?.requestNumber ? ` · ${txn.request.requestNumber}` : ''}
-                          </span>
-                        ) : (
-                          <span className="text-slate-400 italic">Central Store</span>
-                        )}
-                      </td>
-
-                      <td className="px-6 py-4 text-xs text-slate-600">
-                        <span className="font-medium">{txn.issuedBy?.fullName || 'System'}</span>
-                      </td>
-
-                      <td className="px-6 py-4 text-right text-xs text-slate-400 font-medium">
-                        {new Date(txn.createdAt).toLocaleString()}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            <ul className="divide-y divide-slate-100 sm:hidden" aria-label="Inventory transaction history">
-              {filteredTransactions.map((txn: any) => {
-                const associatedParty = txn.supplier?.name || txn.employee?.fullName || txn.department?.name || 'Central Store';
-                const isIncoming = txn.type === 'STOCK_IN' || txn.type === 'RETURN';
-                return (
-                  <li key={txn.id} className="p-4">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <p className="break-words text-sm font-bold text-slate-900">{txn.material?.name}</p>
-                        <p className="mt-1 font-mono text-[11px] text-slate-500">{txn.material?.materialCode} · {txn.transactionCode}</p>
-                      </div>
-                      <span className={`shrink-0 rounded-lg px-2 py-1 text-xs font-bold ${isIncoming ? 'bg-emerald-50 text-emerald-700' : 'bg-sky-50 text-sky-700'}`}>
-                        {isIncoming ? '+' : '−'}{txn.quantity} {txn.material?.unit || 'unit'}{txn.quantity === 1 ? '' : 's'}
-                      </span>
-                    </div>
-                    <div className="mt-3 flex flex-wrap items-center gap-2">
-                      <Badge tone={txn.type === 'STOCK_IN' ? 'success' : txn.type === 'STOCK_OUT' ? 'info' : txn.type === 'RETURN' ? 'warning' : 'purple'}>
-                        {txn.type.replace('_', ' ')}
-                      </Badge>
-                      <span className="text-xs text-slate-600">
-                        {associatedParty}{txn.request?.requestNumber ? ` · ${txn.request.requestNumber}` : ''}
-                      </span>
-                    </div>
-                    <p className="mt-2 text-[11px] text-slate-500">{new Date(txn.createdAt).toLocaleString()} · {txn.issuedBy?.fullName || 'System'}</p>
-                  </li>
-                );
-              })}
-            </ul>
-            </>
-          )}
-        </Card>
+        <InventoryHistoryWorkspace
+          transactions={filteredTransactions}
+          isLoading={isLoading}
+          search={historySearch}
+          typeFilter={historyTypeFilter}
+          onSearchChange={setHistorySearch}
+          onTypeFilterChange={setHistoryTypeFilter}
+        />
       )}
     </InventoryDocumentShell>
   );

@@ -717,6 +717,9 @@ export class InventoryService {
     });
     if (!returnRecord) throw new NotFoundException(`Return inspection ${id} not found`);
     this.resolveStoreId(user, returnRecord.storeId);
+    if (returnRecord.createdById === user.id) {
+      throw new ForbiddenException('The person who created a return inspection cannot inspect it');
+    }
     if (returnRecord.status !== MaterialReturnStatus.DRAFT) {
       throw new BadRequestException(`Only DRAFT returns can be inspected. Current status is ${returnRecord.status}`);
     }
@@ -744,6 +747,9 @@ export class InventoryService {
     });
     if (!returnRecord) throw new NotFoundException(`Return inspection ${id} not found`);
     this.resolveStoreId(user, returnRecord.storeId);
+    if (returnRecord.createdById === user.id || returnRecord.inspectedById === user.id) {
+      throw new ForbiddenException('Return posting requires an independent operator');
+    }
     if (returnRecord.status !== MaterialReturnStatus.INSPECTED || !returnRecord.disposition) {
       throw new BadRequestException(`Only inspected returns with a disposition can be posted. Current status is ${returnRecord.status}`);
     }

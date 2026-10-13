@@ -1319,7 +1319,7 @@ export class InventoryService {
           storeId: transfer.sourceStoreId,
         });
       }
-      await tx.inventoryTransaction.create({
+      const transaction = await tx.inventoryTransaction.create({
         data: {
           transactionCode: `${transfer.transferCode}-OUT`,
           type: TransactionType.TRANSFER,
@@ -1331,12 +1331,29 @@ export class InventoryService {
           remarks: `Dispatched transfer ${transfer.transferCode}`,
         },
       });
+      await this.auditService.logInTransaction(
+        tx,
+        user.id,
+        'DISPATCH_TRANSFER',
+        'INVENTORY',
+        `Dispatched transfer ${transfer.transferCode}`,
+        {
+          actorRole: user.role,
+          entityType: 'INVENTORY_TRANSFER',
+          entityId: transfer.id,
+          beforeData: { status: TransferStatus.DRAFT },
+          afterData: {
+            status: TransferStatus.DISPATCHED,
+            quantity: transfer.quantity,
+            transactionId: transaction.id,
+          },
+        },
+      );
       return tx.inventoryTransfer.findUnique({
         where: { id },
         include: { material: true, sourceStore: true, destinationStore: true },
       });
     });
-    await this.auditService.log(user.id, 'DISPATCH_TRANSFER', 'INVENTORY', `Dispatched transfer ${transfer.transferCode}`);
     return result;
   }
 
@@ -1369,7 +1386,7 @@ export class InventoryService {
         update: { quantityReceived: { increment: transfer.quantity }, remainingQuantity: { increment: transfer.quantity } },
         create: { storeId: transfer.destinationStoreId, materialId: transfer.materialId, quantityReceived: transfer.quantity, remainingQuantity: transfer.quantity },
       });
-      await tx.inventoryTransaction.create({
+      const transaction = await tx.inventoryTransaction.create({
         data: {
           transactionCode: `${transfer.transferCode}-IN`,
           type: TransactionType.TRANSFER,
@@ -1381,12 +1398,29 @@ export class InventoryService {
           remarks: `Received transfer ${transfer.transferCode}`,
         },
       });
+      await this.auditService.logInTransaction(
+        tx,
+        user.id,
+        'RECEIVE_TRANSFER',
+        'INVENTORY',
+        `Received transfer ${transfer.transferCode}`,
+        {
+          actorRole: user.role,
+          entityType: 'INVENTORY_TRANSFER',
+          entityId: transfer.id,
+          beforeData: { status: TransferStatus.DISPATCHED },
+          afterData: {
+            status: TransferStatus.RECEIVED,
+            quantity: transfer.quantity,
+            transactionId: transaction.id,
+          },
+        },
+      );
       return tx.inventoryTransfer.findUnique({
         where: { id },
         include: { material: true, sourceStore: true, destinationStore: true },
       });
     });
-    await this.auditService.log(user.id, 'RECEIVE_TRANSFER', 'INVENTORY', `Received transfer ${transfer.transferCode}`);
     return result;
   }
 

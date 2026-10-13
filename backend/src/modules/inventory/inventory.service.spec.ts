@@ -1194,6 +1194,71 @@ describe('InventoryService', () => {
       );
     });
 
+    it('records dispatch evidence inside the transfer transaction', async () => {
+        const transfer = {
+          id: 'transfer-1',
+          transferCode: 'TRF-001',
+          materialId: 'mat-uuid-1',
+          sourceStoreId: 'store-1',
+          destinationStoreId: 'store-2',
+          quantity: 5,
+          status: 'DRAFT',
+          purpose: 'Inter-store transfer',
+        };
+        prisma.inventoryTransfer.findUnique.mockResolvedValue(transfer);
+        prisma._mockTx.inventoryTransfer.findUnique.mockResolvedValue({ ...transfer, status: 'DISPATCHED' });
+
+        await service.dispatchTransfer(
+          'transfer-1',
+          { id: 'keeper-1', role: Role.STOREKEEPER, scopeType: ScopeType.STORE, storeId: 'store-1' } as any,
+        );
+
+        expect(auditService.logInTransaction).toHaveBeenCalledWith(
+          prisma._mockTx,
+          'keeper-1',
+          'DISPATCH_TRANSFER',
+          'INVENTORY',
+          'Dispatched transfer TRF-001',
+          expect.objectContaining({
+            entityType: 'INVENTORY_TRANSFER',
+            entityId: 'transfer-1',
+            afterData: expect.objectContaining({ status: 'DISPATCHED', quantity: 5 }),
+          }),
+        );
+    });
+
+    it('records receipt evidence inside the transfer transaction', async () => {
+        const transfer = {
+          id: 'transfer-1',
+          transferCode: 'TRF-001',
+          materialId: 'mat-uuid-1',
+          sourceStoreId: 'store-1',
+          destinationStoreId: 'store-2',
+          quantity: 5,
+          status: 'DISPATCHED',
+          purpose: 'Inter-store transfer',
+        };
+        prisma.inventoryTransfer.findUnique.mockResolvedValue(transfer);
+        prisma._mockTx.inventoryTransfer.findUnique.mockResolvedValue({ ...transfer, status: 'RECEIVED' });
+
+        await service.receiveTransfer(
+          'transfer-1',
+          { id: 'keeper-2', role: Role.STOREKEEPER, scopeType: ScopeType.STORE, storeId: 'store-2' } as any,
+        );
+
+        expect(auditService.logInTransaction).toHaveBeenCalledWith(
+          prisma._mockTx,
+          'keeper-2',
+          'RECEIVE_TRANSFER',
+          'INVENTORY',
+          'Received transfer TRF-001',
+          expect.objectContaining({
+            entityType: 'INVENTORY_TRANSFER',
+            entityId: 'transfer-1',
+            afterData: expect.objectContaining({ status: 'RECEIVED', quantity: 5 }),
+          }),
+        );
+    });
     it('rejects cancellation after dispatch because stock has already moved', async () => {
       prisma.inventoryTransfer.findUnique.mockResolvedValue({
         id: 'transfer-1',

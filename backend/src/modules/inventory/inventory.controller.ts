@@ -102,8 +102,8 @@ export class InventoryController {
   }
 
   @Post('adjustment')
-  @Roles(Role.STOREKEEPER, Role.STORE_MANAGER, Role.ADMINISTRATOR)
-  @ApiOperation({ summary: 'Stock Adjustment Audit (Storekeeper / Manager / Admin - UC11)' })
+  @Roles(Role.STORE_MANAGER, Role.ADMINISTRATOR)
+  @ApiOperation({ summary: 'Stock Adjustment Audit (Store Manager / Admin - UC11)' })
   adjustStock(@Req() req: any, @Body() dto: AdjustmentDto) {
     return this.inventoryService.adjustStock(req.user, dto);
   }

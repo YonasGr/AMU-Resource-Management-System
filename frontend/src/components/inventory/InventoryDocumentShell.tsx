@@ -3,12 +3,14 @@ import { AlertTriangle, CheckCircle2, History, LucideIcon } from 'lucide-react';
 import { PageHeader } from '../ui/PageHeader';
 
 export interface InventoryDocumentTab {
-  id: string;
+  id: InventoryTabId;
   label: string;
   icon: LucideIcon;
   activeClassName: string;
   count?: number;
 }
+
+export type InventoryTabId = 'receipt' | 'out' | 'return' | 'adjust' | 'transfer' | 'history';
 
 interface InventoryDocumentShellProps {
   title: string;
@@ -17,8 +19,8 @@ interface InventoryDocumentShellProps {
   breadcrumbs: Array<{ label: string; to?: string }>;
   headerActions?: React.ReactNode;
   tabs: InventoryDocumentTab[];
-  activeTab: string;
-  onTabChange: (tab: string) => void;
+  activeTab: InventoryTabId;
+  onTabChange: (tab: InventoryTabId) => void;
   feedback?: { type: 'success' | 'error'; message: string } | null;
   onDismissFeedback?: () => void;
   roleGuidance?: React.ReactNode;

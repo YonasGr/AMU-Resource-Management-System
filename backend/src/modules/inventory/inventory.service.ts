@@ -668,12 +668,36 @@ export class InventoryService {
           },
         });
       }
+      await this.auditService.logInTransaction(
+        tx,
+        user.id,
+        'APPROVE_CYCLE_COUNT',
+        'INVENTORY',
+        `Approved cycle count ${count.countCode}`,
+        {
+          actorRole: user.role,
+          entityType: 'CYCLE_COUNT',
+          entityId: count.id,
+          beforeData: {
+            status: CycleCountStatus.COUNTED,
+            lines: count.lines.map((line) => ({
+              lineId: line.id,
+              systemQuantity: line.systemQuantity,
+              physicalQuantity: line.physicalQuantity,
+              variance: line.variance,
+            })),
+          },
+          afterData: {
+            status: CycleCountStatus.APPROVED,
+            approvedById: user.id,
+          },
+        },
+      );
       return tx.cycleCount.findUnique({
         where: { id },
         include: { lines: { include: { material: true } }, store: true },
       });
     });
-    await this.auditService.log(user.id, 'APPROVE_CYCLE_COUNT', 'INVENTORY', `Approved cycle count ${count.countCode}`);
     return result;
   }
 
@@ -1188,28 +1212,28 @@ export class InventoryService {
         },
       });
 
+      await this.auditService.logInTransaction(
+        tx,
+        user.id,
+        'STOCK_ADJUSTMENT',
+        'INVENTORY',
+        `Stock audit adjusted "${material.name}" (${material.materialCode}) from ${currentRemaining} to ${dto.newQuantity} (Delta: ${diff >= 0 ? '+' : ''}${diff}). Reason code: "${dto.reasonCode}". Remarks: "${dto.remarks}" [Txn: ${txn.transactionCode}]`,
+        {
+          actorRole: user.role,
+          entityType: 'INVENTORY_TRANSACTION',
+          entityId: txn.id,
+          reason: dto.remarks,
+          source: dto.breakGlass ? 'break-glass' : 'api',
+          beforeData: { remainingQuantity: currentRemaining },
+          afterData: { remainingQuantity: dto.newQuantity, reasonCode: dto.reasonCode },
+        },
+      );
+
       return txn;
     });
 
     // Check low-stock after adjustment too
     await this.maybeAlertLowStock(dto.materialId, storeId);
-
-    // Audit Log
-    await this.auditService.log(
-      user.id,
-      'STOCK_ADJUSTMENT',
-      'INVENTORY',
-      `Stock audit adjusted "${material.name}" (${material.materialCode}) from ${currentRemaining} to ${dto.newQuantity} (Delta: ${diff >= 0 ? '+' : ''}${diff}). Reason code: "${dto.reasonCode}". Remarks: "${dto.remarks}" [Txn: ${transaction.transactionCode}]`,
-      {
-        actorRole: user.role,
-        entityType: 'INVENTORY_TRANSACTION',
-        entityId: transaction.id,
-        reason: dto.remarks,
-        source: dto.breakGlass ? 'break-glass' : 'api',
-        beforeData: { remainingQuantity: currentRemaining },
-        afterData: { remainingQuantity: dto.newQuantity, reasonCode: dto.reasonCode },
-      },
-    );
 
     return transaction;
   }

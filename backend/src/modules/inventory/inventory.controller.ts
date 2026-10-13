@@ -14,7 +14,6 @@ import {
   CreateReturnInspectionDto,
   InspectReturnDto,
   ReturnDto,
-  StockInDto,
   StockOutDto,
   SubmitCycleCountDto,
   TransferDto,
@@ -30,13 +29,6 @@ export class InventoryController {
     private readonly inventoryService: InventoryService,
     private readonly stockBalanceService: StockBalanceService,
   ) {}
-
-  @Post('stock-in')
-  @Roles(Role.STOREKEEPER, Role.STORE_MANAGER, Role.ADMINISTRATOR)
-  @ApiOperation({ summary: 'Receive Stock / Stock In (Storekeeper / Manager / Admin - UC8)' })
-  stockIn(@Req() req: any, @Body() dto: StockInDto) {
-    return this.inventoryService.stockIn(req.user, dto);
-  }
 
   @Post('receipts')
   @Roles(Role.STOREKEEPER, Role.STORE_MANAGER, Role.ADMINISTRATOR)

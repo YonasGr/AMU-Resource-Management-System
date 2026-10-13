@@ -8,6 +8,7 @@ export interface AuthUser {
   role: 'ADMINISTRATOR' | 'STORE_MANAGER' | 'STOREKEEPER' | 'AUDITOR' | 'REQUESTER';
   departmentId?: string | null;
   departmentName?: string | null;
+  storeId?: string | null;
 }
 
 interface AuthState {

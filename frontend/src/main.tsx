@@ -39,7 +39,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
               <Route
                 path="/inventory"
                 element={
-                  <ProtectedRoute allowedRoles={['STOREKEEPER', 'STORE_MANAGER', 'AUDITOR']} />
+                  <ProtectedRoute allowedRoles={['ADMINISTRATOR', 'STOREKEEPER', 'STORE_MANAGER', 'AUDITOR']} />
                 }
               >
                 <Route index element={<InventoryPage />} />

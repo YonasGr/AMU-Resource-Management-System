@@ -15,7 +15,79 @@ import {
   IsIn,
   IsBoolean,
 } from 'class-validator';
-import { InventoryCondition } from '@prisma/client';
+import { InventoryCondition, TransactionType } from '@prisma/client';
+
+export class InventoryTransactionQueryDto {
+  @IsEnum(TransactionType)
+  @IsOptional()
+  type?: TransactionType;
+
+  @IsUUID()
+  @IsOptional()
+  materialId?: string;
+
+  @IsUUID()
+  @IsOptional()
+  storeId?: string;
+
+  @IsUUID()
+  @IsOptional()
+  departmentId?: string;
+
+  @IsUUID()
+  @IsOptional()
+  employeeId?: string;
+
+  @IsUUID()
+  @IsOptional()
+  supplierId?: string;
+
+  @IsUUID()
+  @IsOptional()
+  actorId?: string;
+
+  @IsString()
+  @IsOptional()
+  lotNumber?: string;
+
+  @IsString()
+  @IsOptional()
+  batchNumber?: string;
+
+  @IsString()
+  @IsOptional()
+  serialNumber?: string;
+
+  @IsString()
+  @IsOptional()
+  search?: string;
+
+  @IsDateString()
+  @IsOptional()
+  from?: string;
+
+  @IsDateString()
+  @IsOptional()
+  to?: string;
+
+  @IsIn(['createdAt', 'quantity', 'transactionCode'])
+  @IsOptional()
+  sortBy?: 'createdAt' | 'quantity' | 'transactionCode';
+
+  @IsIn(['asc', 'desc'])
+  @IsOptional()
+  sortOrder?: 'asc' | 'desc';
+
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @IsOptional()
+  limit?: number;
+
+  @IsString()
+  @IsOptional()
+  cursor?: string;
+}
 
 export class BatchInventoryLineDto {
   @IsUUID()

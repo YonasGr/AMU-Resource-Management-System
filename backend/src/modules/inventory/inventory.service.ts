@@ -29,6 +29,7 @@ import {
   InspectGoodsReceiptDto,
   RejectGoodsReceiptDto,
   InspectReturnDto,
+  InventoryTransactionQueryDto,
   ReturnDto,
   StockInDto,
   StockOutDto,
@@ -1806,6 +1807,76 @@ export class InventoryService {
   }
 
   /** Get all inventory transactions with filter */
+  async findTransactionPage(user: SafeUser, query: InventoryTransactionQueryDto = {}) {
+    const visibilityWhere: Prisma.InventoryTransactionWhereInput =
+      this.accessControlService.getTransactionVisibilityWhere(user);
+    const where: Prisma.InventoryTransactionWhereInput = { ...visibilityWhere };
+
+    if (query.type) where.type = query.type;
+    if (query.materialId) where.materialId = query.materialId;
+    if (query.storeId) where.storeId = query.storeId;
+    if (query.departmentId) where.departmentId = query.departmentId;
+    if (query.employeeId) where.employeeId = query.employeeId;
+    if (query.supplierId) where.supplierId = query.supplierId;
+    if (query.actorId) where.issuedById = query.actorId;
+    if (query.lotNumber) where.lotNumber = { contains: query.lotNumber, mode: 'insensitive' };
+    if (query.batchNumber) where.batchNumber = { contains: query.batchNumber, mode: 'insensitive' };
+    if (query.serialNumber) where.serialNumber = { contains: query.serialNumber, mode: 'insensitive' };
+
+    if (query.from || query.to) {
+      where.createdAt = {
+        ...(query.from ? { gte: new Date(query.from) } : {}),
+        ...(query.to ? { lte: new Date(query.to) } : {}),
+      };
+    }
+
+    if (query.search?.trim()) {
+      const search = query.search.trim();
+      where.OR = [
+        { transactionCode: { contains: search, mode: 'insensitive' } },
+        { purpose: { contains: search, mode: 'insensitive' } },
+        { material: { name: { contains: search, mode: 'insensitive' } } },
+        { material: { materialCode: { contains: search, mode: 'insensitive' } } },
+        { issuedBy: { fullName: { contains: search, mode: 'insensitive' } } },
+      ];
+    }
+
+    const limit = Math.min(Math.max(query.limit ?? 50, 1), 200);
+    const sortBy = query.sortBy ?? 'createdAt';
+    const sortOrder = query.sortOrder ?? 'desc';
+    const orderBy =
+      sortBy === 'createdAt'
+        ? [{ createdAt: sortOrder }, { id: sortOrder }]
+        : [{ [sortBy]: sortOrder }, { id: 'desc' as const }];
+
+    const rows = await this.prisma.inventoryTransaction.findMany({
+      where,
+      take: limit + 1,
+      ...(query.cursor ? { cursor: { id: query.cursor }, skip: 1 } : {}),
+      include: {
+        material: { include: { category: true } },
+        store: true,
+        supplier: true,
+        employee: true,
+        department: true,
+        request: true,
+        requestItem: { select: { id: true, quantityIssued: true, quantityReturned: true } },
+        issuedBy: { select: { id: true, fullName: true } },
+        approvedBy: { select: { id: true, fullName: true } },
+      },
+      orderBy,
+    });
+
+    const hasMore = rows.length > limit;
+    const items = hasMore ? rows.slice(0, limit) : rows;
+    return {
+      items,
+      nextCursor: hasMore ? items[items.length - 1]?.id ?? null : null,
+      asOf: new Date().toISOString(),
+    };
+  }
+
+  /** Legacy unpaginated transaction query retained for existing internal consumers. */
   async findAllTransactions(
     user: SafeUser,
     query?: {

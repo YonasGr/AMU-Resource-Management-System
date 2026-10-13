@@ -1359,6 +1359,7 @@ describe('InventoryService', () => {
         include: expect.any(Object),
         orderBy: { createdAt: 'desc' },
       });
+
     });
 
     it('should query all transactions without filter if query is empty', async () => {
@@ -1383,6 +1384,52 @@ describe('InventoryService', () => {
         where: {},
         include: expect.any(Object),
         orderBy: { createdAt: 'desc' },
+      });
+    });
+
+    describe('findTransactionPage()', () => {
+      it('returns a cursor page with server-side filters and freshness metadata', async () => {
+        prisma.inventoryTransaction.findMany.mockResolvedValue([
+          { id: 'txn-1', transactionCode: 'TXN-IN-1', type: TransactionType.STOCK_IN },
+          { id: 'txn-2', transactionCode: 'TXN-IN-2', type: TransactionType.STOCK_IN },
+        ]);
+
+        const result = await service.findTransactionPage(
+          {
+            id: 'manager-1',
+            fullName: 'Global Manager',
+            email: 'manager@example.com',
+            phone: null,
+            role: Role.STORE_MANAGER,
+            status: UserStatus.ACTIVE,
+            scopeType: ScopeType.GLOBAL,
+            departmentId: null,
+            storeId: null,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          },
+          {
+            type: TransactionType.STOCK_IN,
+            materialId: 'mat-uuid-1',
+            search: 'paper',
+            limit: 1,
+          },
+        );
+
+        expect(result.items).toHaveLength(1);
+        expect(result.nextCursor).toBe('txn-1');
+        expect(result.asOf).toEqual(expect.any(String));
+        expect(prisma.inventoryTransaction.findMany).toHaveBeenCalledWith(
+          expect.objectContaining({
+            where: expect.objectContaining({
+              type: TransactionType.STOCK_IN,
+              materialId: 'mat-uuid-1',
+              OR: expect.any(Array),
+            }),
+            take: 2,
+            orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+          }),
+        );
       });
     });
   });

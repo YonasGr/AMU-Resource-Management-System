@@ -774,8 +774,32 @@ describe('InventoryService', () => {
           newQuantity: 0,
           reasonCode: 'LOSS' as const,
           remarks: 'Administrator-approved large variance',
+          breakGlass: true,
         }),
       ).resolves.toBeDefined();
+    });
+
+    it('requires explicit break-glass authorization for large administrator adjustments', async () => {
+      prisma.material.findUnique.mockResolvedValueOnce(mockMaterial);
+      prisma.stockBalance.findUnique.mockResolvedValueOnce({
+        remainingQuantity: 30,
+        reservedQuantity: 0,
+      });
+
+      await expect(
+        service.adjustStock({
+          id: 'admin-1',
+          role: Role.ADMINISTRATOR,
+          scopeType: ScopeType.GLOBAL,
+          storeId: null,
+        } as any, {
+          materialId: 'mat-uuid-1',
+          storeId: 'legacy-store',
+          newQuantity: 0,
+          reasonCode: 'LOSS' as const,
+          remarks: 'Missing stock requires escalation',
+        }),
+      ).rejects.toThrow('break-glass authorization');
     });
   });
 
@@ -881,6 +905,12 @@ describe('InventoryService', () => {
         'STOCK_ADJUSTMENT',
         'INVENTORY',
         expect.stringContaining('Delta: -2'),
+        expect.objectContaining({
+          actorRole: Role.STORE_MANAGER,
+          source: 'api',
+          beforeData: { remainingQuantity: 30 },
+          afterData: { remainingQuantity: 28, reasonCode: 'COUNT_VARIANCE' },
+        }),
       );
     });
 
@@ -899,6 +929,7 @@ describe('InventoryService', () => {
         newQuantity: 4,
         reasonCode: 'DAMAGE' as const,
         remarks: 'Water damage during warehouse roof inspection',
+        breakGlass: true,
       };
 
       await service.adjustStock({

@@ -32,6 +32,7 @@ import {
   InventoryDocumentTab,
 } from '../../components/inventory/InventoryDocumentShell';
 import { ReceivingWorkspace } from '../../components/inventory/ReceivingWorkspace';
+import { StockOutWorkspace } from '../../components/inventory/StockOutWorkspace';
 
 export default function InventoryPage() {
   const queryClient = useQueryClient();
@@ -461,99 +462,26 @@ export default function InventoryPage() {
               )}
 
                 {activeTab === 'out' && (
-                  <form onSubmit={handleStockOutSubmit} className="space-y-4">
-                    <div>
-                      <Label required>Select Material</Label>
-                      <Select
-                        required
-                        value={materialId}
-                        onChange={(e) => setMaterialId(e.target.value)}
-                      >
-                        <option value="">Choose item to issue...</option>
-                        {materials?.map((m: any) => (
-                          <option key={m.id} value={m.id}>
-                            {m.name} ({m.materialCode}) — Avail: {m.stockSummary?.remainingQuantity ?? 0} {m.unit}s
-                          </option>
-                        ))}
-                      </Select>
-                    </div>
-
-                    <div>
-                      <Label required>Quantity to Issue</Label>
-                      <Input
-                        type="number"
-                        required
-                        min={1}
-                        value={quantity}
-                        onChange={(e) => setQuantity(Number(e.target.value))}
-                      />
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      <div>
-                        <Label>Recipient Employee</Label>
-                        <Select
-                          value={employeeId}
-                          onChange={(e) => setEmployeeId(e.target.value)}
-                        >
-                          <option value="">Select Employee...</option>
-                          {employees?.map((emp: any) => (
-                            <option key={emp.id} value={emp.id}>
-                              {emp.fullName} ({emp.department?.name})
-                            </option>
-                          ))}
-                        </Select>
-                      </div>
-
-                      <div>
-                        <Label>Recipient Department</Label>
-                        <Select
-                          value={departmentId}
-                          onChange={(e) => setDepartmentId(e.target.value)}
-                        >
-                          <option value="">Select Department...</option>
-                          {departments?.map((d: any) => (
-                            <option key={d.id} value={d.id}>
-                              {d.name} ({d.code})
-                            </option>
-                          ))}
-                        </Select>
-                      </div>
-                    </div>
-
-                    <div>
-                      <Label>Purpose of Direct Issue</Label>
-                      <Input
-                        placeholder="e.g. Department office workstation setup"
-                        value={purpose}
-                        onChange={(e) => setPurpose(e.target.value)}
-                      />
-                    </div>
-
-                    <div>
-                      <Label>Remarks</Label>
-                      <Textarea
-                        rows={2}
-                        placeholder="Storekeeper notes or authorization code..."
-                        value={remarks}
-                        onChange={(e) => setRemarks(e.target.value)}
-                      />
-                    </div>
-
-                    <div className="pt-2">
-                      <Button
-                        type="submit"
-                        variant="primary"
-                        size="lg"
-                        className="w-full"
-                        disabled={!isKeeper || stockOutMutation.isPending}
-                        isLoading={stockOutMutation.isPending}
-                        leftIcon={<ArrowUpRight className="h-4 w-4" />}
-                      >
-                        Confirm Stock Out & Issue
-                      </Button>
-                    </div>
-                  </form>
+                  <StockOutWorkspace
+                    materials={materials}
+                    employees={employees}
+                    departments={departments}
+                    materialId={materialId}
+                    quantity={quantity}
+                    employeeId={employeeId}
+                    departmentId={departmentId}
+                    purpose={purpose}
+                    remarks={remarks}
+                    isKeeper={isKeeper}
+                    isPending={stockOutMutation.isPending}
+                    onMaterialChange={setMaterialId}
+                    onQuantityChange={setQuantity}
+                    onEmployeeChange={setEmployeeId}
+                    onDepartmentChange={setDepartmentId}
+                    onPurposeChange={setPurpose}
+                    onRemarksChange={setRemarks}
+                    onSubmit={handleStockOutSubmit}
+                  />
                 )}
 
                 {activeTab === 'return' && (

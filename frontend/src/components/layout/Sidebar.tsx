@@ -89,7 +89,7 @@ export function Sidebar({ isOpen = false, onNavigate }: { isOpen?: boolean; onNa
           to: '/inventory',
           label: 'Inventory Operations',
           icon: Repeat,
-          roles: ['STOREKEEPER', 'STORE_MANAGER', 'AUDITOR'],
+          roles: ['ADMINISTRATOR', 'STOREKEEPER', 'STORE_MANAGER', 'AUDITOR'],
         },
       ],
     },

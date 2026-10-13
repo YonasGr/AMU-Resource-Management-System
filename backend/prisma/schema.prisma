@@ -655,7 +655,7 @@ model AuditLog {
   module        String
   entityType    String?  @map("entity_type")
   entityId      String?  @map("entity_id")
-  correlationId String   @default(uuid()) @map("correlation_id")
+  correlationId String   @unique @default(uuid()) @map("correlation_id")
   reversalOfId  String?  @map("reversal_of_id")
   reversalOf    AuditLog? @relation("AuditLogReversal", fields: [reversalOfId], references: [id])
   reversals     AuditLog[] @relation("AuditLogReversal")

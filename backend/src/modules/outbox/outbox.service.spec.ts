@@ -136,6 +136,34 @@ describe('OutboxService', () => {
     expect(outboxEvent.update).not.toHaveBeenCalled();
   });
 
+  it('treats duplicate audit projection delivery as already processed', async () => {
+    const event = {
+      id: 'event-1',
+      eventKey: 'key-1',
+      eventType: 'AUDIT_LOG',
+      payload: { userId: null, action: 'CREATE', module: 'requests', correlationId: 'correlation-1' },
+      status: 'PENDING' as const,
+      attempts: 1,
+    };
+    outboxEvent.findMany.mockResolvedValue([event]);
+    outboxEvent.updateMany.mockResolvedValue({ count: 1 });
+    outboxEvent.update.mockResolvedValue({});
+    prisma.auditLog.create.mockRejectedValue(
+      Object.assign(new Error('Unique constraint failed'), { code: 'P2002' }),
+    );
+
+    await service.processPending();
+
+    expect(outboxEvent.update).toHaveBeenCalledWith({
+      where: { id: 'event-1' },
+      data: {
+        status: 'PROCESSED',
+        processedAt: expect.any(Date),
+        lastError: null,
+      },
+    });
+  });
+
   it('marks failed events for retry with the processing error', async () => {
     const event = {
       id: 'event-1',

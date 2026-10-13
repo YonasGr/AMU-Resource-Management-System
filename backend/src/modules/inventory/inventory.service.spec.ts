@@ -553,6 +553,18 @@ describe('InventoryService', () => {
           }),
         }),
       );
+      expect(auditService.logInTransaction).toHaveBeenCalledWith(
+        prisma._mockTx,
+        'keeper-1',
+        'APPROVE_CYCLE_COUNT',
+        'INVENTORY',
+        'Approved cycle count CC-12345678-123',
+        expect.objectContaining({
+          entityType: 'CYCLE_COUNT',
+          entityId: 'count-1',
+          afterData: expect.objectContaining({ status: 'APPROVED' }),
+        }),
+      );
     });
 
     it('prevents the cycle count creator from approving its variance', async () => {
@@ -1050,7 +1062,8 @@ describe('InventoryService', () => {
         data: { remainingQuantity: { increment: -2 } },
       });
 
-      expect(auditService.log).toHaveBeenCalledWith(
+      expect(auditService.logInTransaction).toHaveBeenCalledWith(
+        prisma._mockTx,
         'manager-1',
         'STOCK_ADJUSTMENT',
         'INVENTORY',

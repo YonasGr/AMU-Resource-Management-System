@@ -13,4 +13,10 @@ export class DashboardController {
   getStats() {
     return this.dashboardService.getStats();
   }
+
+  @Get('exceptions')
+  @ApiOperation({ summary: 'Get actionable inventory exception queues' })
+  getExceptions() {
+    return this.dashboardService.getExceptions();
+  }
 }

@@ -627,7 +627,7 @@ describe('InventoryService', () => {
         .mockResolvedValueOnce(mockMaterial)
         .mockResolvedValueOnce({
           ...mockMaterial,
-          stockSummary: { ...mockMaterial.stockSummary, remainingQuantity: 5 },
+          stockBalances: [{ remainingQuantity: 5 }],
         });
 
       const dto = {
@@ -744,7 +744,7 @@ describe('InventoryService', () => {
         .mockResolvedValueOnce(mockMaterial)
         .mockResolvedValueOnce({
           ...mockMaterial,
-          stockSummary: { ...mockMaterial.stockSummary, remainingQuantity: 28 },
+          stockBalances: [{ remainingQuantity: 28 }],
         });
 
       const dto = {
@@ -760,7 +760,7 @@ describe('InventoryService', () => {
 
       expect(prisma._mockTx.stockSummary.update).toHaveBeenCalledWith({
         where: { materialId: 'mat-uuid-1' },
-        data: { remainingQuantity: 28 },
+        data: { remainingQuantity: { increment: -2 } },
       });
 
       expect(auditService.log).toHaveBeenCalledWith(
@@ -777,7 +777,7 @@ describe('InventoryService', () => {
         .mockResolvedValueOnce(mockMaterial)
         .mockResolvedValueOnce({
           ...mockMaterial,
-          stockSummary: { ...mockMaterial.stockSummary, remainingQuantity: 4 },
+          stockBalances: [{ remainingQuantity: 4 }],
         });
 
       const dto = {

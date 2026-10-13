@@ -49,4 +49,39 @@ describe('AuditService', () => {
       expect.objectContaining({ correlationId: 'correlation-1', source: 'job' }),
     );
   });
+
+  it('writes an audit outbox event through the supplied transaction client', async () => {
+    const outboxEvent = { createMany: jest.fn().mockResolvedValue({ count: 1 }) };
+    const service = new AuditService({} as never, {} as never);
+
+    await service.logInTransaction(
+      { outboxEvent } as never,
+      'user-1',
+      'POST_GOODS_RECEIPT',
+      'INVENTORY',
+      'Posted receipt',
+      {
+        actorRole: 'STORE_MANAGER',
+        entityType: 'GOODS_RECEIPT',
+        entityId: 'receipt-1',
+        beforeData: { status: 'INSPECTED' },
+        afterData: { status: 'POSTED' },
+      },
+    );
+
+    expect(outboxEvent.createMany).toHaveBeenCalledWith({
+      data: [expect.objectContaining({
+        eventKey: expect.any(String),
+        eventType: 'AUDIT_LOG',
+        payload: expect.objectContaining({
+          userId: 'user-1',
+          action: 'POST_GOODS_RECEIPT',
+          entityType: 'GOODS_RECEIPT',
+          entityId: 'receipt-1',
+          correlationId: expect.any(String),
+        }),
+      })],
+      skipDuplicates: true,
+    });
+  });
 });

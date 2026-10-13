@@ -419,13 +419,31 @@ export class InventoryService {
           data: { status: remaining === 0 ? 'RECEIVED' : 'PARTIALLY_RECEIVED' },
         });
       }
-      return tx.goodsReceipt.update({
+      const postedReceipt = await tx.goodsReceipt.update({
         where: { id },
         data: {},
         include: { material: true, store: true, supplier: true },
       });
+      await this.auditService.logInTransaction(
+        tx,
+        user.id,
+        'POST_GOODS_RECEIPT',
+        'INVENTORY',
+        `Posted goods receipt ${receipt.receiptCode}`,
+        {
+          actorRole: user.role,
+          entityType: 'GOODS_RECEIPT',
+          entityId: receipt.id,
+          beforeData: { status: receipt.status },
+          afterData: {
+            status: 'POSTED',
+            quantityAccepted: receipt.quantityAccepted,
+            transactionCode,
+          },
+        },
+      );
+      return postedReceipt;
     }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
-    await this.auditService.log(user.id, 'POST_GOODS_RECEIPT', 'INVENTORY', `Posted goods receipt ${receipt.receiptCode}`);
     return posted;
   }
 

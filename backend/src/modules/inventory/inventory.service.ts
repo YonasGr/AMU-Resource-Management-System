@@ -934,19 +934,27 @@ export class InventoryService {
         },
       });
 
+      await this.auditService.logInTransaction(
+        tx,
+        user.id,
+        'STOCK_OUT',
+        'INVENTORY',
+        `Issued ${dto.quantity} ${material.unit}(s) of "${material.name}" (${material.materialCode}) [Txn: ${txn.transactionCode}]`,
+        {
+          actorRole: user.role,
+          entityType: 'INVENTORY_TRANSACTION',
+          entityId: txn.id,
+          reason: dto.remarks,
+          beforeData: { availableQuantity: available },
+          afterData: { availableQuantity: available - dto.quantity, quantityIssued: dto.quantity },
+        },
+      );
+
       return txn;
     });
 
     // Check if stock fell below minimum after this operation
     await this.maybeAlertLowStock(dto.materialId, storeId);
-
-    // Audit Log
-    await this.auditService.log(
-      user.id,
-      'STOCK_OUT',
-      'INVENTORY',
-      `Issued ${dto.quantity} ${material.unit}(s) of "${material.name}" (${material.materialCode}) [Txn: ${transaction.transactionCode}]`,
-    );
 
     return transaction;
   }
@@ -1064,16 +1072,27 @@ export class InventoryService {
         },
       });
 
+      await this.auditService.logInTransaction(
+        tx,
+        user.id,
+        'RETURN',
+        'INVENTORY',
+        `Accepted return of ${dto.quantity} ${material.unit}(s) of "${material.name}" (${material.materialCode}) for request ${requestItem.request.requestNumber} [Txn: ${txn.transactionCode}]`,
+        {
+          actorRole: user.role,
+          entityType: 'INVENTORY_TRANSACTION',
+          entityId: txn.id,
+          reason: dto.remarks,
+          beforeData: { quantityReturned: requestItem.quantityReturned },
+          afterData: {
+            quantityReturned: requestItem.quantityReturned + dto.quantity,
+            quantityAcceptedToStock: dto.quantity,
+          },
+        },
+      );
+
       return txn;
     });
-
-    // Audit Log
-    await this.auditService.log(
-      user.id,
-      'RETURN',
-      'INVENTORY',
-      `Accepted return of ${dto.quantity} ${material.unit}(s) of "${material.name}" (${material.materialCode}) for request ${requestItem.request.requestNumber} [Txn: ${transaction.transactionCode}]`,
-    );
 
     return transaction;
   }

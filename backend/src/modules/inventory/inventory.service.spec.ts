@@ -796,11 +796,16 @@ describe('InventoryService', () => {
         }),
       );
 
-      expect(auditService.log).toHaveBeenCalledWith(
+      expect(auditService.logInTransaction).toHaveBeenCalledWith(
+        prisma._mockTx,
         'keeper-1',
         'STOCK_OUT',
         'INVENTORY',
         expect.stringContaining('Issued 15 Ream(s) of "A4 Printing Paper"'),
+        expect.objectContaining({
+          entityType: 'INVENTORY_TRANSACTION',
+          afterData: expect.objectContaining({ availableQuantity: 15, quantityIssued: 15 }),
+        }),
       );
 
       // Should not trigger low stock alert since remaining (15) >= minimumStock (10)
@@ -986,11 +991,16 @@ describe('InventoryService', () => {
         }),
       );
 
-      expect(auditService.log).toHaveBeenCalledWith(
+      expect(auditService.logInTransaction).toHaveBeenCalledWith(
+        prisma._mockTx,
         'keeper-1',
         'RETURN',
         'INVENTORY',
         expect.stringContaining('Accepted return of 5 Ream(s) of "A4 Printing Paper"'),
+        expect.objectContaining({
+          entityType: 'INVENTORY_TRANSACTION',
+          afterData: expect.objectContaining({ quantityReturned: 5, quantityAcceptedToStock: 5 }),
+        }),
       );
     });
 

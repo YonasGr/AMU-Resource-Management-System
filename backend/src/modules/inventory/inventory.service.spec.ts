@@ -771,6 +771,7 @@ describe('InventoryService', () => {
 
       expect(prisma.$transaction).not.toHaveBeenCalled();
       expect(prisma._mockTx.stockBalance.updateMany).not.toHaveBeenCalled();
+      expect(auditService.logInTransaction).not.toHaveBeenCalled();
     });
 
     it('should successfully issue stock and decrement remaining balance', async () => {
@@ -861,6 +862,7 @@ describe('InventoryService', () => {
       ).rejects.toThrow(BadRequestException);
 
       expect(prisma._mockTx.inventoryTransaction.create).not.toHaveBeenCalled();
+      expect(auditService.logInTransaction).not.toHaveBeenCalled();
     });
 
     it('returns a typed conflict when the aggregate summary changes during issue', async () => {
@@ -870,6 +872,7 @@ describe('InventoryService', () => {
       await expect(
         service.stockOut('keeper-1', { materialId: 'mat-uuid-1', quantity: 5 }),
       ).rejects.toBeInstanceOf(StockConflictException);
+      expect(auditService.logInTransaction).not.toHaveBeenCalled();
     });
 
     it('should throw NotFoundException if material does not exist', async () => {

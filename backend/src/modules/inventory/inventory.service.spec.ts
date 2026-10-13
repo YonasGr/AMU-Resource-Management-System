@@ -625,6 +625,8 @@ describe('InventoryService', () => {
         quantity: 3,
         status: 'INSPECTED',
         disposition: 'ACCEPT_TO_STOCK',
+        createdById: 'requester-1',
+        inspectedById: 'inspector-1',
         requestItem: { quantityIssued: 10, quantityReturned: 2 },
       });
 
@@ -664,6 +666,8 @@ describe('InventoryService', () => {
         quantity: 3,
         status: 'INSPECTED',
         disposition: 'QUARANTINE',
+        createdById: 'requester-1',
+        inspectedById: 'inspector-1',
         requestItem: { quantityIssued: 10, quantityReturned: 2 },
       });
 
@@ -675,6 +679,41 @@ describe('InventoryService', () => {
       expect(prisma._mockTx.materialRequestItem.updateMany).toHaveBeenCalled();
       expect(prisma._mockTx.stockBalance.upsert).not.toHaveBeenCalled();
       expect(prisma._mockTx.inventoryTransaction.create).not.toHaveBeenCalled();
+    });
+
+    it('prevents the return creator from inspecting the return', async () => {
+      prisma.materialReturn.findUnique.mockResolvedValue({
+        id: 'return-1',
+        storeId: 'store-1',
+        status: 'DRAFT',
+        createdById: 'keeper-1',
+      });
+
+      await expect(
+        service.inspectReturn('return-1', actor, { disposition: 'ACCEPT_TO_STOCK' }),
+      ).rejects.toThrow(ForbiddenException);
+      expect(prisma.materialReturn.update).not.toHaveBeenCalled();
+    });
+
+    it('prevents the creator or inspector from posting a return', async () => {
+      prisma.materialReturn.findUnique.mockResolvedValue({
+        id: 'return-1',
+        storeId: 'store-1',
+        status: 'INSPECTED',
+        disposition: 'ACCEPT_TO_STOCK',
+        createdById: 'keeper-1',
+        inspectedById: 'manager-1',
+        requestItem: { quantityIssued: 10, quantityReturned: 2 },
+      });
+
+      await expect(
+        service.postReturnInspection('return-1', {
+          ...actor,
+          id: 'manager-1',
+          role: Role.STORE_MANAGER,
+        }),
+      ).rejects.toThrow(ForbiddenException);
+      expect(prisma.$transaction).not.toHaveBeenCalled();
     });
   });
 

@@ -4,22 +4,12 @@ import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { OutboxService } from '../outbox/outbox.service';
 import { AuditQueryDto } from './dto/audit-query.dto';
-
-export interface AuditLogOptions {
-  actorRole?: string;
-  storeId?: string;
-  deviceId?: string;
-  entityType?: string;
-  entityId?: string;
-  correlationId?: string;
-  reversalOfId?: string;
-  reason?: string;
-  source?: string;
-  ipAddress?: string;
-  userAgent?: string;
-  beforeData?: Record<string, unknown>;
-  afterData?: Record<string, unknown>;
-}
+import {
+  AuditAction,
+  AuditLogOptions,
+  AuditModule,
+  createAuditEvent,
+} from './audit-event.contract';
 
 @Injectable()
 export class AuditService {
@@ -27,8 +17,8 @@ export class AuditService {
 
   async log(
     userId: string | null,
-    action: string,
-    module: string,
+    action: AuditAction,
+    module: AuditModule,
     details?: string,
     optionsOrIpAddress: AuditLogOptions | string = {},
   ) {
@@ -36,7 +26,37 @@ export class AuditService {
       typeof optionsOrIpAddress === 'string'
         ? { ipAddress: optionsOrIpAddress }
         : optionsOrIpAddress;
-    await this.outbox.enqueue('AUDIT_LOG', {
+    await this.outbox.enqueue('AUDIT_LOG', createAuditEvent({
+      userId,
+      action,
+      module,
+      details,
+      actorRole: options.actorRole,
+      storeId: options.storeId,
+      deviceId: options.deviceId,
+      entityType: options.entityType,
+      entityId: options.entityId,
+      correlationId: options.correlationId || randomUUID(),
+      reversalOfId: options.reversalOfId,
+      reason: options.reason,
+      source: options.source || 'api',
+      ipAddress: options.ipAddress,
+      userAgent: options.userAgent,
+      beforeData: options.beforeData,
+      afterData: options.afterData,
+    }));
+    return { queued: true };
+  }
+
+  async logInTransaction(
+    tx: Prisma.TransactionClient,
+    userId: string | null,
+    action: AuditAction,
+    module: AuditModule,
+    details?: string,
+    options: AuditLogOptions = {},
+  ) {
+    const payload = createAuditEvent({
       userId,
       action,
       module,
@@ -55,36 +75,6 @@ export class AuditService {
       beforeData: options.beforeData,
       afterData: options.afterData,
     });
-    return { queued: true };
-  }
-
-  async logInTransaction(
-    tx: Prisma.TransactionClient,
-    userId: string | null,
-    action: string,
-    module: string,
-    details?: string,
-    options: AuditLogOptions = {},
-  ) {
-    const payload = {
-      userId,
-      action,
-      module,
-      details,
-      actorRole: options.actorRole,
-      storeId: options.storeId,
-      deviceId: options.deviceId,
-      entityType: options.entityType,
-      entityId: options.entityId,
-      correlationId: options.correlationId || randomUUID(),
-      reversalOfId: options.reversalOfId,
-      reason: options.reason,
-      source: options.source || 'api',
-      ipAddress: options.ipAddress,
-      userAgent: options.userAgent,
-      beforeData: options.beforeData,
-      afterData: options.afterData,
-    };
     const jsonPayload = JSON.parse(JSON.stringify(payload)) as Prisma.InputJsonValue;
 
     await tx.outboxEvent.createMany({

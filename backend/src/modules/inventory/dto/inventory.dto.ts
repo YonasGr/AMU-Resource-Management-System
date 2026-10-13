@@ -13,6 +13,7 @@ import {
   IsDateString,
   IsEnum,
   IsIn,
+  IsBoolean,
 } from 'class-validator';
 import { InventoryCondition } from '@prisma/client';
 
@@ -340,6 +341,10 @@ export class AdjustmentDto {
   @IsString()
   @IsNotEmpty()
   remarks!: string;
+
+  @IsBoolean()
+  @IsOptional()
+  breakGlass?: boolean;
 }
 
 export class CreateCycleCountLineDto {

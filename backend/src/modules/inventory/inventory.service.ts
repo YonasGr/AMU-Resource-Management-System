@@ -1031,6 +1031,15 @@ export class InventoryService {
         `Adjustments greater than ${DIRECT_ADJUSTMENT_ADMIN_THRESHOLD} units require administrator approval`,
       );
     }
+    if (
+      user.role === Role.ADMINISTRATOR &&
+      Math.abs(diff) > DIRECT_ADJUSTMENT_ADMIN_THRESHOLD &&
+      dto.breakGlass !== true
+    ) {
+      throw new ForbiddenException(
+        'Large administrator adjustments require explicit break-glass authorization',
+      );
+    }
 
     const timeStamp = Date.now().toString().slice(-6);
     const rand = Math.floor(100 + Math.random() * 900);
@@ -1091,6 +1100,15 @@ export class InventoryService {
       'STOCK_ADJUSTMENT',
       'INVENTORY',
       `Stock audit adjusted "${material.name}" (${material.materialCode}) from ${currentRemaining} to ${dto.newQuantity} (Delta: ${diff >= 0 ? '+' : ''}${diff}). Reason code: "${dto.reasonCode}". Remarks: "${dto.remarks}" [Txn: ${transaction.transactionCode}]`,
+      {
+        actorRole: user.role,
+        entityType: 'INVENTORY_TRANSACTION',
+        entityId: transaction.id,
+        reason: dto.remarks,
+        source: dto.breakGlass ? 'break-glass' : 'api',
+        beforeData: { remainingQuantity: currentRemaining },
+        afterData: { remainingQuantity: dto.newQuantity, reasonCode: dto.reasonCode },
+      },
     );
 
     return transaction;

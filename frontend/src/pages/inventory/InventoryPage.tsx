@@ -61,6 +61,7 @@ export default function InventoryPage() {
   const [newQuantity, setNewQuantity] = useState(0);
   const [adjustReasonCode, setAdjustReasonCode] = useState('');
   const [adjustRemarks, setAdjustRemarks] = useState('');
+  const [breakGlass, setBreakGlass] = useState(false);
   const [returnRequestId, setReturnRequestId] = useState('');
   const [returnRequestItemId, setReturnRequestItemId] = useState('');
   const [returnQuantity, setReturnQuantity] = useState(1);
@@ -281,6 +282,7 @@ export default function InventoryPage() {
     setNewQuantity(0);
     setAdjustReasonCode('');
     setAdjustRemarks('');
+    setBreakGlass(false);
   };
 
   const handleStockInSubmit = (e: React.FormEvent) => {
@@ -342,6 +344,7 @@ export default function InventoryPage() {
       newQuantity: Number(newQuantity),
       reasonCode: adjustReasonCode,
       remarks: adjustRemarks,
+      breakGlass,
     });
   };
 
@@ -886,6 +889,23 @@ export default function InventoryPage() {
                         onChange={(e) => setAdjustRemarks(e.target.value)}
                       />
                     </div>
+
+                    {user?.role === 'ADMINISTRATOR' && (
+                      <label className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+                        <input
+                          type="checkbox"
+                          checked={breakGlass}
+                          onChange={(e) => setBreakGlass(e.target.checked)}
+                          className="mt-1"
+                        />
+                        <span>
+                          <strong>Break-glass authorization</strong>
+                          <span className="block text-xs">
+                            Required for adjustments exceeding 10 units. This action is highlighted in the audit trail.
+                          </span>
+                        </span>
+                      </label>
+                    )}
 
                     <div className="pt-2">
                       <Button

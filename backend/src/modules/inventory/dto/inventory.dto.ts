@@ -427,3 +427,12 @@ export class TransferDto {
   @IsOptional()
   expiryDate?: string;
 }
+
+export class CancelTransferDto {
+  @IsIn(['DUPLICATE_REQUEST', 'NO_LONGER_REQUIRED', 'DESTINATION_UNAVAILABLE', 'STOCK_CORRECTION', 'OTHER'])
+  reasonCode!: 'DUPLICATE_REQUEST' | 'NO_LONGER_REQUIRED' | 'DESTINATION_UNAVAILABLE' | 'STOCK_CORRECTION' | 'OTHER';
+
+  @IsString()
+  @IsNotEmpty()
+  remarks!: string;
+}

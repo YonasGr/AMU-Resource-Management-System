@@ -7,6 +7,7 @@ import {
 import { StockBalanceService } from './stock-balance.service';
 import {
   AdjustmentDto,
+  CancelTransferDto,
   CreateGoodsReceiptDto,
   CreateCycleCountDto,
   InspectGoodsReceiptDto,
@@ -125,6 +126,12 @@ export class InventoryController {
   @Roles(Role.STOREKEEPER, Role.STORE_MANAGER, Role.ADMINISTRATOR)
   receiveTransfer(@Req() req: any, @Param('id', ParseUUIDPipe) id: string) {
     return this.inventoryService.receiveTransfer(id, req.user);
+  }
+
+  @Post('transfer/:id/cancel')
+  @Roles(Role.STORE_MANAGER, Role.ADMINISTRATOR)
+  cancelTransfer(@Req() req: any, @Param('id', ParseUUIDPipe) id: string, @Body() dto: CancelTransferDto) {
+    return this.inventoryService.cancelTransfer(id, req.user, dto);
   }
 
   @Post('return-inspections')

@@ -40,6 +40,17 @@ describe('InventoryService', () => {
           createdAt: new Date(),
         })),
       },
+      inventoryTransfer: {
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+        findUnique: jest.fn().mockResolvedValue({
+          id: 'transfer-1',
+          transferCode: 'TRF-001',
+          materialId: 'mat-uuid-1',
+          sourceStoreId: 'store-1',
+          destinationStoreId: 'store-2',
+          status: 'CANCELLED',
+        }),
+      },
       goodsReceipt: {
         updateMany: jest.fn().mockResolvedValue({ count: 1 }),
         update: jest.fn().mockImplementation(({ data }) => ({
@@ -133,6 +144,9 @@ describe('InventoryService', () => {
             inventoryTransaction: {
               findUnique: jest.fn(),
               findMany: jest.fn(),
+            },
+            inventoryTransfer: {
+              findUnique: jest.fn(),
             },
             $transaction: jest.fn((callback) => callback(mockTx)),
             _mockTx: mockTx,
@@ -981,6 +995,89 @@ describe('InventoryService', () => {
 
       expect(prisma.material.findUnique).not.toHaveBeenCalled();
       expect(auditService.log).not.toHaveBeenCalled();
+    });
+
+    it('cancels a draft transfer with structured cancellation evidence', async () => {
+      const draftTransfer = {
+        id: 'transfer-1',
+        transferCode: 'TRF-001',
+        materialId: 'mat-uuid-1',
+        sourceStoreId: 'store-1',
+        destinationStoreId: 'store-2',
+        status: 'DRAFT',
+      };
+      prisma.inventoryTransfer.findUnique.mockResolvedValue(draftTransfer);
+
+      const result = await service.cancelTransfer(
+        'transfer-1',
+        {
+          id: 'manager-1',
+          role: Role.STORE_MANAGER,
+          scopeType: ScopeType.STORE,
+          storeId: 'store-1',
+        } as any,
+        {
+          reasonCode: 'NO_LONGER_REQUIRED',
+          remarks: 'Destination no longer needs this material',
+        },
+      );
+
+      expect(result).toEqual(expect.objectContaining({ status: 'CANCELLED' }));
+      expect(prisma._mockTx.inventoryTransfer.updateMany).toHaveBeenCalledWith({
+        where: { id: 'transfer-1', status: 'DRAFT' },
+        data: expect.objectContaining({
+          status: 'CANCELLED',
+          cancelledById: 'manager-1',
+          cancellationReasonCode: 'NO_LONGER_REQUIRED',
+          cancellationRemarks: 'Destination no longer needs this material',
+        }),
+      });
+      expect(auditService.log).toHaveBeenCalledWith(
+        'manager-1',
+        'CANCEL_TRANSFER',
+        'INVENTORY',
+        'Cancelled transfer TRF-001',
+        expect.objectContaining({
+          entityType: 'INVENTORY_TRANSFER',
+          entityId: 'transfer-1',
+          afterData: { status: 'CANCELLED', reasonCode: 'NO_LONGER_REQUIRED' },
+        }),
+      );
+    });
+
+    it('rejects cancellation after dispatch because stock has already moved', async () => {
+      prisma.inventoryTransfer.findUnique.mockResolvedValue({
+        id: 'transfer-1',
+        transferCode: 'TRF-001',
+        materialId: 'mat-uuid-1',
+        sourceStoreId: 'store-1',
+        destinationStoreId: 'store-2',
+        status: 'DISPATCHED',
+      });
+
+      await expect(
+        service.cancelTransfer(
+          'transfer-1',
+          {
+            id: 'manager-1',
+            role: Role.STORE_MANAGER,
+            scopeType: ScopeType.STORE,
+            storeId: 'store-1',
+          } as any,
+          { reasonCode: 'STOCK_CORRECTION', remarks: 'Incorrect transfer request' },
+        ),
+      ).rejects.toThrow('Only DRAFT transfers can be cancelled');
+      expect(prisma.$transaction).not.toHaveBeenCalled();
+    });
+
+    it('requires cancellation remarks', async () => {
+      await expect(
+        service.cancelTransfer('transfer-1', 'manager-1', {
+          reasonCode: 'OTHER',
+          remarks: '   ',
+        }),
+      ).rejects.toThrow('Transfer cancellation remarks are required');
+      expect(prisma.inventoryTransfer.findUnique).not.toHaveBeenCalled();
     });
 
   });

@@ -17,6 +17,7 @@ import { StockConflictException } from './stock-conflict.exception';
 import { SafeUser } from '../auth/decorators/current-user.decorator';
 import {
   AdjustmentDto,
+  CancelTransferDto,
   CreateCycleCountDto,
   CreateGoodsReceiptDto,
   CreateReturnInspectionDto,
@@ -1263,6 +1264,60 @@ export class InventoryService {
       });
     });
     await this.auditService.log(user.id, 'RECEIVE_TRANSFER', 'INVENTORY', `Received transfer ${transfer.transferCode}`);
+    return result;
+  }
+
+  async cancelTransfer(id: string, actor: SafeUser | string, dto: CancelTransferDto) {
+    const user = this.normalizeActor(actor);
+    if (!dto.remarks?.trim()) {
+      throw new BadRequestException('Transfer cancellation remarks are required');
+    }
+
+    const transfer = await this.prisma.inventoryTransfer.findUnique({ where: { id } });
+    if (!transfer) throw new NotFoundException(`Transfer ${id} not found`);
+    this.resolveStoreId(user, transfer.sourceStoreId);
+    if (transfer.status !== TransferStatus.DRAFT) {
+      throw new BadRequestException(`Only DRAFT transfers can be cancelled. Current status is ${transfer.status}`);
+    }
+
+    const result = await this.prisma.$transaction(async (tx) => {
+      const cancelled = await tx.inventoryTransfer.updateMany({
+        where: { id, status: TransferStatus.DRAFT },
+        data: {
+          status: TransferStatus.CANCELLED,
+          cancelledById: user.id,
+          cancelledAt: new Date(),
+          cancellationReasonCode: dto.reasonCode,
+          cancellationRemarks: dto.remarks.trim(),
+        },
+      });
+      if (cancelled.count !== 1) {
+        throw new StockConflictException('Transfer changed before cancellation; refresh and retry', {
+          operation: 'TRANSFER_CANCEL',
+          materialId: transfer.materialId,
+          storeId: transfer.sourceStoreId,
+        });
+      }
+      return tx.inventoryTransfer.findUnique({
+        where: { id },
+        include: { material: true, sourceStore: true, destinationStore: true },
+      });
+    });
+
+    await this.auditService.log(
+      user.id,
+      'CANCEL_TRANSFER',
+      'INVENTORY',
+      `Cancelled transfer ${transfer.transferCode}`,
+      {
+        actorRole: user.role,
+        entityType: 'INVENTORY_TRANSFER',
+        entityId: id,
+        reason: dto.remarks.trim(),
+        beforeData: { status: transfer.status },
+        afterData: { status: TransferStatus.CANCELLED, reasonCode: dto.reasonCode },
+      },
+    );
     return result;
   }
 

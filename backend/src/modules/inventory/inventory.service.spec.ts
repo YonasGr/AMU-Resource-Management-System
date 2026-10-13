@@ -453,6 +453,23 @@ describe('InventoryService', () => {
         }),
       );
     });
+
+    it('prevents the cycle count creator from approving its variance', async () => {
+      prisma.cycleCount.findUnique.mockResolvedValue({
+        id: 'count-1',
+        storeId: 'store-1',
+        createdById: 'keeper-1',
+        status: 'COUNTED',
+        lines: [],
+      });
+
+      await expect(
+        service.approveCycleCount('count-1', {
+          ...actor,
+          role: Role.STORE_MANAGER,
+        }),
+      ).rejects.toThrow(ForbiddenException);
+    });
   });
 
   describe('return inspections', () => {
@@ -791,7 +808,12 @@ describe('InventoryService', () => {
         reason: 'Physical inventory audit variance count',
       };
 
-      const result = await service.adjustStock('keeper-1', dto);
+      const result = await service.adjustStock({
+        id: 'manager-1',
+        role: Role.STORE_MANAGER,
+        scopeType: ScopeType.STORE,
+        storeId: 'legacy-store',
+      } as any, dto);
 
       expect(result.type).toBe(TransactionType.ADJUSTMENT);
       expect(result.quantity).toBe(2); // abs(28 - 30) = 2
@@ -802,7 +824,7 @@ describe('InventoryService', () => {
       });
 
       expect(auditService.log).toHaveBeenCalledWith(
-        'keeper-1',
+        'manager-1',
         'STOCK_ADJUSTMENT',
         'INVENTORY',
         expect.stringContaining('Delta: -2'),
@@ -824,7 +846,12 @@ describe('InventoryService', () => {
         reason: 'Water damage during warehouse roof inspection',
       };
 
-      await service.adjustStock('keeper-1', dto);
+      await service.adjustStock({
+        id: 'manager-1',
+        role: Role.STORE_MANAGER,
+        scopeType: ScopeType.STORE,
+        storeId: 'legacy-store',
+      } as any, dto);
 
       expect(notifications.createForUsers).toHaveBeenCalledWith(
         expect.any(Array),
@@ -839,7 +866,12 @@ describe('InventoryService', () => {
       prisma.material.findUnique.mockResolvedValue(null);
 
       await expect(
-        service.adjustStock('keeper-1', {
+        service.adjustStock({
+          id: 'manager-1',
+          role: Role.STORE_MANAGER,
+          scopeType: ScopeType.STORE,
+          storeId: 'legacy-store',
+        } as any, {
           materialId: 'non-existent',
           newQuantity: 10,
           reason: 'Count',

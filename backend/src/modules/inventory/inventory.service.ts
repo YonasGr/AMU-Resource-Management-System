@@ -535,6 +535,9 @@ export class InventoryService {
     const count = await this.prisma.cycleCount.findUnique({ where: { id }, include: { lines: true } });
     if (!count) throw new NotFoundException(`Cycle count ${id} not found`);
     this.resolveStoreId(user, count.storeId);
+    if (count.createdById === user.id) {
+      throw new ForbiddenException('The person who created a cycle count cannot approve its variance');
+    }
     if (count.status !== CycleCountStatus.COUNTED) {
       throw new BadRequestException(`Only COUNTED cycle counts can be approved. Current status is ${count.status}`);
     }
@@ -996,6 +999,9 @@ export class InventoryService {
   /** Stock Adjustment (Manual stock audit count adjustment) */
   async adjustStock(actor: SafeUser | string, dto: AdjustmentDto) {
     const user = this.normalizeActor(actor);
+    if (user.role !== Role.STORE_MANAGER && user.role !== Role.ADMINISTRATOR) {
+      throw new ForbiddenException('Direct stock adjustments require store manager approval');
+    }
     const storeId = this.resolveStoreId(user, dto.storeId);
     const material = await this.prisma.material.findUnique({
       where: { id: dto.materialId },

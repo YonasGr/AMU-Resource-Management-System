@@ -10,6 +10,7 @@ export interface AuditLogOptions {
   entityType?: string;
   entityId?: string;
   correlationId?: string;
+  reversalOfId?: string;
   reason?: string;
   source?: string;
   ipAddress?: string;
@@ -42,6 +43,7 @@ export class AuditService {
       entityType: options.entityType,
       entityId: options.entityId,
       correlationId: options.correlationId || randomUUID(),
+      reversalOfId: options.reversalOfId,
       reason: options.reason,
       source: options.source || 'api',
       ipAddress: options.ipAddress,
@@ -69,6 +71,7 @@ export class AuditService {
       entityType: options.entityType,
       entityId: options.entityId,
       correlationId: options.correlationId || randomUUID(),
+      reversalOfId: options.reversalOfId,
       reason: options.reason,
       source: options.source || 'api',
       ipAddress: options.ipAddress,

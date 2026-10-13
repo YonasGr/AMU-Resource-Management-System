@@ -11,6 +11,7 @@ type AuditPayload = {
   entityType?: string;
   entityId?: string;
   correlationId: string;
+  reversalOfId?: string;
   details?: string;
   reason?: string;
   source: string;

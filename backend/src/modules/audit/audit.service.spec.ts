@@ -50,6 +50,24 @@ describe('AuditService', () => {
     );
   });
 
+  it('preserves reversal linkage in structured audit payloads', async () => {
+    const outbox = { enqueue: jest.fn().mockResolvedValue({ count: 1 }) };
+    const service = new AuditService({} as never, outbox as never);
+
+    await service.log(null, 'REVERSE_STOCK_OUT', 'INVENTORY', 'Corrected issue', {
+      correlationId: 'correction-1',
+      reversalOfId: 'original-audit-1',
+    });
+
+    expect(outbox.enqueue).toHaveBeenCalledWith(
+      'AUDIT_LOG',
+      expect.objectContaining({
+        correlationId: 'correction-1',
+        reversalOfId: 'original-audit-1',
+      }),
+    );
+  });
+
   it('writes an audit outbox event through the supplied transaction client', async () => {
     const outboxEvent = { createMany: jest.fn().mockResolvedValue({ count: 1 }) };
     const service = new AuditService({} as never, {} as never);

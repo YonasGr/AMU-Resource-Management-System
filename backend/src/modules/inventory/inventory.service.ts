@@ -96,7 +96,7 @@ export class InventoryService {
       where: { id: materialId },
       include: { stockBalances: { where: { storeId }, take: 1 }, stockSummary: true },
     });
-    const balance = material?.stockBalances?.[0] ?? material?.stockSummary;
+    const balance = material?.stockBalances?.[0];
     if (!material || !balance) return;
 
     const { remainingQuantity } = balance;
@@ -978,7 +978,7 @@ export class InventoryService {
       await tx.stockSummary.update({
         where: { materialId: dto.materialId },
         data: {
-          remainingQuantity: dto.newQuantity,
+          remainingQuantity: { increment: diff },
         },
       });
 

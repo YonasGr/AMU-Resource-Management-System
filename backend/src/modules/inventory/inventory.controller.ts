@@ -4,6 +4,7 @@ import { Role } from '@prisma/client';
 import {
   InventoryService,
 } from './inventory.service';
+import { StockBalanceService } from './stock-balance.service';
 import {
   AdjustmentDto,
   CreateGoodsReceiptDto,
@@ -24,7 +25,10 @@ import { CurrentUser, SafeUser } from '../auth/decorators/current-user.decorator
 @ApiBearerAuth()
 @Controller('inventory')
 export class InventoryController {
-  constructor(private readonly inventoryService: InventoryService) {}
+  constructor(
+    private readonly inventoryService: InventoryService,
+    private readonly stockBalanceService: StockBalanceService,
+  ) {}
 
   @Post('stock-in')
   @Roles(Role.STOREKEEPER, Role.STORE_MANAGER, Role.ADMINISTRATOR)
@@ -158,5 +162,12 @@ export class InventoryController {
       employeeId,
       supplierId,
     });
+  }
+
+  @Get('reconciliation/stock-summaries')
+  @Roles(Role.ADMINISTRATOR, Role.AUDITOR)
+  @ApiOperation({ summary: 'Find aggregate stock summaries that diverge from store balances' })
+  findStockSummaryMismatches() {
+    return this.stockBalanceService.findSummaryMismatches();
   }
 }

@@ -1,12 +1,11 @@
 import { Body, Controller, Get, Param, ParseUUIDPipe, Post, Query, Req } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Role } from '@prisma/client';
-import {
-  InventoryService,
-} from './inventory.service';
+import { InventoryService } from './inventory.service';
 import { StockBalanceService } from './stock-balance.service';
 import {
   AdjustmentDto,
+  BatchInventoryMovementDto,
   CancelTransferDto,
   CreateGoodsReceiptDto,
   CreateCycleCountDto,
@@ -55,7 +54,11 @@ export class InventoryController {
 
   @Post('receipts/:id/reject')
   @Roles(Role.STORE_MANAGER, Role.ADMINISTRATOR)
-  rejectGoodsReceipt(@Req() req: any, @Param('id', ParseUUIDPipe) id: string, @Body() dto: RejectGoodsReceiptDto) {
+  rejectGoodsReceipt(
+    @Req() req: any,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: RejectGoodsReceiptDto,
+  ) {
     return this.inventoryService.rejectGoodsReceipt(id, req.user, dto);
   }
 
@@ -89,14 +92,28 @@ export class InventoryController {
 
   @Post('stock-out')
   @Roles(Role.STOREKEEPER, Role.STORE_MANAGER, Role.ADMINISTRATOR)
-  @ApiOperation({ summary: 'Issue Materials / Stock Out Direct (Storekeeper / Manager / Admin - UC9)' })
+  @ApiOperation({
+    summary: 'Issue Materials / Stock Out Direct (Storekeeper / Manager / Admin - UC9)',
+  })
   stockOut(@Req() req: any, @Body() dto: StockOutDto) {
     return this.inventoryService.stockOut(req.user, dto);
   }
 
+  @Post('batch')
+  @Roles(Role.STOREKEEPER, Role.STORE_MANAGER, Role.ADMINISTRATOR)
+  @ApiOperation({
+    summary: 'Process warehouse movement lines with per-line results and safe retries',
+  })
+  processBatch(@Req() req: any, @Body() dto: BatchInventoryMovementDto) {
+    return this.inventoryService.processBatch(req.user, dto);
+  }
+
   @Post('return')
   @Roles(Role.STOREKEEPER, Role.STORE_MANAGER, Role.ADMINISTRATOR)
-  @ApiOperation({ summary: 'Return materials against an issued request item (Storekeeper / Manager / Admin - UC10)' })
+  @ApiOperation({
+    summary:
+      'Return materials against an issued request item (Storekeeper / Manager / Admin - UC10)',
+  })
   returnMaterial(@Req() req: any, @Body() dto: ReturnDto) {
     return this.inventoryService.returnMaterial(req.user, dto);
   }
@@ -129,7 +146,11 @@ export class InventoryController {
 
   @Post('transfer/:id/cancel')
   @Roles(Role.STORE_MANAGER, Role.ADMINISTRATOR)
-  cancelTransfer(@Req() req: any, @Param('id', ParseUUIDPipe) id: string, @Body() dto: CancelTransferDto) {
+  cancelTransfer(
+    @Req() req: any,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: CancelTransferDto,
+  ) {
     return this.inventoryService.cancelTransfer(id, req.user, dto);
   }
 
@@ -141,7 +162,11 @@ export class InventoryController {
 
   @Post('return-inspections/:id/inspect')
   @Roles(Role.STORE_MANAGER, Role.ADMINISTRATOR)
-  inspectReturn(@Req() req: any, @Param('id', ParseUUIDPipe) id: string, @Body() dto: InspectReturnDto) {
+  inspectReturn(
+    @Req() req: any,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: InspectReturnDto,
+  ) {
     return this.inventoryService.inspectReturn(id, req.user, dto);
   }
 

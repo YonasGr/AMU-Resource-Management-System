@@ -17,6 +17,79 @@ import {
 } from 'class-validator';
 import { InventoryCondition } from '@prisma/client';
 
+export class BatchInventoryLineDto {
+  @IsUUID()
+  materialId!: string;
+
+  @IsString()
+  @IsNotEmpty()
+  idempotencyKey!: string;
+
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  quantity!: number;
+
+  @IsUUID()
+  @IsOptional()
+  supplierId?: string;
+
+  @IsUUID()
+  @IsOptional()
+  employeeId?: string;
+
+  @IsUUID()
+  @IsOptional()
+  departmentId?: string;
+
+  @IsUUID()
+  @IsOptional()
+  sourceStoreId?: string;
+
+  @IsUUID()
+  @IsOptional()
+  destinationStoreId?: string;
+
+  @IsString()
+  @IsOptional()
+  purpose?: string;
+
+  @IsString()
+  @IsOptional()
+  remarks?: string;
+
+  @IsString()
+  @IsOptional()
+  deliveryReference?: string;
+
+  @IsString()
+  @IsOptional()
+  lotNumber?: string;
+
+  @IsString()
+  @IsOptional()
+  batchNumber?: string;
+
+  @IsDateString()
+  @IsOptional()
+  expiryDate?: string;
+
+  @IsString()
+  @IsOptional()
+  serialNumber?: string;
+}
+
+export class BatchInventoryMovementDto {
+  @IsIn(['RECEIPT', 'STOCK_OUT', 'TRANSFER'])
+  operation!: 'RECEIPT' | 'STOCK_OUT' | 'TRANSFER';
+
+  @IsArray()
+  @ArrayMinSize(1)
+  @ValidateNested({ each: true })
+  @Type(() => BatchInventoryLineDto)
+  lines!: BatchInventoryLineDto[];
+}
+
 export class StockInDto {
   @IsUUID()
   materialId!: string;
@@ -162,8 +235,21 @@ export class InspectGoodsReceiptDto {
 }
 
 export class RejectGoodsReceiptDto {
-  @IsIn(['DAMAGED', 'INCORRECT_ITEM', 'OVER_DELIVERED', 'QUALITY_FAILURE', 'DUPLICATE_DELIVERY', 'OTHER'])
-  reasonCode!: 'DAMAGED' | 'INCORRECT_ITEM' | 'OVER_DELIVERED' | 'QUALITY_FAILURE' | 'DUPLICATE_DELIVERY' | 'OTHER';
+  @IsIn([
+    'DAMAGED',
+    'INCORRECT_ITEM',
+    'OVER_DELIVERED',
+    'QUALITY_FAILURE',
+    'DUPLICATE_DELIVERY',
+    'OTHER',
+  ])
+  reasonCode!:
+    | 'DAMAGED'
+    | 'INCORRECT_ITEM'
+    | 'OVER_DELIVERED'
+    | 'QUALITY_FAILURE'
+    | 'DUPLICATE_DELIVERY'
+    | 'OTHER';
 
   @IsString()
   @IsNotEmpty()
@@ -345,7 +431,8 @@ export class AdjustmentDto {
   newQuantity!: number;
 
   @IsIn(['COUNT_VARIANCE', 'DAMAGE', 'EXPIRY', 'LOSS', 'FOUND_STOCK', 'CORRECTION', 'OTHER'])
-  reasonCode!: 'COUNT_VARIANCE' | 'DAMAGE' | 'EXPIRY' | 'LOSS' | 'FOUND_STOCK' | 'CORRECTION' | 'OTHER';
+  reasonCode!:
+    'COUNT_VARIANCE' | 'DAMAGE' | 'EXPIRY' | 'LOSS' | 'FOUND_STOCK' | 'CORRECTION' | 'OTHER';
 
   @IsString()
   @IsNotEmpty()
@@ -403,6 +490,11 @@ export class TransferDto {
   @IsUUID()
   materialId!: string;
 
+  @IsString()
+  @IsNotEmpty()
+  @IsOptional()
+  idempotencyKey?: string;
+
   @IsUUID()
   sourceStoreId!: string;
 
@@ -438,8 +530,19 @@ export class TransferDto {
 }
 
 export class CancelTransferDto {
-  @IsIn(['DUPLICATE_REQUEST', 'NO_LONGER_REQUIRED', 'DESTINATION_UNAVAILABLE', 'STOCK_CORRECTION', 'OTHER'])
-  reasonCode!: 'DUPLICATE_REQUEST' | 'NO_LONGER_REQUIRED' | 'DESTINATION_UNAVAILABLE' | 'STOCK_CORRECTION' | 'OTHER';
+  @IsIn([
+    'DUPLICATE_REQUEST',
+    'NO_LONGER_REQUIRED',
+    'DESTINATION_UNAVAILABLE',
+    'STOCK_CORRECTION',
+    'OTHER',
+  ])
+  reasonCode!:
+    | 'DUPLICATE_REQUEST'
+    | 'NO_LONGER_REQUIRED'
+    | 'DESTINATION_UNAVAILABLE'
+    | 'STOCK_CORRECTION'
+    | 'OTHER';
 
   @IsString()
   @IsNotEmpty()

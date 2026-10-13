@@ -817,6 +817,7 @@ describe('InventoryService', () => {
         expect.stringContaining('Issued 15 Ream(s) of "A4 Printing Paper"'),
         expect.objectContaining({
           entityType: 'INVENTORY_TRANSACTION',
+          storeId: 'legacy-store',
           afterData: expect.objectContaining({ availableQuantity: 15, quantityIssued: 15 }),
         }),
       );

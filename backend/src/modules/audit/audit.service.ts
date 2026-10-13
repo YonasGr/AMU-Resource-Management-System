@@ -7,6 +7,8 @@ import { AuditQueryDto } from './dto/audit-query.dto';
 
 export interface AuditLogOptions {
   actorRole?: string;
+  storeId?: string;
+  deviceId?: string;
   entityType?: string;
   entityId?: string;
   correlationId?: string;
@@ -40,6 +42,8 @@ export class AuditService {
       module,
       details,
       actorRole: options.actorRole,
+      storeId: options.storeId,
+      deviceId: options.deviceId,
       entityType: options.entityType,
       entityId: options.entityId,
       correlationId: options.correlationId || randomUUID(),
@@ -68,6 +72,8 @@ export class AuditService {
       module,
       details,
       actorRole: options.actorRole,
+      storeId: options.storeId,
+      deviceId: options.deviceId,
       entityType: options.entityType,
       entityId: options.entityId,
       correlationId: options.correlationId || randomUUID(),
@@ -98,6 +104,8 @@ export class AuditService {
       action: query.action,
       module: query.module,
       actorRole: query.actorRole,
+      storeId: query.storeId,
+      deviceId: query.deviceId,
       userId: query.actorId,
       entityType: query.entityType,
       entityId: query.entityId,

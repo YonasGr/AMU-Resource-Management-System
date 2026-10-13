@@ -432,6 +432,7 @@ export class InventoryService {
         `Posted goods receipt ${receipt.receiptCode}`,
         {
           actorRole: user.role,
+          storeId: receipt.storeId,
           entityType: 'GOODS_RECEIPT',
           entityId: receipt.id,
           beforeData: { status: receipt.status },
@@ -676,6 +677,7 @@ export class InventoryService {
         `Approved cycle count ${count.countCode}`,
         {
           actorRole: user.role,
+          storeId: count.storeId,
           entityType: 'CYCLE_COUNT',
           entityId: count.id,
           beforeData: {
@@ -966,6 +968,7 @@ export class InventoryService {
         `Issued ${dto.quantity} ${material.unit}(s) of "${material.name}" (${material.materialCode}) [Txn: ${txn.transactionCode}]`,
         {
           actorRole: user.role,
+          storeId,
           entityType: 'INVENTORY_TRANSACTION',
           entityId: txn.id,
           reason: dto.remarks,
@@ -1104,6 +1107,7 @@ export class InventoryService {
         `Accepted return of ${dto.quantity} ${material.unit}(s) of "${material.name}" (${material.materialCode}) for request ${requestItem.request.requestNumber} [Txn: ${txn.transactionCode}]`,
         {
           actorRole: user.role,
+          storeId: requestStoreId,
           entityType: 'INVENTORY_TRANSACTION',
           entityId: txn.id,
           reason: dto.remarks,
@@ -1220,6 +1224,7 @@ export class InventoryService {
         `Stock audit adjusted "${material.name}" (${material.materialCode}) from ${currentRemaining} to ${dto.newQuantity} (Delta: ${diff >= 0 ? '+' : ''}${diff}). Reason code: "${dto.reasonCode}". Remarks: "${dto.remarks}" [Txn: ${txn.transactionCode}]`,
         {
           actorRole: user.role,
+          storeId,
           entityType: 'INVENTORY_TRANSACTION',
           entityId: txn.id,
           reason: dto.remarks,
@@ -1339,6 +1344,7 @@ export class InventoryService {
         `Dispatched transfer ${transfer.transferCode}`,
         {
           actorRole: user.role,
+          storeId: transfer.sourceStoreId,
           entityType: 'INVENTORY_TRANSFER',
           entityId: transfer.id,
           beforeData: { status: TransferStatus.DRAFT },
@@ -1406,6 +1412,7 @@ export class InventoryService {
         `Received transfer ${transfer.transferCode}`,
         {
           actorRole: user.role,
+          storeId: transfer.destinationStoreId,
           entityType: 'INVENTORY_TRANSFER',
           entityId: transfer.id,
           beforeData: { status: TransferStatus.DISPATCHED },

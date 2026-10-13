@@ -6,6 +6,8 @@ import { PrismaService } from '../../prisma/prisma.service';
 type AuditPayload = {
   userId: string | null;
   actorRole?: string;
+  storeId?: string;
+  deviceId?: string;
   action: string;
   module: string;
   entityType?: string;

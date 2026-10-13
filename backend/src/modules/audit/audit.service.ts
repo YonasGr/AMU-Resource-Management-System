@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { OutboxService } from '../outbox/outbox.service';
+import { AuditQueryDto } from './dto/audit-query.dto';
 
 export interface AuditLogOptions {
   actorRole?: string;
@@ -87,13 +88,47 @@ export class AuditService {
     });
   }
 
-  async findAll() {
-    return this.prisma.auditLog.findMany({
-      include: {
-        user: { select: { fullName: true, email: true, role: true } },
+  async findAll(query: AuditQueryDto = new AuditQueryDto()) {
+    const page = query.page ?? 1;
+    const pageSize = query.pageSize ?? 100;
+    const where: Prisma.AuditLogWhereInput = {
+      action: query.action,
+      module: query.module,
+      actorRole: query.actorRole,
+      userId: query.actorId,
+      entityType: query.entityType,
+      entityId: query.entityId,
+      correlationId: query.correlationId,
+      OR: query.search
+        ? [
+            { details: { contains: query.search, mode: 'insensitive' } },
+            { reason: { contains: query.search, mode: 'insensitive' } },
+          ]
+        : undefined,
+      createdAt: {
+        gte: query.from ? new Date(query.from) : undefined,
+        lte: query.to ? new Date(query.to) : undefined,
       },
-      orderBy: { createdAt: 'desc' },
-      take: 100,
-    });
+    };
+    const [items, total] = await this.prisma.$transaction([
+      this.prisma.auditLog.findMany({
+        where,
+        include: {
+          user: { select: { fullName: true, email: true, role: true } },
+        },
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+      }),
+      this.prisma.auditLog.count({ where }),
+    ]);
+
+    return {
+      items,
+      page,
+      pageSize,
+      total,
+      totalPages: Math.ceil(total / pageSize),
+    };
   }
 }

@@ -113,4 +113,51 @@ describe('AuditService', () => {
       }),
     );
   });
+
+  it('returns filtered audit pages with stable ordering and totals', async () => {
+    const findMany = jest.fn().mockResolvedValue([{ id: 'audit-1' }]);
+    const count = jest.fn().mockResolvedValue(3);
+    const prisma = {
+      auditLog: { findMany, count },
+      $transaction: jest.fn((operations: Promise<unknown>[]) => Promise.all(operations)),
+    };
+    const service = new AuditService(prisma as never, {} as never);
+
+    await expect(
+      service.findAll({
+        page: 2,
+        pageSize: 1,
+        action: 'STOCK_OUT',
+        actorId: '11111111-1111-4111-8111-111111111111',
+        entityType: 'INVENTORY_TRANSACTION',
+        search: 'issued',
+        from: '2026-10-01T00:00:00.000Z',
+        to: '2026-10-13T23:59:59.999Z',
+      }),
+    ).resolves.toEqual({
+      items: [{ id: 'audit-1' }],
+      page: 2,
+      pageSize: 1,
+      total: 3,
+      totalPages: 3,
+    });
+
+    expect(findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({
+        action: 'STOCK_OUT',
+        userId: '11111111-1111-4111-8111-111111111111',
+        entityType: 'INVENTORY_TRANSACTION',
+        OR: [
+          { details: { contains: 'issued', mode: 'insensitive' } },
+          { reason: { contains: 'issued', mode: 'insensitive' } },
+        ],
+      }),
+      skip: 1,
+      take: 1,
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+    }));
+    expect(count).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({ action: 'STOCK_OUT' }),
+    }));
+  });
 });

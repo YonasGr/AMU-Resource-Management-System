@@ -15,19 +15,22 @@ import {
   Truck,
   FileText,
   AlertTriangle,
-  CheckCircle2,
   QrCode,
   MapPin,
   Sparkles,
 } from 'lucide-react';
 import { api } from '../../lib/api';
 import { useAuthStore } from '../../store/auth.store';
-import { PageHeader } from '../../components/ui/PageHeader';
 import { Card, CardHeader, CardTitle, CardDescription, CardBody } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { Badge } from '../../components/ui/Badge';
 import { Input, Select, Label, Textarea, SearchInput } from '../../components/ui/Input';
 import { EmptyState } from '../../components/ui/EmptyState';
+import {
+  AuditorModeBadge,
+  InventoryDocumentShell,
+  InventoryDocumentTab,
+} from '../../components/inventory/InventoryDocumentShell';
 
 export default function InventoryPage() {
   const queryClient = useQueryClient();
@@ -362,153 +365,55 @@ export default function InventoryPage() {
     return matchesSearch && matchesType;
   });
 
+  const operationTabs: InventoryDocumentTab[] = [
+    ...(!isAuditor && canMutateStock
+      ? [
+          { id: 'receipt', label: 'Goods Receipt Draft', icon: ArrowDownLeft, activeClassName: 'bg-emerald-600' },
+          { id: 'out', label: 'Direct Stock Out', icon: ArrowUpRight, activeClassName: 'bg-cyan-600' },
+          { id: 'return', label: 'Request Returns', icon: RotateCcw, activeClassName: 'bg-amber-600' },
+          { id: 'adjust', label: 'Stock Adjustments', icon: Sliders, activeClassName: 'bg-purple-600' },
+          { id: 'transfer', label: 'Store Transfer', icon: ArrowRightLeft, activeClassName: 'bg-teal-700' },
+        ]
+      : []),
+    {
+      id: 'history',
+      label: 'Transaction History Ledger',
+      icon: History,
+      activeClassName: 'bg-brand-900',
+      count: transactions?.length ?? 0,
+    },
+  ];
+
   return (
-    <div className="space-y-6 animate-fade-in">
-      {/* Header */}
-      <PageHeader
-        title={isAuditor ? 'Inventory Audit Ledger' : 'Inventory Operations & Ledger'}
-        description={
-          isAuditor
-            ? 'Independent compliance inspection ledger of all university physical stock transactions, supplier deliveries, and departmental issuances.'
-            : 'Execute physical stock movements, supplier shipments, direct issues, departmental transfers, and audit adjustments.'
-        }
-        icon={Repeat}
-        breadcrumbs={[{ label: 'Home', to: '/' }, { label: 'Inventory Operations' }]}
-        actions={
-          isAuditor ? (
-            <div className="inline-flex items-center gap-2 rounded-xl bg-purple-500/10 px-3 py-1.5 text-xs font-bold text-purple-700 border border-purple-200">
-              <History className="h-4 w-4 text-purple-600" />
-              <span>Auditor Read-Only Inspection Mode</span>
+    <InventoryDocumentShell
+      title={isAuditor ? 'Inventory Audit Ledger' : 'Inventory Operations & Ledger'}
+      description={
+        isAuditor
+          ? 'Independent compliance inspection ledger of all university physical stock transactions, supplier deliveries, and departmental issuances.'
+          : 'Execute physical stock movements, supplier shipments, direct issues, departmental transfers, and audit adjustments.'
+      }
+      headerIcon={Repeat}
+      breadcrumbs={[{ label: 'Home', to: '/' }, { label: 'Inventory Operations' }]}
+      headerActions={isAuditor ? <AuditorModeBadge /> : undefined}
+      tabs={operationTabs}
+      activeTab={activeTab}
+      onTabChange={(tab) => handleTabChange(tab as typeof activeTab)}
+      feedback={feedback}
+      onDismissFeedback={() => setFeedback(null)}
+      roleGuidance={
+        !isKeeper && activeTab !== 'history' ? (
+          <div className="flex items-center gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-xs text-amber-900">
+            <AlertTriangle className="h-5 w-5 shrink-0 text-amber-600" />
+            <div>
+              <p className="font-bold">Store Operator Privilege Required for Execution</p>
+              <p className="mt-0.5 text-amber-700">
+                You are viewing this operation in preview mode as <strong>{user?.role?.replace('_', ' ')}</strong>. To record official stock movements, log in as <strong>Storekeeper</strong>, <strong>Store Manager</strong>, or <strong>Administrator</strong>.
+              </p>
             </div>
-          ) : undefined
-        }
-      />
-
-      {/* Action Tabs Toolbar */}
-      <div className="-mx-4 flex snap-x items-center gap-2 overflow-x-auto border-b border-slate-200/90 px-4 pb-3 sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0">
-        {!isAuditor && canMutateStock && (
-          <>
-            <button
-              type="button"
-              onClick={() => handleTabChange('receipt')}
-              className={`flex min-h-11 shrink-0 snap-start items-center gap-2 rounded-xl px-3 py-2 text-xs font-bold transition-all sm:px-4 ${
-                activeTab === 'receipt'
-                  ? 'bg-emerald-600 text-white shadow-xs'
-                  : 'bg-white text-slate-600 border border-slate-200/80 hover:bg-slate-50'
-              }`}
-            >
-              <ArrowDownLeft className="h-3.5 w-3.5" />
-              <span>Goods Receipt Draft</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => handleTabChange('out')}
-              className={`flex min-h-11 shrink-0 snap-start items-center gap-2 rounded-xl px-3 py-2 text-xs font-bold transition-all sm:px-4 ${
-                activeTab === 'out'
-                  ? 'bg-cyan-600 text-white shadow-xs'
-                  : 'bg-white text-slate-600 border border-slate-200/80 hover:bg-slate-50'
-              }`}
-            >
-              <ArrowUpRight className="h-3.5 w-3.5" />
-              <span>Direct Stock Out</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => handleTabChange('return')}
-              className={`flex min-h-11 shrink-0 snap-start items-center gap-2 rounded-xl px-3 py-2 text-xs font-bold transition-all sm:px-4 ${
-                activeTab === 'return'
-                  ? 'bg-amber-600 text-white shadow-xs'
-                  : 'bg-white text-slate-600 border border-slate-200/80 hover:bg-slate-50'
-              }`}
-            >
-              <RotateCcw className="h-3.5 w-3.5" />
-              <span>Request Returns</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => handleTabChange('adjust')}
-              className={`flex min-h-11 shrink-0 snap-start items-center gap-2 rounded-xl px-3 py-2 text-xs font-bold transition-all sm:px-4 ${
-                activeTab === 'adjust'
-                  ? 'bg-purple-600 text-white shadow-xs'
-                  : 'bg-white text-slate-600 border border-slate-200/80 hover:bg-slate-50'
-              }`}
-            >
-              <Sliders className="h-3.5 w-3.5" />
-              <span>Stock Adjustments</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => handleTabChange('transfer')}
-              className={`flex min-h-11 shrink-0 snap-start items-center gap-2 rounded-xl px-3 py-2 text-xs font-bold transition-all sm:px-4 ${
-                activeTab === 'transfer'
-                  ? 'bg-teal-700 text-white shadow-xs'
-                  : 'bg-white text-slate-600 border border-slate-200/80 hover:bg-slate-50'
-              }`}
-            >
-              <ArrowRightLeft className="h-3.5 w-3.5" />
-              <span>Store Transfer</span>
-            </button>
-          </>
-        )}
-
-        <button
-          type="button"
-          onClick={() => handleTabChange('history')}
-          className={`flex min-h-11 shrink-0 snap-start items-center gap-2 rounded-xl px-3 py-2 text-xs font-bold transition-all sm:px-4 ${
-            activeTab === 'history'
-              ? 'bg-brand-900 text-white shadow-xs'
-              : 'bg-white text-slate-600 border border-slate-200/80 hover:bg-slate-50'
-          }`}
-        >
-          <History className="h-3.5 w-3.5" />
-          <span>Transaction History Ledger</span>
-          <span className="rounded-full bg-slate-100/30 px-2 py-0.5 text-[10px] font-bold">
-            {transactions?.length ?? 0}
-          </span>
-        </button>
-      </div>
-
-      {/* Feedback Banner */}
-      {feedback && (
-        <div
-          className={`flex items-center gap-3 p-4 rounded-2xl border text-sm font-semibold animate-fade-in ${
-            feedback.type === 'success'
-              ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
-              : 'bg-coral-50 text-coral-800 border-coral-200'
-          }`}
-        >
-          {feedback.type === 'success' ? (
-            <CheckCircle2 className="h-5 w-5 text-emerald-600 shrink-0" />
-          ) : (
-            <AlertTriangle className="h-5 w-5 text-coral-600 shrink-0" />
-          )}
-          <span className="flex-1">{feedback.message}</span>
-          <button
-            type="button"
-            onClick={() => setFeedback(null)}
-            className="text-xs underline hover:no-underline opacity-80"
-          >
-            Dismiss
-          </button>
-        </div>
-      )}
-
-      {/* Non-keeper Role Guidance Banner */}
-      {!isKeeper && activeTab !== 'history' && (
-        <div className="p-4 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 text-xs flex items-center gap-3">
-          <AlertTriangle className="h-5 w-5 text-amber-600 shrink-0" />
-          <div>
-            <p className="font-bold">Store Operator Privilege Required for Execution</p>
-            <p className="mt-0.5 text-amber-700">
-              You are viewing this operation in preview mode as <strong>{user?.role?.replace('_', ' ')}</strong>. To record official stock movements, log in as <strong>Storekeeper</strong>, <strong>Store Manager</strong>, or <strong>Administrator</strong>.
-            </p>
           </div>
-        </div>
-      )}
+        ) : null
+      }
+    >
 
       {/* 2-Column Workflow for Active Form */}
       {activeTab !== 'history' ? (
@@ -1246,6 +1151,6 @@ export default function InventoryPage() {
           )}
         </Card>
       )}
-    </div>
+    </InventoryDocumentShell>
   );
 }

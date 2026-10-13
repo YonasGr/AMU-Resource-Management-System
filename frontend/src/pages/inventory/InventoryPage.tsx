@@ -34,6 +34,7 @@ import {
 import { ReceivingWorkspace } from '../../components/inventory/ReceivingWorkspace';
 import { StockOutWorkspace } from '../../components/inventory/StockOutWorkspace';
 import { ReturnsWorkspace, IssuedRequest } from '../../components/inventory/ReturnsWorkspace';
+import { AdjustmentWorkspace } from '../../components/inventory/AdjustmentWorkspace';
 
 export default function InventoryPage() {
   const queryClient = useQueryClient();
@@ -520,94 +521,23 @@ export default function InventoryPage() {
                 )}
 
                 {activeTab === 'adjust' && (
-                  <form onSubmit={handleAdjustSubmit} className="space-y-4">
-                    <div>
-                      <Label required>Select Material to Adjust</Label>
-                      <Select
-                        required
-                        value={materialId}
-                        onChange={(e) => setMaterialId(e.target.value)}
-                      >
-                        <option value="">Choose item for audit adjustment...</option>
-                        {materials?.map((m: any) => (
-                          <option key={m.id} value={m.id}>
-                            {m.name} ({m.materialCode}) — Current System Stock: {m.stockSummary?.remainingQuantity ?? 0} {m.unit}s
-                          </option>
-                        ))}
-                      </Select>
-                    </div>
-
-                    <div>
-                      <Label required>New Physical Stock Count</Label>
-                      <Input
-                        type="number"
-                        required
-                        min={0}
-                        value={newQuantity}
-                        onChange={(e) => setNewQuantity(Number(e.target.value))}
-                      />
-                    </div>
-
-                    <div>
-                      <Label required>Adjustment Reason Code</Label>
-                      <Select
-                        required
-                        value={adjustReasonCode}
-                        onChange={(e) => setAdjustReasonCode(e.target.value)}
-                      >
-                        <option value="">Choose a controlled reason...</option>
-                        <option value="COUNT_VARIANCE">Physical count variance</option>
-                        <option value="DAMAGE">Damaged stock</option>
-                        <option value="EXPIRY">Expired stock</option>
-                        <option value="LOSS">Stock loss</option>
-                        <option value="FOUND_STOCK">Found stock</option>
-                        <option value="CORRECTION">Data correction</option>
-                        <option value="OTHER">Other approved exception</option>
-                      </Select>
-                    </div>
-
-                    <div>
-                      <Label required>Operator Remarks</Label>
-                      <Textarea
-                        required
-                        rows={2}
-                        placeholder="Describe what was verified and why the adjustment is required"
-                        value={adjustRemarks}
-                        onChange={(e) => setAdjustRemarks(e.target.value)}
-                      />
-                    </div>
-
-                    {user?.role === 'ADMINISTRATOR' && (
-                      <label className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
-                        <input
-                          type="checkbox"
-                          checked={breakGlass}
-                          onChange={(e) => setBreakGlass(e.target.checked)}
-                          className="mt-1"
-                        />
-                        <span>
-                          <strong>Break-glass authorization</strong>
-                          <span className="block text-xs">
-                            Required for adjustments exceeding 10 units. This action is highlighted in the audit trail.
-                          </span>
-                        </span>
-                      </label>
-                    )}
-
-                    <div className="pt-2">
-                      <Button
-                        type="submit"
-                        variant="primary"
-                        size="lg"
-                        className="w-full bg-purple-600 hover:bg-purple-700 text-white"
-                        disabled={!canAdjustStock || adjustMutation.isPending}
-                        isLoading={adjustMutation.isPending}
-                        leftIcon={<Sliders className="h-4 w-4" />}
-                      >
-                        Confirm Stock Count Adjustment
-                      </Button>
-                    </div>
-                  </form>
+                  <AdjustmentWorkspace
+                    materials={materials}
+                    materialId={materialId}
+                    newQuantity={newQuantity}
+                    reasonCode={adjustReasonCode}
+                    remarks={adjustRemarks}
+                    breakGlass={breakGlass}
+                    canAdjust={canAdjustStock}
+                    isAdministrator={user?.role === 'ADMINISTRATOR'}
+                    isPending={adjustMutation.isPending}
+                    onMaterialChange={setMaterialId}
+                    onQuantityChange={setNewQuantity}
+                    onReasonCodeChange={setAdjustReasonCode}
+                    onRemarksChange={setAdjustRemarks}
+                    onBreakGlassChange={setBreakGlass}
+                    onSubmit={handleAdjustSubmit}
+                  />
                 )}
 
                 {activeTab === 'transfer' && (

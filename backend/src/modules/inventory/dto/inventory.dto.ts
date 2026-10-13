@@ -12,6 +12,7 @@ import {
   ValidateNested,
   IsDateString,
   IsEnum,
+  IsIn,
 } from 'class-validator';
 import { InventoryCondition } from '@prisma/client';
 
@@ -333,9 +334,12 @@ export class AdjustmentDto {
   @Min(0)
   newQuantity!: number;
 
+  @IsIn(['COUNT_VARIANCE', 'DAMAGE', 'EXPIRY', 'LOSS', 'FOUND_STOCK', 'CORRECTION', 'OTHER'])
+  reasonCode!: 'COUNT_VARIANCE' | 'DAMAGE' | 'EXPIRY' | 'LOSS' | 'FOUND_STOCK' | 'CORRECTION' | 'OTHER';
+
   @IsString()
   @IsNotEmpty()
-  reason!: string;
+  remarks!: string;
 }
 
 export class CreateCycleCountLineDto {

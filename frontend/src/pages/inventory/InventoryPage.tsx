@@ -58,7 +58,8 @@ export default function InventoryPage() {
   const [purpose, setPurpose] = useState('');
   const [remarks, setRemarks] = useState('');
   const [newQuantity, setNewQuantity] = useState(0);
-  const [adjustReason, setAdjustReason] = useState('');
+  const [adjustReasonCode, setAdjustReasonCode] = useState('');
+  const [adjustRemarks, setAdjustRemarks] = useState('');
   const [returnRequestId, setReturnRequestId] = useState('');
   const [returnRequestItemId, setReturnRequestItemId] = useState('');
   const [returnQuantity, setReturnQuantity] = useState(1);
@@ -277,7 +278,8 @@ export default function InventoryPage() {
     setPurpose('');
     setRemarks('');
     setNewQuantity(0);
-    setAdjustReason('');
+    setAdjustReasonCode('');
+    setAdjustRemarks('');
   };
 
   const handleStockInSubmit = (e: React.FormEvent) => {
@@ -337,7 +339,8 @@ export default function InventoryPage() {
     adjustMutation.mutate({
       materialId,
       newQuantity: Number(newQuantity),
-      reason: adjustReason,
+      reasonCode: adjustReasonCode,
+      remarks: adjustRemarks,
     });
   };
 
@@ -855,13 +858,31 @@ export default function InventoryPage() {
                     </div>
 
                     <div>
-                      <Label required>Audit Adjustment Reason</Label>
+                      <Label required>Adjustment Reason Code</Label>
+                      <Select
+                        required
+                        value={adjustReasonCode}
+                        onChange={(e) => setAdjustReasonCode(e.target.value)}
+                      >
+                        <option value="">Choose a controlled reason...</option>
+                        <option value="COUNT_VARIANCE">Physical count variance</option>
+                        <option value="DAMAGE">Damaged stock</option>
+                        <option value="EXPIRY">Expired stock</option>
+                        <option value="LOSS">Stock loss</option>
+                        <option value="FOUND_STOCK">Found stock</option>
+                        <option value="CORRECTION">Data correction</option>
+                        <option value="OTHER">Other approved exception</option>
+                      </Select>
+                    </div>
+
+                    <div>
+                      <Label required>Operator Remarks</Label>
                       <Textarea
                         required
                         rows={2}
-                        placeholder="e.g. Physical stock recount difference / expired damaged items removed"
-                        value={adjustReason}
-                        onChange={(e) => setAdjustReason(e.target.value)}
+                        placeholder="Describe what was verified and why the adjustment is required"
+                        value={adjustRemarks}
+                        onChange={(e) => setAdjustRemarks(e.target.value)}
                       />
                     </div>
 

@@ -13,6 +13,7 @@ import { Prisma } from '@prisma/client';
 import { NotificationsService } from '../notifications/notifications.service';
 import { AuditService } from '../audit/audit.service';
 import { AccessControlService } from '../auth/access-control.service';
+import { StockConflictException } from './stock-conflict.exception';
 import { SafeUser } from '../auth/decorators/current-user.decorator';
 import {
   AdjustmentDto,
@@ -804,11 +805,12 @@ export class InventoryService {
         },
       });
       if (decremented.count !== 1) {
-        throw new BadRequestException(
+        throw new StockConflictException(
           `Stock changed while issuing "${material.name}". Refresh and try again.`,
+          { operation: 'STOCK_OUT', materialId: dto.materialId, storeId },
         );
       }
-      await tx.stockSummary.updateMany({
+      const summaryUpdated = await tx.stockSummary.updateMany({
         where: {
           materialId: dto.materialId,
           remainingQuantity: { gte: dto.quantity },
@@ -818,6 +820,12 @@ export class InventoryService {
           remainingQuantity: { decrement: dto.quantity },
         },
       });
+      if (summaryUpdated.count !== 1) {
+        throw new StockConflictException(
+          `Aggregate stock changed while issuing "${material.name}". Refresh and try again.`,
+          { operation: 'STOCK_OUT', materialId: dto.materialId, storeId },
+        );
+      }
 
       const txn = await tx.inventoryTransaction.create({
         data: {
@@ -1129,7 +1137,11 @@ export class InventoryService {
       if (claimed.count !== 1) {
         const current = await tx.inventoryTransfer.findUnique({ where: { id } });
         if (current?.status === TransferStatus.DISPATCHED) return current;
-        throw new BadRequestException('Transfer changed before dispatch; refresh and retry');
+        throw new StockConflictException('Transfer changed before dispatch; refresh and retry', {
+          operation: 'TRANSFER_DISPATCH',
+          materialId: transfer.materialId,
+          storeId: transfer.sourceStoreId,
+        });
       }
 
       const balance = await tx.stockBalance.findUnique({
@@ -1143,7 +1155,13 @@ export class InventoryService {
         where: { id: balance.id, remainingQuantity: { gte: transfer.quantity }, reservedQuantity: balance.reservedQuantity },
         data: { remainingQuantity: { decrement: transfer.quantity }, quantityIssued: { increment: transfer.quantity } },
       });
-      if (moved.count !== 1) throw new BadRequestException('Stock changed while dispatching; refresh and retry');
+      if (moved.count !== 1) {
+        throw new StockConflictException('Stock changed while dispatching; refresh and retry', {
+          operation: 'TRANSFER_DISPATCH',
+          materialId: transfer.materialId,
+          storeId: transfer.sourceStoreId,
+        });
+      }
       await tx.inventoryTransaction.create({
         data: {
           transactionCode: `${transfer.transferCode}-OUT`,
@@ -1182,7 +1200,11 @@ export class InventoryService {
       if (claimed.count !== 1) {
         const current = await tx.inventoryTransfer.findUnique({ where: { id } });
         if (current?.status === TransferStatus.RECEIVED) return current;
-        throw new BadRequestException('Transfer changed before receipt; refresh and retry');
+        throw new StockConflictException('Transfer changed before receipt; refresh and retry', {
+          operation: 'TRANSFER_RECEIVE',
+          materialId: transfer.materialId,
+          storeId: transfer.destinationStoreId,
+        });
       }
 
       await tx.stockBalance.upsert({

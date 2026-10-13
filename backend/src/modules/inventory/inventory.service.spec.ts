@@ -6,6 +6,7 @@ import { AuditService } from '../audit/audit.service';
 import { BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { Role, ScopeType, TransactionType, UserStatus } from '@prisma/client';
 import { AccessControlService } from '../auth/access-control.service';
+import { StockConflictException } from './stock-conflict.exception';
 
 describe('InventoryService', () => {
   let service: InventoryService;
@@ -90,8 +91,6 @@ describe('InventoryService', () => {
         })),
       },
     };
-    mockTx.stockBalance.updateMany = mockTx.stockSummary.updateMany;
-
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         InventoryService,
@@ -688,6 +687,15 @@ describe('InventoryService', () => {
       ).rejects.toThrow(BadRequestException);
 
       expect(prisma._mockTx.inventoryTransaction.create).not.toHaveBeenCalled();
+    });
+
+    it('returns a typed conflict when the aggregate summary changes during issue', async () => {
+      prisma.material.findUnique.mockResolvedValue(mockMaterial);
+      prisma._mockTx.stockSummary.updateMany.mockResolvedValueOnce({ count: 0 });
+
+      await expect(
+        service.stockOut('keeper-1', { materialId: 'mat-uuid-1', quantity: 5 }),
+      ).rejects.toBeInstanceOf(StockConflictException);
     });
 
     it('should throw NotFoundException if material does not exist', async () => {

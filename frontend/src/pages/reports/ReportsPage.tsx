@@ -16,7 +16,6 @@ import {
   SlidersHorizontal,
   RotateCcw,
   CheckSquare,
-  Building2,
   Calendar,
   Sparkles,
   Info,
@@ -393,7 +392,7 @@ export default function ReportsPage() {
         <div className="print-letterhead border-b-2 border-slate-900 pb-5">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div className="flex items-start gap-4">
-              <div className="relative flex h-18 w-18 items-center justify-center rounded-2xl bg-white p-1.5 shadow-xs border border-slate-200 shrink-0">
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-white p-0.5 shrink-0">
                 <img
                   src="/amu-logo.png"
                   alt="Arba Minch University"
@@ -578,7 +577,7 @@ export default function ReportsPage() {
         {/* 3-Tier Formal Institutional Sign-off Block */}
         {filteredRows.length > 0 && (
           <div className="print-signature-section mt-8 pt-6 border-t-2 border-slate-900">
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 print:grid-cols-4 print:gap-3 text-xs">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 print:grid-cols-3 print:gap-3 text-xs">
               {/* Tier 1: Prepared By */}
               <div className="print-sign-box rounded-xl border border-slate-300 p-4 space-y-3 bg-white flex flex-col justify-between min-h-[125px]">
                 <div>
@@ -648,24 +647,11 @@ export default function ReportsPage() {
                 </div>
               </div>
 
-              {/* Tier 4: Official Stamp Seal */}
-              <div className="print-seal-box rounded-xl border-2 border-dashed border-slate-400 p-4 flex flex-col items-center justify-center text-center bg-slate-50/50 min-h-[125px]">
-                <div className="rounded-full border border-slate-300 p-2 text-slate-400 mb-1">
-                  <Building2 className="h-6 w-6" />
-                </div>
-                <span className="text-[10px] font-black uppercase tracking-wider text-slate-700">
-                  Official Store Seal
-                </span>
-                <span className="text-[9px] text-slate-400 mt-0.5">
-                  Arba Minch University Directorate
-                </span>
-              </div>
             </div>
 
-            {/* Official Legal Audit Footer */}
             <div className="mt-4 pt-3 border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between text-[10px] text-slate-400 gap-2">
               <span>
-                Confidential Arba Minch University Audit Document. Valid only with authorized signatures and official directorate seal.
+                Confidential Arba Minch University audit document. Valid with authorized signatures.
               </span>
               <span className="font-semibold text-slate-500">
                 Arba Minch University &copy; {new Date().getFullYear()} &bull; Central Store Operations

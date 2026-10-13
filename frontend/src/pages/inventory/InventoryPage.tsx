@@ -33,6 +33,7 @@ import {
 } from '../../components/inventory/InventoryDocumentShell';
 import { ReceivingWorkspace } from '../../components/inventory/ReceivingWorkspace';
 import { StockOutWorkspace } from '../../components/inventory/StockOutWorkspace';
+import { ReturnsWorkspace, IssuedRequest } from '../../components/inventory/ReturnsWorkspace';
 
 export default function InventoryPage() {
   const queryClient = useQueryClient();
@@ -132,7 +133,7 @@ export default function InventoryPage() {
     enabled: activeTab === 'return',
   });
 
-  const selectedReturnRequest = issuedRequests?.find((request: any) => request.id === returnRequestId);
+  const selectedReturnRequest = issuedRequests?.find((request: any) => request.id === returnRequestId) as IssuedRequest | undefined;
   const selectedReturnItem = selectedReturnRequest?.items?.find((item: any) => item.id === returnRequestItemId);
   const returnableItems = selectedReturnRequest?.items?.filter(
     (item: any) => item.quantityIssued > (item.quantityReturned ?? 0),
@@ -485,111 +486,37 @@ export default function InventoryPage() {
                 )}
 
                 {activeTab === 'return' && (
-                  <form onSubmit={handleReturnSubmit} className="space-y-4">
-                    <div>
-                      <Label required>Original Issued Request</Label>
-                      <Select
-                        required
-                        value={returnRequestId}
-                        onChange={(e) => {
-                          const requestId = e.target.value;
-                          const request = issuedRequests?.find((item: any) => item.id === requestId);
-                          const firstReturnable = request?.items?.find(
-                            (item: any) => item.quantityIssued > (item.quantityReturned ?? 0),
-                          );
-                          setReturnRequestId(requestId);
-                          setReturnRequestItemId(firstReturnable?.id ?? '');
-                          setMaterialId(firstReturnable?.materialId ?? '');
-                          setReturnQuantity(1);
-                        }}
-                      >
-                        <option value="">Choose an issued request...</option>
-                        {issuedRequests?.map((request: any) => (
-                          <option key={request.id} value={request.id}>
-                            {request.requestNumber} — {request.requester?.fullName || 'Requester'} ({request.department?.name || 'Department'})
-                          </option>
-                        ))}
-                      </Select>
-                      {issuedRequests?.length === 0 && (
-                        <p className="mt-2 text-xs font-medium text-slate-500">
-                          No issued requests have an outstanding quantity to return.
-                        </p>
-                      )}
-                    </div>
-
-                    {returnRequestId && (
-                      <>
-                        <div>
-                          <Label required>Issued Material</Label>
-                          <Select
-                            required
-                            value={returnRequestItemId}
-                            onChange={(e) => {
-                              const itemId = e.target.value;
-                              const item = selectedReturnRequest?.items?.find((row: any) => row.id === itemId);
-                              setReturnRequestItemId(itemId);
-                              setMaterialId(item?.materialId ?? '');
-                              setReturnQuantity(1);
-                            }}
-                          >
-                            <option value="">Choose a material from this request...</option>
-                            {returnableItems.map((item: any) => (
-                              <option key={item.id} value={item.id}>
-                                {item.material?.name} ({item.material?.materialCode}) — {item.quantityIssued - (item.quantityReturned ?? 0)} eligible
-                              </option>
-                            ))}
-                          </Select>
-                          {returnableItems.length === 0 && (
-                            <p className="mt-2 text-xs font-medium text-slate-500">All issued items on this request have already been returned.</p>
-                          )}
-                        </div>
-
-                        {selectedReturnItem && (
-                          <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-950">
-                            <p className="font-semibold">{selectedReturnItem.material?.name}</p>
-                            <p className="mt-1 text-xs">Issued: {selectedReturnItem.quantityIssued} · Returned: {selectedReturnItem.quantityReturned ?? 0} · Still eligible: {returnableQuantity}</p>
-                          </div>
-                        )}
-                      </>
-                    )}
-
-                    <div>
-                      <Label required>Quantity Returned</Label>
-                      <Input
-                        type="number"
-                        required
-                        min={1}
-                        step={1}
-                        max={returnableQuantity}
-                        value={returnQuantity}
-                        onChange={(e) => setReturnQuantity(Number(e.target.value))}
-                      />
-                    </div>
-
-                    <div>
-                      <Label>Reason & Condition Remarks</Label>
-                      <Textarea
-                        rows={2}
-                        placeholder="e.g. Unused items returned in original unopened packaging"
-                        value={remarks}
-                        onChange={(e) => setRemarks(e.target.value)}
-                      />
-                    </div>
-
-                    <div className="pt-2">
-                      <Button
-                        type="submit"
-                        variant="primary"
-                        size="lg"
-                        className="w-full bg-amber-600 hover:bg-amber-700 text-white"
-                        disabled={!isKeeper || returnMutation.isPending || !selectedReturnItem || returnQuantity < 1 || returnQuantity > returnableQuantity}
-                        isLoading={returnMutation.isPending}
-                        leftIcon={<RotateCcw className="h-4 w-4" />}
-                      >
-                        Confirm Return to Store
-                      </Button>
-                    </div>
-                  </form>
+                  <ReturnsWorkspace
+                    issuedRequests={issuedRequests as IssuedRequest[] | undefined}
+                    selectedItem={selectedReturnItem}
+                    returnableItems={returnableItems}
+                    returnableQuantity={returnableQuantity}
+                    requestId={returnRequestId}
+                    requestItemId={returnRequestItemId}
+                    quantity={returnQuantity}
+                    remarks={remarks}
+                    isKeeper={isKeeper}
+                    isPending={returnMutation.isPending}
+                    onRequestChange={(requestId) => {
+                      const request = issuedRequests?.find((item: any) => item.id === requestId);
+                      const firstReturnable = request?.items?.find(
+                        (item: any) => item.quantityIssued > (item.quantityReturned ?? 0),
+                      );
+                      setReturnRequestId(requestId);
+                      setReturnRequestItemId(firstReturnable?.id ?? '');
+                      setMaterialId(firstReturnable?.materialId ?? '');
+                      setReturnQuantity(1);
+                    }}
+                    onItemChange={(itemId) => {
+                      const item = selectedReturnRequest?.items?.find((row: any) => row.id === itemId);
+                      setReturnRequestItemId(itemId);
+                      setMaterialId(item?.materialId ?? '');
+                      setReturnQuantity(1);
+                    }}
+                    onQuantityChange={setReturnQuantity}
+                    onRemarksChange={setRemarks}
+                    onSubmit={handleReturnSubmit}
+                  />
                 )}
 
                 {activeTab === 'adjust' && (

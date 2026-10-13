@@ -31,6 +31,7 @@ import {
   InventoryDocumentShell,
   InventoryDocumentTab,
 } from '../../components/inventory/InventoryDocumentShell';
+import { ReceivingWorkspace } from '../../components/inventory/ReceivingWorkspace';
 
 export default function InventoryPage() {
   const queryClient = useQueryClient();
@@ -439,95 +440,25 @@ export default function InventoryPage() {
               </CardHeader>
 
               <CardBody>
-                {activeTab === 'receipt' && (
-                  <form onSubmit={handleReceiptSubmit} className="space-y-4">
-                    <div>
-                      <Label required>Select Material</Label>
-                      <Select
-                        required
-                        value={materialId}
-                        onChange={(e) => setMaterialId(e.target.value)}
-                      >
-                        <option value="">Choose received item...</option>
-                        {materials?.map((m: any) => (
-                          <option key={m.id} value={m.id}>
-                            {m.name} ({m.materialCode}) — Current: {m.stockSummary?.remainingQuantity ?? 0} {m.unit}s
-                          </option>
-                        ))}
-                      </Select>
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      <div>
-                        <Label required>Quantity Delivered</Label>
-                        <Input
-                          type="number"
-                          required
-                          min={1}
-                          value={quantity}
-                          onChange={(e) => setQuantity(Number(e.target.value))}
-                        />
-                      </div>
-
-                      <div>
-                        <Label>Delivery Reference</Label>
-                        <Input
-                          placeholder="Supplier delivery note or invoice reference"
-                          value={deliveryReference}
-                          onChange={(e) => setDeliveryReference(e.target.value)}
-                        />
-                      </div>
-                    </div>
-
-                    <div>
-                      <Label>Supplier / Vendor</Label>
-                      <Select
-                        value={supplierId}
-                        onChange={(e) => setSupplierId(e.target.value)}
-                      >
-                        <option value="">Select Supplier (Optional)...</option>
-                        {suppliers?.map((s: any) => (
-                          <option key={s.id} value={s.id}>
-                            {s.name} ({s.supplierCode})
-                          </option>
-                        ))}
-                      </Select>
-                    </div>
-
-                    <div>
-                      <Label>Inspection Notes</Label>
-                      <Input
-                        placeholder="Condition, packaging, or receiving notes"
-                        value={remarks}
-                        onChange={(e) => setRemarks(e.target.value)}
-                      />
-                    </div>
-
-                    <div>
-                      <Label>Additional Notes</Label>
-                      <Textarea
-                        rows={2}
-                        placeholder="Delivery invoice reference, box condition..."
-                        value={remarks}
-                        onChange={(e) => setRemarks(e.target.value)}
-                      />
-                    </div>
-
-                    <div className="pt-2">
-                      <Button
-                        type="submit"
-                        variant="success"
-                        size="lg"
-                        className="w-full"
-                        disabled={!isKeeper || receiptMutation.isPending}
-                        isLoading={receiptMutation.isPending}
-                        leftIcon={<ArrowDownLeft className="h-4 w-4" />}
-                      >
-                        Create Draft for Independent Inspection
-                      </Button>
-                    </div>
-                  </form>
-                )}
+              {activeTab === 'receipt' && (
+                <ReceivingWorkspace
+                  materials={materials}
+                  suppliers={suppliers}
+                  materialId={materialId}
+                  quantity={quantity}
+                  supplierId={supplierId}
+                  deliveryReference={deliveryReference}
+                  remarks={remarks}
+                  isKeeper={isKeeper}
+                  isPending={receiptMutation.isPending}
+                  onMaterialChange={setMaterialId}
+                  onQuantityChange={setQuantity}
+                  onSupplierChange={setSupplierId}
+                  onDeliveryReferenceChange={setDeliveryReference}
+                  onRemarksChange={setRemarks}
+                  onSubmit={handleReceiptSubmit}
+                />
+              )}
 
                 {activeTab === 'out' && (
                   <form onSubmit={handleStockOutSubmit} className="space-y-4">

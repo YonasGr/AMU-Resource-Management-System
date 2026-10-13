@@ -84,4 +84,33 @@ describe('AuditService', () => {
       skipDuplicates: true,
     });
   });
+
+  it('uses the correlation id as an idempotent transaction event key', async () => {
+    const outboxEvent = { createMany: jest.fn().mockResolvedValue({ count: 0 }) };
+    const service = new AuditService({} as never, {} as never);
+    const tx = { outboxEvent } as never;
+
+    await service.logInTransaction(tx, 'user-1', 'STOCK_OUT', 'INVENTORY', 'Issued stock', {
+      correlationId: 'operation-1',
+    });
+    await service.logInTransaction(tx, 'user-1', 'STOCK_OUT', 'INVENTORY', 'Issued stock', {
+      correlationId: 'operation-1',
+    });
+
+    expect(outboxEvent.createMany).toHaveBeenCalledTimes(2);
+    expect(outboxEvent.createMany).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        data: [expect.objectContaining({ eventKey: 'operation-1' })],
+        skipDuplicates: true,
+      }),
+    );
+    expect(outboxEvent.createMany).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        data: [expect.objectContaining({ eventKey: 'operation-1' })],
+        skipDuplicates: true,
+      }),
+    );
+  });
 });

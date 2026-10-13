@@ -2,6 +2,8 @@ import React from 'react';
 import { RotateCcw } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { Input, Label, Select, Textarea } from '../ui/Input';
+import { InventoryTrackingFields, InventoryTrackingValue } from './InventoryTrackingFields';
+import { WarehouseMaterial } from './WarehouseMaterialPicker';
 
 export interface ReturnableItem {
   id: string;
@@ -29,12 +31,15 @@ interface ReturnsWorkspaceProps {
   requestItemId: string;
   quantity: number;
   remarks: string;
+  materials?: WarehouseMaterial[];
+  tracking: InventoryTrackingValue;
   isKeeper: boolean;
   isPending: boolean;
   onRequestChange: (requestId: string) => void;
   onItemChange: (itemId: string) => void;
   onQuantityChange: (quantity: number) => void;
   onRemarksChange: (remarks: string) => void;
+  onTrackingChange: (value: InventoryTrackingValue) => void;
   onSubmit: (event: React.FormEvent<HTMLFormElement>) => void;
 }
 
@@ -47,14 +52,19 @@ export function ReturnsWorkspace({
   requestItemId,
   quantity,
   remarks,
+  materials,
+  tracking,
   isKeeper,
   isPending,
   onRequestChange,
   onItemChange,
   onQuantityChange,
   onRemarksChange,
+  onTrackingChange,
   onSubmit,
 }: ReturnsWorkspaceProps) {
+  const selectedMaterial = materials?.find((material) => material.id === selectedItem?.materialId);
+
   return (
     <form onSubmit={onSubmit} className="space-y-4">
       <div>
@@ -93,6 +103,8 @@ export function ReturnsWorkspace({
                 All issued items on this request have already been returned.
               </p>
             )}
+
+            <InventoryTrackingFields material={selectedMaterial} value={tracking} onChange={onTrackingChange} />
           </div>
 
           {selectedItem && (

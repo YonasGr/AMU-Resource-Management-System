@@ -2,14 +2,8 @@ import React from 'react';
 import { ArrowRightLeft } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { Input, Label, Select, Textarea } from '../ui/Input';
-
-interface Material {
-  id: string;
-  name: string;
-  materialCode: string;
-  unit: string;
-  stockSummary?: { remainingQuantity?: number };
-}
+import { InventoryTrackingFields, InventoryTrackingValue } from './InventoryTrackingFields';
+import { WarehouseMaterialPicker, WarehouseMaterial } from './WarehouseMaterialPicker';
 
 interface Department {
   id: string;
@@ -18,13 +12,14 @@ interface Department {
 }
 
 interface TransferWorkspaceProps {
-  materials?: Material[];
+  materials?: WarehouseMaterial[];
   departments?: Department[];
   materialId: string;
   quantity: number;
   departmentId: string;
   purpose: string;
   remarks: string;
+  tracking: InventoryTrackingValue;
   isKeeper: boolean;
   isPending: boolean;
   onMaterialChange: (value: string) => void;
@@ -32,6 +27,7 @@ interface TransferWorkspaceProps {
   onDepartmentChange: (value: string) => void;
   onPurposeChange: (value: string) => void;
   onRemarksChange: (value: string) => void;
+  onTrackingChange: (value: InventoryTrackingValue) => void;
   onSubmit: (event: React.FormEvent<HTMLFormElement>) => void;
 }
 
@@ -43,6 +39,7 @@ export function TransferWorkspace({
   departmentId,
   purpose,
   remarks,
+  tracking,
   isKeeper,
   isPending,
   onMaterialChange,
@@ -50,21 +47,21 @@ export function TransferWorkspace({
   onDepartmentChange,
   onPurposeChange,
   onRemarksChange,
+  onTrackingChange,
   onSubmit,
 }: TransferWorkspaceProps) {
+  const selectedMaterial = materials?.find((material) => material.id === materialId);
+
   return (
     <form onSubmit={onSubmit} className="space-y-4">
       <div>
-        <Label required>Select Material</Label>
-        <Select required value={materialId} onChange={(event) => onMaterialChange(event.target.value)}>
-          <option value="">Choose item to transfer...</option>
-          {materials?.map((material) => (
-            <option key={material.id} value={material.id}>
-              {material.name} ({material.materialCode}) — Avail: {material.stockSummary?.remainingQuantity ?? 0}{' '}
-              {material.unit}s
-            </option>
-          ))}
-        </Select>
+        <WarehouseMaterialPicker
+          materials={materials}
+          value={materialId}
+          onChange={onMaterialChange}
+          label="Select material to transfer"
+          placeholder="Scan barcode or search transfer item..."
+        />
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -91,6 +88,8 @@ export function TransferWorkspace({
           </Select>
         </div>
       </div>
+
+      <InventoryTrackingFields material={selectedMaterial} value={tracking} onChange={onTrackingChange} />
 
       <div>
         <Label>Purpose / Transfer Order</Label>

@@ -681,6 +681,19 @@ describe('InventoryService', () => {
           }),
         }),
       );
+      expect(auditService.logInTransaction).toHaveBeenCalledWith(
+        prisma._mockTx,
+        'keeper-1',
+        'POST_RETURN_INSPECTION',
+        'INVENTORY',
+        'Posted return RET-12345678-123 as ACCEPT_TO_STOCK',
+        expect.objectContaining({
+          storeId: 'store-1',
+          entityType: 'MATERIAL_RETURN',
+          entityId: 'return-1',
+          afterData: expect.objectContaining({ status: 'POSTED', quantity: 3 }),
+        }),
+      );
     });
 
     it('posts quarantine returns without adding available stock', async () => {
@@ -707,6 +720,18 @@ describe('InventoryService', () => {
       expect(prisma._mockTx.materialRequestItem.updateMany).toHaveBeenCalled();
       expect(prisma._mockTx.stockBalance.upsert).not.toHaveBeenCalled();
       expect(prisma._mockTx.inventoryTransaction.create).not.toHaveBeenCalled();
+      expect(auditService.logInTransaction).toHaveBeenCalledWith(
+        prisma._mockTx,
+        'keeper-1',
+        'POST_RETURN_INSPECTION',
+        'INVENTORY',
+        'Posted return RET-12345678-123 as QUARANTINE',
+        expect.objectContaining({
+          entityType: 'MATERIAL_RETURN',
+          entityId: 'return-1',
+          afterData: expect.objectContaining({ status: 'POSTED', disposition: 'QUARANTINE' }),
+        }),
+      );
     });
 
     it('prevents the return creator from inspecting the return', async () => {

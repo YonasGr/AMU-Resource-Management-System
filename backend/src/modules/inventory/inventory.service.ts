@@ -854,13 +854,35 @@ export class InventoryService {
         });
       }
 
+      await this.auditService.logInTransaction(
+        tx,
+        user.id,
+        'POST_RETURN_INSPECTION',
+        'INVENTORY',
+        `Posted return ${returnRecord.returnCode} as ${returnRecord.disposition}`,
+        {
+          actorRole: user.role,
+          storeId: returnRecord.storeId,
+          entityType: 'MATERIAL_RETURN',
+          entityId: returnRecord.id,
+          beforeData: {
+            status: MaterialReturnStatus.INSPECTED,
+            disposition: returnRecord.disposition,
+          },
+          afterData: {
+            status: MaterialReturnStatus.POSTED,
+            disposition: returnRecord.disposition,
+            quantity: returnRecord.quantity,
+          },
+        },
+      );
+
       return tx.materialReturn.update({
         where: { id },
         data: {},
         include: { material: true, store: true, request: true, requestItem: true },
       });
     });
-    await this.auditService.log(user.id, 'POST_RETURN_INSPECTION', 'INVENTORY', `Posted return ${returnRecord.returnCode} as ${returnRecord.disposition}`);
     return result;
   }
 

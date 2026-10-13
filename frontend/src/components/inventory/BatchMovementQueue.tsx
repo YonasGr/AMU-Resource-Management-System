@@ -30,6 +30,7 @@ interface BatchMovementQueueProps {
 }
 
 export interface BatchMovementResult {
+  queued?: boolean;
   results?: Array<{ index: number; status: "SUCCEEDED" | "FAILED" }>;
 }
 

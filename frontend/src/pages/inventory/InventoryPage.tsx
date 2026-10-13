@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   useInfiniteQuery,
   useMutation,
@@ -66,9 +66,11 @@ import {
   BatchMovementResult,
   BatchMovementQueue,
 } from "../../components/inventory/BatchMovementQueue";
+import { useOfflineSync } from "../../hooks/useOfflineSync";
 
 export default function InventoryPage() {
   const queryClient = useQueryClient();
+  const { isOnline, operations, queue, replay } = useOfflineSync();
   const user = useAuthStore((s) => s.user);
   const isAuditor = user?.role === "AUDITOR";
   const isKeeper =
@@ -78,6 +80,34 @@ export default function InventoryPage() {
   const canAdjustStock =
     user?.role === "STORE_MANAGER" || user?.role === "ADMINISTRATOR";
   const canMutateStock = isKeeper;
+  const draftStorageKey = `inventory-draft-${user?.id ?? "anonymous"}`;
+
+  const postPhysicalMovement = async (
+    endpoint: string,
+    data: Record<string, unknown>,
+    queueKey = typeof data.idempotencyKey === "string"
+      ? data.idempotencyKey
+      : crypto.randomUUID(),
+  ) => {
+    const payload =
+      endpoint === "/inventory/batch"
+        ? data
+        : { ...data, idempotencyKey: data.idempotencyKey ?? queueKey };
+    if (!isOnline) {
+      await queue(endpoint, payload, queueKey);
+      return { queued: true, idempotencyKey: queueKey };
+    }
+    try {
+      const res = await api.post(endpoint, payload);
+      return res.data;
+    } catch (error: any) {
+      if (!error.response) {
+        await queue(endpoint, payload, queueKey);
+        return { queued: true, idempotencyKey: queueKey };
+      }
+      throw error;
+    }
+  };
 
   const [activeTab, setActiveTab] = useState<InventoryTabId>(
     isAuditor ? "history" : "receipt",
@@ -118,6 +148,84 @@ export default function InventoryPage() {
   const [historySort, setHistorySort] = useState<"createdAt" | "quantity">(
     "createdAt",
   );
+  const [draftHydrated, setDraftHydrated] = useState(false);
+
+  useEffect(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem(draftStorageKey) ?? "null");
+      if (!saved) return;
+      setMaterialId(saved.materialId ?? "");
+      setQuantity(saved.quantity ?? 1);
+      setSupplierId(saved.supplierId ?? "");
+      setEmployeeId(saved.employeeId ?? "");
+      setDepartmentId(saved.departmentId ?? "");
+      setPurpose(saved.purpose ?? "");
+      setDeliveryReference(saved.deliveryReference ?? "");
+      setRemarks(saved.remarks ?? "");
+      setNewQuantity(saved.newQuantity ?? 0);
+      setAdjustReasonCode(saved.adjustReasonCode ?? "");
+      setAdjustRemarks(saved.adjustRemarks ?? "");
+      setReturnRequestId(saved.returnRequestId ?? "");
+      setReturnRequestItemId(saved.returnRequestItemId ?? "");
+      setReturnQuantity(saved.returnQuantity ?? 1);
+      setTracking(saved.tracking ?? { lotNumber: "", batchNumber: "", expiryDate: "", serialNumber: "" });
+    } catch {
+      localStorage.removeItem(draftStorageKey);
+    }
+    setDraftHydrated(true);
+  }, [draftStorageKey]);
+
+  useEffect(() => {
+    if (!draftHydrated) return;
+    localStorage.setItem(
+      draftStorageKey,
+      JSON.stringify({
+        materialId,
+        quantity,
+        supplierId,
+        employeeId,
+        departmentId,
+        purpose,
+        deliveryReference,
+        remarks,
+        newQuantity,
+        adjustReasonCode,
+        adjustRemarks,
+        returnRequestId,
+        returnRequestItemId,
+        returnQuantity,
+        tracking,
+      }),
+    );
+  }, [
+    draftStorageKey,
+    materialId,
+    quantity,
+    supplierId,
+    employeeId,
+    departmentId,
+    purpose,
+    deliveryReference,
+    remarks,
+    newQuantity,
+    adjustReasonCode,
+    adjustRemarks,
+    returnRequestId,
+    returnRequestItemId,
+    returnQuantity,
+    tracking,
+  ]);
+
+  useEffect(() => {
+    const handleSyncComplete = () => {
+      queryClient.invalidateQueries({ queryKey: ["materials"] });
+      queryClient.invalidateQueries({ queryKey: ["inventory-transactions"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard-stats"] });
+      setFeedback({ type: "success", message: "Queued inventory operations were synchronized." });
+    };
+    window.addEventListener("inventory-sync-complete", handleSyncComplete);
+    return () => window.removeEventListener("inventory-sync-complete", handleSyncComplete);
+  }, [queryClient]);
 
   // Each workflow owns its draft boundary; switching tabs must not carry quantities,
   // recipients, or authorization fields into another inventory operation.
@@ -249,6 +357,9 @@ export default function InventoryPage() {
   // Mutations
   const receiptMutation = useMutation({
     mutationFn: async (data: any) => {
+      if (!isOnline) {
+        throw new Error("Goods receipt drafts require connectivity; save the draft when back online.");
+      }
       const res = await api.post("/inventory/receipts", data);
       return res.data;
     },
@@ -259,7 +370,9 @@ export default function InventoryPage() {
       const code = data?.data?.receiptCode || data?.receiptCode || "";
       setFeedback({
         type: "success",
-        message: `Goods receipt draft created successfully. ${code ? `Receipt Code: ${code}` : ""}`,
+        message: data?.queued
+          ? "Goods receipt saved offline and queued for replay."
+          : `Goods receipt draft created successfully. ${code ? `Receipt Code: ${code}` : ""}`,
       });
       resetForm();
     },
@@ -276,8 +389,7 @@ export default function InventoryPage() {
 
   const stockOutMutation = useMutation({
     mutationFn: async (data: any) => {
-      const res = await api.post("/inventory/stock-out", data);
-      return res.data;
+      return postPhysicalMovement("/inventory/stock-out", data);
     },
     onSuccess: (data: any) => {
       queryClient.invalidateQueries({ queryKey: ["materials"] });
@@ -286,7 +398,9 @@ export default function InventoryPage() {
       const code = data?.data?.transactionCode || data?.transactionCode || "";
       setFeedback({
         type: "success",
-        message: `Stock Out issued successfully! ${code ? `Transaction Code: ${code}` : ""}`,
+        message: data?.queued
+          ? "Stock Out saved offline and queued for replay."
+          : `Stock Out issued successfully! ${code ? `Transaction Code: ${code}` : ""}`,
       });
       resetForm();
     },
@@ -303,8 +417,7 @@ export default function InventoryPage() {
 
   const returnMutation = useMutation({
     mutationFn: async (data: any) => {
-      const res = await api.post("/inventory/return", data);
-      return res.data;
+      return postPhysicalMovement("/inventory/return", data);
     },
     onSuccess: (data: any) => {
       queryClient.invalidateQueries({ queryKey: ["materials"] });
@@ -314,7 +427,9 @@ export default function InventoryPage() {
       const code = data?.data?.transactionCode || data?.transactionCode || "";
       setFeedback({
         type: "success",
-        message: `Return to stock recorded successfully! ${code ? `Transaction Code: ${code}` : ""}`,
+        message: data?.queued
+          ? "Return saved offline and queued for replay."
+          : `Return to stock recorded successfully! ${code ? `Transaction Code: ${code}` : ""}`,
       });
       resetForm();
       setReturnRequestId("");
@@ -334,8 +449,7 @@ export default function InventoryPage() {
 
   const adjustMutation = useMutation({
     mutationFn: async (data: any) => {
-      const res = await api.post("/inventory/adjustment", data);
-      return res.data;
+      return postPhysicalMovement("/inventory/adjustment", data);
     },
     onSuccess: (data: any) => {
       queryClient.invalidateQueries({ queryKey: ["materials"] });
@@ -344,7 +458,9 @@ export default function InventoryPage() {
       const code = data?.data?.transactionCode || data?.transactionCode || "";
       setFeedback({
         type: "success",
-        message: `Stock adjustment audit recorded successfully! ${code ? `Transaction Code: ${code}` : ""}`,
+        message: data?.queued
+          ? "Stock adjustment saved offline and queued for replay."
+          : `Stock adjustment audit recorded successfully! ${code ? `Transaction Code: ${code}` : ""}`,
       });
       resetForm();
     },
@@ -361,8 +477,7 @@ export default function InventoryPage() {
 
   const transferMutation = useMutation({
     mutationFn: async (data: any) => {
-      const res = await api.post("/inventory/transfer", data);
-      return res.data;
+      return postPhysicalMovement("/inventory/transfer", data);
     },
     onSuccess: (data: any) => {
       queryClient.invalidateQueries({ queryKey: ["materials"] });
@@ -371,7 +486,9 @@ export default function InventoryPage() {
       const code = data?.data?.transactionCode || data?.transactionCode || "";
       setFeedback({
         type: "success",
-        message: `Material transfer logged successfully! ${code ? `Transaction Code: ${code}` : ""}`,
+        message: data?.queued
+          ? "Transfer saved offline and queued for replay."
+          : `Material transfer logged successfully! ${code ? `Transaction Code: ${code}` : ""}`,
       });
 
       resetForm();
@@ -402,8 +519,11 @@ export default function InventoryPage() {
     }): Promise<
       BatchMovementResult & { succeeded?: number; failed?: number }
     > => {
-      const res = await api.post("/inventory/batch", data);
-      return res.data?.data ?? res.data;
+      return postPhysicalMovement(
+        "/inventory/batch",
+        data,
+        `batch-${crypto.randomUUID()}`,
+      ).then((result: any) => result?.data ?? result);
     },
     onSuccess: (
       result: BatchMovementResult & { succeeded?: number; failed?: number },
@@ -413,7 +533,9 @@ export default function InventoryPage() {
       queryClient.invalidateQueries({ queryKey: ["dashboard-stats"] });
       setFeedback({
         type: result.failed ? "error" : "success",
-        message: `Batch posted: ${result.succeeded ?? 0} succeeded, ${result.failed ?? 0} failed. Review failed lines before retrying.`,
+        message: result.queued
+          ? "Batch saved offline and queued for replay."
+          : `Batch posted: ${result.succeeded ?? 0} succeeded, ${result.failed ?? 0} failed. Review failed lines before retrying.`,
       });
     },
     onError: (err: any) => {
@@ -640,6 +762,55 @@ export default function InventoryPage() {
         ) : null
       }
     >
+      <div className={`mb-4 flex flex-col gap-2 rounded-2xl border p-4 text-xs sm:flex-row sm:items-center sm:justify-between ${
+        isOnline
+          ? "border-emerald-200 bg-emerald-50 text-emerald-900"
+          : "border-amber-200 bg-amber-50 text-amber-900"
+      }`}>
+        <div>
+          <p className="font-bold">{isOnline ? "Online sync active" : "Offline mode"}</p>
+          <p className="mt-0.5 opacity-80">
+            {isOnline
+              ? operations.length
+                ? `${operations.length} operation${operations.length === 1 ? "" : "s"} waiting for confirmation.`
+                : "Physical postings will replay safely if connectivity drops."
+              : "Idempotent stock postings are saved locally and will replay when connectivity returns."}
+          </p>
+        </div>
+        {operations.length > 0 && (
+          <div className="flex items-center gap-2">
+            <span className="rounded-full bg-white/80 px-2.5 py-1 font-bold">
+              {operations.filter((operation) => operation.status === "conflict").length
+                ? "Conflict needs review"
+                : `${operations.length} queued`}
+            </span>
+            {isOnline && (
+              <button
+                type="button"
+                onClick={() => void replay()}
+                className="rounded-lg bg-white px-2.5 py-1 font-bold shadow-sm hover:text-teal-700"
+              >
+                Retry
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+      {operations.some((operation) => operation.status === "conflict" || operation.status === "failed") && (
+        <div className="mb-4 space-y-2 rounded-2xl border border-rose-200 bg-rose-50 p-4 text-xs text-rose-900">
+          <p className="font-bold">Queued operations need attention</p>
+          {operations
+            .filter((operation) => operation.status === "conflict" || operation.status === "failed")
+            .map((operation) => (
+              <div key={operation.id} className="flex flex-col gap-1 rounded-xl bg-white/70 p-2 sm:flex-row sm:items-center sm:justify-between">
+                <span className="font-semibold">
+                  {operation.endpoint.replace("/inventory/", "")} · {operation.status}
+                </span>
+                <span className="text-rose-700">{operation.error || "Retry when the server state is reviewed."}</span>
+              </div>
+            ))}
+        </div>
+      )}
       {/* 2-Column Workflow for Active Form */}
       {activeTab !== "history" ? (
         <div className="grid grid-cols-1 gap-8 lg:grid-cols-3">

@@ -40,6 +40,9 @@ describe('InventoryService', () => {
           createdAt: new Date(),
         })),
       },
+      outboxEvent: {
+        createMany: jest.fn().mockResolvedValue({ count: 1 }),
+      },
       inventoryTransfer: {
         updateMany: jest.fn().mockResolvedValue({ count: 1 }),
         findUnique: jest.fn().mockResolvedValue({
@@ -164,6 +167,7 @@ describe('InventoryService', () => {
           provide: AuditService,
           useValue: {
             log: jest.fn().mockResolvedValue({ id: 'audit-1' }),
+            logInTransaction: jest.fn().mockResolvedValue(undefined),
           },
         },
         AccessControlService,
@@ -367,6 +371,18 @@ describe('InventoryService', () => {
             type: TransactionType.STOCK_IN,
             storeId: 'store-1',
           }),
+        }),
+      );
+      expect(auditService.logInTransaction).toHaveBeenCalledWith(
+        prisma._mockTx,
+        'keeper-1',
+        'POST_GOODS_RECEIPT',
+        'INVENTORY',
+        'Posted goods receipt GRN-12345678-123',
+        expect.objectContaining({
+          entityType: 'GOODS_RECEIPT',
+          entityId: 'receipt-uuid-1',
+          afterData: expect.objectContaining({ status: 'POSTED', quantityAccepted: 8 }),
         }),
       );
     });

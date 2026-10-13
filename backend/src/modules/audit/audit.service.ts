@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { OutboxService } from '../outbox/outbox.service';
 
@@ -48,6 +49,42 @@ export class AuditService {
       afterData: options.afterData,
     });
     return { queued: true };
+  }
+
+  async logInTransaction(
+    tx: Prisma.TransactionClient,
+    userId: string | null,
+    action: string,
+    module: string,
+    details?: string,
+    options: AuditLogOptions = {},
+  ) {
+    const payload = {
+      userId,
+      action,
+      module,
+      details,
+      actorRole: options.actorRole,
+      entityType: options.entityType,
+      entityId: options.entityId,
+      correlationId: options.correlationId || randomUUID(),
+      reason: options.reason,
+      source: options.source || 'api',
+      ipAddress: options.ipAddress,
+      userAgent: options.userAgent,
+      beforeData: options.beforeData,
+      afterData: options.afterData,
+    };
+    const jsonPayload = JSON.parse(JSON.stringify(payload)) as Prisma.InputJsonValue;
+
+    await tx.outboxEvent.createMany({
+      data: [{
+        eventKey: payload.correlationId,
+        eventType: 'AUDIT_LOG',
+        payload: jsonPayload,
+      }],
+      skipDuplicates: true,
+    });
   }
 
   async findAll() {

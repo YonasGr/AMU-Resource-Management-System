@@ -805,7 +805,8 @@ describe('InventoryService', () => {
       const dto = {
         materialId: 'mat-uuid-1',
         newQuantity: 28,
-        reason: 'Physical inventory audit variance count',
+        reasonCode: 'COUNT_VARIANCE' as const,
+        remarks: 'Physical inventory audit variance count',
       };
 
       const result = await service.adjustStock({
@@ -843,7 +844,8 @@ describe('InventoryService', () => {
       const dto = {
         materialId: 'mat-uuid-1',
         newQuantity: 4,
-        reason: 'Water damage during warehouse roof inspection',
+        reasonCode: 'DAMAGE' as const,
+        remarks: 'Water damage during warehouse roof inspection',
       };
 
       await service.adjustStock({
@@ -874,7 +876,8 @@ describe('InventoryService', () => {
         } as any, {
           materialId: 'non-existent',
           newQuantity: 10,
-          reason: 'Count',
+          reasonCode: 'COUNT_VARIANCE' as const,
+          remarks: 'Count',
         }),
       ).rejects.toThrow(NotFoundException);
     });

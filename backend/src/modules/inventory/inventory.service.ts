@@ -1045,7 +1045,7 @@ export class InventoryService {
           quantity: Math.abs(diff),
           issuedById: user.id,
           purpose: 'Stock Audit Adjustment',
-          remarks: `Adjusted from ${currentRemaining} to ${dto.newQuantity}. Reason: ${dto.reason}`,
+          remarks: `Adjusted from ${currentRemaining} to ${dto.newQuantity}. Reason code: ${dto.reasonCode}. Operator remarks: ${dto.remarks}`,
         },
         include: {
           material: true,
@@ -1081,7 +1081,7 @@ export class InventoryService {
       user.id,
       'STOCK_ADJUSTMENT',
       'INVENTORY',
-      `Stock audit adjusted "${material.name}" (${material.materialCode}) from ${currentRemaining} to ${dto.newQuantity} (Delta: ${diff >= 0 ? '+' : ''}${diff}). Reason: "${dto.reason}" [Txn: ${transaction.transactionCode}]`,
+      `Stock audit adjusted "${material.name}" (${material.materialCode}) from ${currentRemaining} to ${dto.newQuantity} (Delta: ${diff >= 0 ? '+' : ''}${diff}). Reason code: "${dto.reasonCode}". Remarks: "${dto.remarks}" [Txn: ${transaction.transactionCode}]`,
     );
 
     return transaction;

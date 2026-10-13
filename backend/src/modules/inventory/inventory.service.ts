@@ -90,6 +90,24 @@ export class InventoryService {
     return storeId;
   }
 
+  private async findExistingTransaction(
+    tx: Prisma.TransactionClient,
+    idempotencyKey: string | undefined,
+    expected: { type: TransactionType; materialId: string; storeId: string },
+  ) {
+    if (!idempotencyKey) return null;
+    const existing = await tx.inventoryTransaction.findUnique({ where: { idempotencyKey } });
+    if (!existing) return null;
+    if (
+      existing.type !== expected.type ||
+      existing.materialId !== expected.materialId ||
+      existing.storeId !== expected.storeId
+    ) {
+      throw new BadRequestException('The idempotency key was already used for a different inventory operation');
+    }
+    return existing;
+  }
+
   /** Emit a low-stock alert if stock has fallen below minimum */
   private async maybeAlertLowStock(materialId: string, storeId: string) {
     const material = await this.prisma.material.findUnique({
@@ -128,15 +146,29 @@ export class InventoryService {
       throw new NotFoundException(`Material ${dto.materialId} not found`);
     }
     this.validateTraceability(material, dto, dto.quantity);
+    const existing = await this.findExistingTransaction(this.prisma, dto.idempotencyKey, {
+      type: TransactionType.STOCK_IN,
+      materialId: dto.materialId,
+      storeId,
+    });
+    if (existing) return existing;
 
     const timeStamp = Date.now().toString().slice(-6);
     const rand = Math.floor(100 + Math.random() * 900);
     const txnCode = `TXN-IN-${timeStamp}-${rand}`;
 
     const transaction = await this.prisma.$transaction(async (tx) => {
+      const existing = await this.findExistingTransaction(tx, dto.idempotencyKey, {
+        type: TransactionType.STOCK_IN,
+        materialId: dto.materialId,
+        storeId,
+      });
+      if (existing) return existing;
+
       const txn = await tx.inventoryTransaction.create({
         data: {
           transactionCode: txnCode,
+          idempotencyKey: dto.idempotencyKey,
           type: TransactionType.STOCK_IN,
           materialId: dto.materialId,
           storeId,
@@ -731,12 +763,25 @@ export class InventoryService {
     if (!material) {
       throw new NotFoundException(`Material ${dto.materialId} not found`);
     }
+    const existing = await this.findExistingTransaction(this.prisma, dto.idempotencyKey, {
+      type: TransactionType.STOCK_OUT,
+      materialId: dto.materialId,
+      storeId,
+    });
+    if (existing) return existing;
 
     const timeStamp = Date.now().toString().slice(-6);
     const rand = Math.floor(100 + Math.random() * 900);
     const txnCode = `TXN-OUT-${timeStamp}-${rand}`;
 
     const transaction = await this.prisma.$transaction(async (tx) => {
+      const existing = await this.findExistingTransaction(tx, dto.idempotencyKey, {
+        type: TransactionType.STOCK_OUT,
+        materialId: dto.materialId,
+        storeId,
+      });
+      if (existing) return existing;
+
       const balance = await tx.stockBalance.findUnique({
         where: { storeId_materialId: { storeId, materialId: dto.materialId } },
       });
@@ -777,6 +822,7 @@ export class InventoryService {
       const txn = await tx.inventoryTransaction.create({
         data: {
           transactionCode: txnCode,
+          idempotencyKey: dto.idempotencyKey,
           type: TransactionType.STOCK_OUT,
           materialId: dto.materialId,
           storeId,
@@ -839,14 +885,31 @@ export class InventoryService {
     if (dto.quantity > outstanding) {
       throw new BadRequestException(`Only ${outstanding} item(s) remain eligible for return on this request`);
     }
+    const requestStoreId = requestItem.request.storeId;
+    if (!requestStoreId) {
+      throw new BadRequestException('The issued request is not assigned to a store');
+    }
 
     const material = requestItem.material;
+    const existing = await this.findExistingTransaction(this.prisma, dto.idempotencyKey, {
+      type: TransactionType.RETURN,
+      materialId: dto.materialId,
+      storeId: requestStoreId,
+    });
+    if (existing) return existing;
 
     const timeStamp = Date.now().toString().slice(-6);
     const rand = Math.floor(100 + Math.random() * 900);
     const txnCode = `TXN-RET-${timeStamp}-${rand}`;
 
     const transaction = await this.prisma.$transaction(async (tx) => {
+      const existing = await this.findExistingTransaction(tx, dto.idempotencyKey, {
+        type: TransactionType.RETURN,
+        materialId: dto.materialId,
+        storeId: requestStoreId,
+      });
+      if (existing) return existing;
+
       // Conditional update makes the issued quantity cap safe if two returns race.
       const updatedItem = await tx.materialRequestItem.updateMany({
         where: {
@@ -864,6 +927,7 @@ export class InventoryService {
       const txn = await tx.inventoryTransaction.create({
         data: {
           transactionCode: txnCode,
+          idempotencyKey: dto.idempotencyKey,
           type: TransactionType.RETURN,
           materialId: dto.materialId,
           storeId: requestItem.request.storeId,
@@ -886,14 +950,10 @@ export class InventoryService {
         },
       });
 
-      if (!requestItem.request.storeId) {
-        throw new BadRequestException('The issued request is not assigned to a store');
-      }
-
       await tx.stockBalance.update({
         where: {
           storeId_materialId: {
-            storeId: requestItem.request.storeId,
+            storeId: requestStoreId,
             materialId: dto.materialId,
           },
         },
@@ -936,6 +996,12 @@ export class InventoryService {
     if (!material) {
       throw new NotFoundException(`Material ${dto.materialId} not found`);
     }
+    const existing = await this.findExistingTransaction(this.prisma, dto.idempotencyKey, {
+      type: TransactionType.ADJUSTMENT,
+      materialId: dto.materialId,
+      storeId,
+    });
+    if (existing) return existing;
 
     const storeBalance = await this.prisma.stockBalance.findUnique({
       where: { storeId_materialId: { storeId, materialId: dto.materialId } },
@@ -948,9 +1014,17 @@ export class InventoryService {
     const txnCode = `TXN-ADJ-${timeStamp}-${rand}`;
 
     const transaction = await this.prisma.$transaction(async (tx) => {
+      const existing = await this.findExistingTransaction(tx, dto.idempotencyKey, {
+        type: TransactionType.ADJUSTMENT,
+        materialId: dto.materialId,
+        storeId,
+      });
+      if (existing) return existing;
+
       const txn = await tx.inventoryTransaction.create({
         data: {
           transactionCode: txnCode,
+          idempotencyKey: dto.idempotencyKey,
           type: TransactionType.ADJUSTMENT,
           materialId: dto.materialId,
           storeId,
@@ -1043,10 +1117,21 @@ export class InventoryService {
     const transfer = await this.prisma.inventoryTransfer.findUnique({ where: { id } });
     if (!transfer) throw new NotFoundException(`Transfer ${id} not found`);
     this.resolveStoreId(user, transfer.sourceStoreId);
+    if (transfer.status === TransferStatus.DISPATCHED) return transfer;
     if (transfer.status !== TransferStatus.DRAFT) {
       throw new BadRequestException(`Only DRAFT transfers can be dispatched. Current status is ${transfer.status}`);
     }
     const result = await this.prisma.$transaction(async (tx) => {
+      const claimed = await tx.inventoryTransfer.updateMany({
+        where: { id, status: TransferStatus.DRAFT },
+        data: { status: TransferStatus.DISPATCHED, dispatchedById: user.id, dispatchedAt: new Date() },
+      });
+      if (claimed.count !== 1) {
+        const current = await tx.inventoryTransfer.findUnique({ where: { id } });
+        if (current?.status === TransferStatus.DISPATCHED) return current;
+        throw new BadRequestException('Transfer changed before dispatch; refresh and retry');
+      }
+
       const balance = await tx.stockBalance.findUnique({
         where: { storeId_materialId: { storeId: transfer.sourceStoreId, materialId: transfer.materialId } },
       });
@@ -1071,9 +1156,8 @@ export class InventoryService {
           remarks: `Dispatched transfer ${transfer.transferCode}`,
         },
       });
-      return tx.inventoryTransfer.update({
+      return tx.inventoryTransfer.findUnique({
         where: { id },
-        data: { status: TransferStatus.DISPATCHED, dispatchedById: user.id, dispatchedAt: new Date() },
         include: { material: true, sourceStore: true, destinationStore: true },
       });
     });
@@ -1086,10 +1170,21 @@ export class InventoryService {
     const transfer = await this.prisma.inventoryTransfer.findUnique({ where: { id } });
     if (!transfer) throw new NotFoundException(`Transfer ${id} not found`);
     this.resolveStoreId(user, transfer.destinationStoreId);
+    if (transfer.status === TransferStatus.RECEIVED) return transfer;
     if (transfer.status !== TransferStatus.DISPATCHED) {
       throw new BadRequestException(`Only DISPATCHED transfers can be received. Current status is ${transfer.status}`);
     }
     const result = await this.prisma.$transaction(async (tx) => {
+      const claimed = await tx.inventoryTransfer.updateMany({
+        where: { id, status: TransferStatus.DISPATCHED },
+        data: { status: TransferStatus.RECEIVED, receivedById: user.id, receivedAt: new Date() },
+      });
+      if (claimed.count !== 1) {
+        const current = await tx.inventoryTransfer.findUnique({ where: { id } });
+        if (current?.status === TransferStatus.RECEIVED) return current;
+        throw new BadRequestException('Transfer changed before receipt; refresh and retry');
+      }
+
       await tx.stockBalance.upsert({
         where: { storeId_materialId: { storeId: transfer.destinationStoreId, materialId: transfer.materialId } },
         update: { quantityReceived: { increment: transfer.quantity }, remainingQuantity: { increment: transfer.quantity } },
@@ -1107,9 +1202,8 @@ export class InventoryService {
           remarks: `Received transfer ${transfer.transferCode}`,
         },
       });
-      return tx.inventoryTransfer.update({
+      return tx.inventoryTransfer.findUnique({
         where: { id },
-        data: { status: TransferStatus.RECEIVED, receivedById: user.id, receivedAt: new Date() },
         include: { material: true, sourceStore: true, destinationStore: true },
       });
     });

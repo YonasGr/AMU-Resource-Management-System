@@ -119,6 +119,7 @@ describe('InventoryService', () => {
               create: jest.fn(),
               findUnique: jest.fn(),
               update: jest.fn(),
+              updateMany: jest.fn().mockResolvedValue({ count: 1 }),
             },
             cycleCount: {
               create: jest.fn(),
@@ -382,6 +383,76 @@ describe('InventoryService', () => {
         'Only INSPECTED receipts can be posted',
       );
       expect(prisma._mockTx.stockBalance.upsert).not.toHaveBeenCalled();
+    });
+
+    it('rejects a draft receipt with structured evidence without changing stock', async () => {
+      prisma.goodsReceipt.findUnique
+        .mockResolvedValueOnce({
+          ...draftReceipt,
+          status: 'DRAFT',
+          createdById: 'keeper-1',
+        })
+        .mockResolvedValueOnce({
+          ...draftReceipt,
+          status: 'REJECTED',
+          inspectedById: 'manager-1',
+          rejectionReasonCode: 'DAMAGED',
+          remarks: 'Shipment arrived with damaged packaging',
+        });
+
+      const result = await service.rejectGoodsReceipt(
+        'receipt-uuid-1',
+        { id: 'manager-1', role: Role.STORE_MANAGER, scopeType: ScopeType.STORE, storeId: 'store-1' } as any,
+        { reasonCode: 'DAMAGED', remarks: 'Shipment arrived with damaged packaging' },
+      );
+
+      expect(result).toEqual(expect.objectContaining({ status: 'REJECTED' }));
+      expect(prisma.goodsReceipt.updateMany).toHaveBeenCalledWith({
+        where: { id: 'receipt-uuid-1', status: 'DRAFT' },
+        data: expect.objectContaining({
+          status: 'REJECTED',
+          inspectedById: 'manager-1',
+          rejectionReasonCode: 'DAMAGED',
+          remarks: 'Shipment arrived with damaged packaging',
+        }),
+      });
+      expect(prisma._mockTx.stockBalance.upsert).not.toHaveBeenCalled();
+      expect(auditService.log).toHaveBeenCalledWith(
+        'manager-1',
+        'REJECT_GOODS_RECEIPT',
+        'INVENTORY',
+        'Rejected goods receipt GRN-12345678-123',
+        expect.objectContaining({
+          entityType: 'GOODS_RECEIPT',
+          entityId: 'receipt-uuid-1',
+        }),
+      );
+    });
+
+    it('prevents the receipt creator from rejecting a receipt', async () => {
+      prisma.goodsReceipt.findUnique.mockResolvedValue({
+        ...draftReceipt,
+        createdById: 'manager-1',
+      });
+
+      await expect(
+        service.rejectGoodsReceipt(
+          'receipt-uuid-1',
+          { id: 'manager-1', role: Role.STORE_MANAGER, scopeType: ScopeType.STORE, storeId: 'store-1' } as any,
+          { reasonCode: 'OTHER', remarks: 'Rejected after review' },
+        ),
+      ).rejects.toThrow(ForbiddenException);
+      expect(prisma.goodsReceipt.updateMany).not.toHaveBeenCalled();
+    });
+
+    it('requires rejection remarks', async () => {
+      await expect(
+        service.rejectGoodsReceipt('receipt-uuid-1', 'manager-1', {
+          reasonCode: 'OTHER',
+          remarks: '   ',
+        }),
+      ).rejects.toThrow('Goods receipt rejection remarks are required');
+      expect(prisma.goodsReceipt.findUnique).not.toHaveBeenCalled();
     });
   });
 

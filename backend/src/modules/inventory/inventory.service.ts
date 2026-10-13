@@ -22,6 +22,7 @@ import {
   CreateGoodsReceiptDto,
   CreateReturnInspectionDto,
   InspectGoodsReceiptDto,
+  RejectGoodsReceiptDto,
   InspectReturnDto,
   ReturnDto,
   StockInDto,
@@ -426,6 +427,61 @@ export class InventoryService {
     }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
     await this.auditService.log(user.id, 'POST_GOODS_RECEIPT', 'INVENTORY', `Posted goods receipt ${receipt.receiptCode}`);
     return posted;
+  }
+
+  async rejectGoodsReceipt(id: string, actor: SafeUser | string, dto: RejectGoodsReceiptDto) {
+    const user = this.normalizeActor(actor);
+    if (!dto.remarks?.trim()) {
+      throw new BadRequestException('Goods receipt rejection remarks are required');
+    }
+
+    const receipt = await this.prisma.goodsReceipt.findUnique({ where: { id } });
+    if (!receipt) throw new NotFoundException(`Goods receipt ${id} not found`);
+    this.resolveStoreId(user, receipt.storeId);
+    if (receipt.createdById === user.id) {
+      throw new ForbiddenException('The person who created a goods receipt cannot reject it');
+    }
+    if (receipt.status !== 'DRAFT') {
+      throw new BadRequestException(`Only DRAFT receipts can be rejected. Current status is ${receipt.status}`);
+    }
+
+    const rejected = await this.prisma.goodsReceipt.updateMany({
+      where: { id, status: 'DRAFT' },
+      data: {
+        status: 'REJECTED',
+        inspectedById: user.id,
+        inspectedAt: new Date(),
+        rejectionReasonCode: dto.reasonCode,
+        remarks: dto.remarks.trim(),
+      } as never,
+    });
+    if (rejected.count !== 1) {
+      throw new StockConflictException('Goods receipt changed before rejection; refresh and retry', {
+        operation: 'REJECT_GOODS_RECEIPT',
+        materialId: receipt.materialId,
+        storeId: receipt.storeId,
+      });
+    }
+
+    const result = await this.prisma.goodsReceipt.findUnique({
+      where: { id },
+      include: { material: true, store: true, supplier: true },
+    });
+    await this.auditService.log(
+      user.id,
+      'REJECT_GOODS_RECEIPT',
+      'INVENTORY',
+      `Rejected goods receipt ${receipt.receiptCode}`,
+      {
+        actorRole: user.role,
+        entityType: 'GOODS_RECEIPT',
+        entityId: id,
+        reason: dto.remarks.trim(),
+        beforeData: { status: receipt.status },
+        afterData: { status: 'REJECTED', reasonCode: dto.reasonCode },
+      },
+    );
+    return result;
   }
 
   async createCycleCount(actor: SafeUser | string, dto: CreateCycleCountDto) {

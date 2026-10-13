@@ -13,6 +13,7 @@ import {
   RejectGoodsReceiptDto,
   CreateReturnInspectionDto,
   InspectReturnDto,
+  InventoryTransactionQueryDto,
   ReturnDto,
   StockOutDto,
   SubmitCycleCountDto,
@@ -178,7 +179,13 @@ export class InventoryController {
 
   @Get('transactions')
   @ApiOperation({ summary: 'View Transaction History Ledger (UC16)' })
-  findAllTransactions(
+  findAllTransactions(@CurrentUser() user: SafeUser, @Query() query: InventoryTransactionQueryDto) {
+    return this.inventoryService.findTransactionPage(user, query);
+  }
+
+  @Get('transactions/all')
+  @ApiOperation({ summary: 'View unpaginated transaction history for legacy consumers' })
+  findAllTransactionsLegacy(
     @CurrentUser() user: SafeUser,
     @Query('type') type?: string,
     @Query('materialId') materialId?: string,

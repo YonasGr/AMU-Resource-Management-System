@@ -1,5 +1,10 @@
 import React, { useState } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import {
+  useInfiniteQuery,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import {
   Repeat,
   ArrowDownLeft,
@@ -109,6 +114,10 @@ export default function InventoryPage() {
   // Ledger Filter State
   const [historySearch, setHistorySearch] = useState("");
   const [historyTypeFilter, setHistoryTypeFilter] = useState("ALL");
+  const [historyMaterialId, setHistoryMaterialId] = useState("");
+  const [historySort, setHistorySort] = useState<"createdAt" | "quantity">(
+    "createdAt",
+  );
 
   // Each workflow owns its draft boundary; switching tabs must not carry quantities,
   // recipients, or authorization fields into another inventory operation.
@@ -205,12 +214,36 @@ export default function InventoryPage() {
     : 0;
 
   // Fetch Transactions
-  const { data: transactions, isLoading } = useQuery({
-    queryKey: ["inventory-transactions"],
-    queryFn: async () => {
-      const res = await api.get("/inventory/transactions");
+  const {
+    data: transactionPages,
+    isLoading,
+    isFetchingNextPage,
+    hasNextPage,
+    fetchNextPage,
+  } = useInfiniteQuery({
+    queryKey: [
+      "inventory-transactions",
+      historySearch,
+      historyTypeFilter,
+      historyMaterialId,
+      historySort,
+    ],
+    initialPageParam: undefined as string | undefined,
+    queryFn: async ({ pageParam }) => {
+      const res = await api.get("/inventory/transactions", {
+        params: {
+          ...(pageParam ? { cursor: pageParam } : {}),
+          ...(historySearch.trim() ? { search: historySearch.trim() } : {}),
+          ...(historyTypeFilter !== "ALL" ? { type: historyTypeFilter } : {}),
+          ...(historyMaterialId ? { materialId: historyMaterialId } : {}),
+          sortBy: historySort,
+          sortOrder: "desc",
+          limit: 50,
+        },
+      });
       return res.data.data ?? res.data;
     },
+    getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
   });
 
   // Mutations
@@ -519,22 +552,8 @@ export default function InventoryPage() {
     (m: any) => m.id === materialId,
   ) as WarehouseMaterial | undefined;
 
-  // Filter transactions
-  const filteredTransactions = (transactions || []).filter((txn: any) => {
-    const matchesSearch =
-      txn.transactionCode
-        ?.toLowerCase()
-        .includes(historySearch.toLowerCase()) ||
-      txn.material?.name?.toLowerCase().includes(historySearch.toLowerCase()) ||
-      txn.issuedBy?.fullName
-        ?.toLowerCase()
-        .includes(historySearch.toLowerCase());
-
-    const matchesType =
-      historyTypeFilter === "ALL" || txn.type === historyTypeFilter;
-
-    return matchesSearch && matchesType;
-  });
+  const transactions = transactionPages?.pages.flatMap((page) => page.items) ?? [];
+  const asOf = transactionPages?.pages[transactionPages.pages.length - 1]?.asOf;
 
   const operationTabs: InventoryDocumentTab[] = [
     ...(!isAuditor && canMutateStock
@@ -801,12 +820,20 @@ export default function InventoryPage() {
         </div>
       ) : (
         <InventoryHistoryWorkspace
-          transactions={filteredTransactions}
+          transactions={transactions}
           isLoading={isLoading}
           search={historySearch}
           typeFilter={historyTypeFilter}
           onSearchChange={setHistorySearch}
           onTypeFilterChange={setHistoryTypeFilter}
+          materialId={historyMaterialId}
+          onMaterialIdChange={setHistoryMaterialId}
+          sortBy={historySort}
+          onSortChange={setHistorySort}
+          asOf={asOf}
+          hasNextPage={Boolean(hasNextPage)}
+          isFetchingNextPage={isFetchingNextPage}
+          onLoadMore={() => fetchNextPage()}
         />
       )}
     </InventoryDocumentShell>

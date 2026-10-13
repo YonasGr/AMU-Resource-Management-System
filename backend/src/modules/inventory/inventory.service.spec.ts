@@ -31,6 +31,7 @@ describe('InventoryService', () => {
   beforeEach(async () => {
     const mockTx = {
       inventoryTransaction: {
+        findUnique: jest.fn(),
         create: jest.fn().mockImplementation(({ data }) => ({
           id: 'txn-uuid-1',
           transactionCode: data.transactionCode,
@@ -131,6 +132,7 @@ describe('InventoryService', () => {
               }),
             },
             inventoryTransaction: {
+              findUnique: jest.fn(),
               findMany: jest.fn(),
             },
             $transaction: jest.fn((callback) => callback(mockTx)),
@@ -255,6 +257,7 @@ describe('InventoryService', () => {
         }),
       ).rejects.toThrow(NotFoundException);
     });
+
   });
 
   describe('goods receipts', () => {
@@ -575,6 +578,33 @@ describe('InventoryService', () => {
   });
 
   describe('stockOut()', () => {
+    it('replays a keyed stock-out without mutating stock again', async () => {
+      prisma.material.findUnique.mockResolvedValueOnce(mockMaterial);
+      const existing = {
+        id: 'txn-existing',
+        type: TransactionType.STOCK_OUT,
+        materialId: 'mat-uuid-1',
+        storeId: 'store-1',
+        transactionCode: 'TXN-OUT-existing',
+      };
+      prisma.inventoryTransaction.findUnique.mockResolvedValueOnce(existing);
+
+      await expect(
+        service.stockOut(
+          {
+            id: 'keeper-1',
+            role: Role.STOREKEEPER,
+            scopeType: ScopeType.STORE,
+            storeId: 'store-1',
+          } as any,
+          { materialId: 'mat-uuid-1', storeId: 'store-1', quantity: 2, idempotencyKey: 'scan-1' },
+        ),
+      ).resolves.toEqual(existing);
+
+      expect(prisma.$transaction).not.toHaveBeenCalled();
+      expect(prisma._mockTx.stockBalance.updateMany).not.toHaveBeenCalled();
+    });
+
     it('should successfully issue stock and decrement remaining balance', async () => {
       // 30 remaining, minimum is 10. Issuing 15 leaves 15 (above minimum).
       prisma.material.findUnique

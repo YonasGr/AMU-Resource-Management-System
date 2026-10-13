@@ -590,6 +590,7 @@ model InventoryTransfer {
 model InventoryTransaction {
   id              String          @id @default(uuid())
   transactionCode String          @unique @map("transaction_code")
+  idempotencyKey  String?         @unique @map("idempotency_key")
   type            TransactionType
   quantity        Int
   lotNumber       String?         @map("lot_number")

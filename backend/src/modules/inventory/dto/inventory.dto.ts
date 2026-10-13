@@ -19,6 +19,11 @@ export class StockInDto {
   @IsUUID()
   materialId!: string;
 
+  @IsString()
+  @IsNotEmpty()
+  @IsOptional()
+  idempotencyKey?: string;
+
   @IsUUID()
   @IsOptional()
   storeId?: string;
@@ -158,6 +163,11 @@ export class StockOutDto {
   @IsUUID()
   materialId!: string;
 
+  @IsString()
+  @IsNotEmpty()
+  @IsOptional()
+  idempotencyKey?: string;
+
   @IsUUID()
   @IsOptional()
   storeId?: string;
@@ -204,6 +214,11 @@ export class StockOutDto {
 export class ReturnDto {
   @IsUUID()
   requestId!: string;
+
+  @IsString()
+  @IsNotEmpty()
+  @IsOptional()
+  idempotencyKey?: string;
 
   @IsUUID()
   requestItemId!: string;
@@ -303,6 +318,11 @@ export class InspectReturnDto {
 export class AdjustmentDto {
   @IsUUID()
   materialId!: string;
+
+  @IsString()
+  @IsNotEmpty()
+  @IsOptional()
+  idempotencyKey?: string;
 
   @IsUUID()
   @IsOptional()

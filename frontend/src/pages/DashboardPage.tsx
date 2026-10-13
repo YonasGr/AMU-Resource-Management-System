@@ -17,7 +17,6 @@ import {
   ArrowRight,
   TrendingUp,
   Clock,
-  Sparkles,
   CheckCircle2,
   ClipboardCheck,
   PackageSearch,
@@ -126,78 +125,45 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-8 animate-fade-in">
-      {/* Welcome & Role Header Hero */}
-      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-brand-900 via-brand-800 to-brand-900 p-8 text-white shadow-xl border border-brand-700/80">
-        {/* Background ambient light */}
-        <div className="absolute top-0 right-10 h-64 w-64 rounded-full bg-teal-500/10 blur-3xl pointer-events-none" />
-
-        <div className="relative z-10 flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
-          <div className="flex items-start gap-4">
-            <div className="relative hidden sm:flex h-16 w-16 items-center justify-center rounded-2xl bg-white p-1.5 shadow-xl ring-2 ring-teal-400/30 shrink-0">
-              <img src="/amu-logo.png" alt="Arba Minch University Logo" className="h-full w-full object-contain" />
-            </div>
-            <div className="space-y-2">
-              <div className="inline-flex items-center gap-2 rounded-full bg-teal-500/20 px-3 py-1 text-xs font-bold text-teal-300 border border-teal-500/30">
-                <Sparkles className="h-3.5 w-3.5" />
-                <span>Arba Minch University Store Management</span>
-              </div>
-
-              <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-white">
-                Welcome back, {user?.fullName}!
-              </h1>
-
-              <p className="text-xs sm:text-sm text-slate-300 max-w-xl leading-relaxed">
-                System access level:{' '}
-                <span className="font-bold text-teal-300 uppercase tracking-wide">
-                  {user?.role?.replace('_', ' ')}
-                </span>{' '}
-                {user?.departmentName ? `• Assigned to ${user.departmentName}` : '• Central ICT & Resource Store'}
-              </p>
-            </div>
-          </div>
-
-          {/* Quick Action Shortcuts */}
-          <div className="flex flex-wrap items-center gap-3">
-            {user?.role === 'REQUESTER' && (
-              <Button
-                variant="primary"
-                onClick={() => navigate('/requests')}
-                leftIcon={<PlusCircle className="h-4 w-4" />}
-              >
-                Request Material
-              </Button>
-            )}
-
-            {(user?.role === 'STOREKEEPER' ||
-              user?.role === 'STORE_MANAGER' ||
-              user?.role === 'ADMINISTRATOR') && (
-              <Button
-                variant="primary"
-                onClick={() => navigate('/inventory')}
-                leftIcon={<Repeat className="h-4 w-4" />}
-              >
-                Inventory Operations
-              </Button>
-            )}
-
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h1 className="text-2xl font-extrabold tracking-tight text-slate-900">Overview</h1>
+        <div className="flex flex-wrap items-center gap-2">
+          {user?.role === 'REQUESTER' && (
+            <Button
+              variant="primary"
+              onClick={() => navigate('/requests')}
+              leftIcon={<PlusCircle className="h-4 w-4" />}
+            >
+              Request material
+            </Button>
+          )}
+          {(user?.role === 'STOREKEEPER' ||
+            user?.role === 'STORE_MANAGER' ||
+            user?.role === 'ADMINISTRATOR') && (
+            <Button
+              variant="primary"
+              onClick={() => navigate('/inventory')}
+              leftIcon={<Repeat className="h-4 w-4" />}
+            >
+              Inventory operations
+            </Button>
+          )}
+          <Button
+            variant="secondary"
+            onClick={() => navigate('/materials')}
+            leftIcon={<Package className="h-4 w-4" />}
+          >
+            Catalog
+          </Button>
+          {user?.role !== 'REQUESTER' && (
             <Button
               variant="secondary"
-              onClick={() => navigate('/materials')}
-              leftIcon={<Package className="h-4 w-4" />}
+              onClick={() => navigate('/reports')}
+              leftIcon={<BarChart3 className="h-4 w-4" />}
             >
-              Browse Catalog
+              Reports
             </Button>
-
-            {user?.role !== 'REQUESTER' && (
-              <button
-                onClick={() => navigate('/reports')}
-                className="flex items-center gap-2 rounded-xl bg-brand-800/80 px-4 py-2 text-xs font-semibold text-slate-200 border border-brand-700 hover:bg-brand-700/80 transition-all"
-              >
-                <BarChart3 className="h-4 w-4 text-teal-400" />
-                <span>Reports</span>
-              </button>
-            )}
-          </div>
+          )}
         </div>
       </div>
 

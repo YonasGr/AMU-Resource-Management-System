@@ -30,6 +30,7 @@ import {
 } from './dto/inventory.dto';
 
 type InventoryActor = Pick<SafeUser, 'id' | 'storeId' | 'scopeType' | 'role'>;
+const DIRECT_ADJUSTMENT_ADMIN_THRESHOLD = 10;
 
 @Injectable()
 export class InventoryService {
@@ -1022,6 +1023,14 @@ export class InventoryService {
     });
     const currentRemaining = storeBalance?.remainingQuantity ?? 0;
     const diff = dto.newQuantity - currentRemaining;
+    if (
+      user.role === Role.STORE_MANAGER &&
+      Math.abs(diff) > DIRECT_ADJUSTMENT_ADMIN_THRESHOLD
+    ) {
+      throw new ForbiddenException(
+        `Adjustments greater than ${DIRECT_ADJUSTMENT_ADMIN_THRESHOLD} units require administrator approval`,
+      );
+    }
 
     const timeStamp = Date.now().toString().slice(-6);
     const rand = Math.floor(100 + Math.random() * 900);

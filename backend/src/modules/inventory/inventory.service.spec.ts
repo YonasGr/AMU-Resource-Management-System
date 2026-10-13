@@ -725,6 +725,58 @@ describe('InventoryService', () => {
         }),
       ).rejects.toThrow(NotFoundException);
     });
+
+    it('requires administrator approval for large manager adjustments', async () => {
+      prisma.material.findUnique.mockResolvedValueOnce(mockMaterial);
+      prisma.stockBalance.findUnique.mockResolvedValueOnce({
+        remainingQuantity: 30,
+        reservedQuantity: 0,
+      });
+
+      await expect(
+        service.adjustStock({
+          id: 'manager-1',
+          role: Role.STORE_MANAGER,
+          scopeType: ScopeType.STORE,
+          storeId: 'legacy-store',
+        } as any, {
+          materialId: 'mat-uuid-1',
+          newQuantity: 15,
+          reasonCode: 'COUNT_VARIANCE' as const,
+          remarks: 'Large variance requires escalation',
+        }),
+      ).rejects.toThrow('require administrator approval');
+
+      expect(prisma.$transaction).not.toHaveBeenCalled();
+    });
+
+    it('allows administrators to post large adjustments', async () => {
+      prisma.material.findUnique
+        .mockResolvedValueOnce(mockMaterial)
+        .mockResolvedValueOnce({
+          ...mockMaterial,
+          stockBalances: [{ remainingQuantity: 0 }],
+        });
+      prisma.stockBalance.findUnique.mockResolvedValueOnce({
+        remainingQuantity: 30,
+        reservedQuantity: 0,
+      });
+
+      await expect(
+        service.adjustStock({
+          id: 'admin-1',
+          role: Role.ADMINISTRATOR,
+          scopeType: ScopeType.GLOBAL,
+          storeId: null,
+        } as any, {
+          materialId: 'mat-uuid-1',
+          storeId: 'legacy-store',
+          newQuantity: 0,
+          reasonCode: 'LOSS' as const,
+          remarks: 'Administrator-approved large variance',
+        }),
+      ).resolves.toBeDefined();
+    });
   });
 
   describe('returnMaterial()', () => {
@@ -843,16 +895,17 @@ describe('InventoryService', () => {
 
       const dto = {
         materialId: 'mat-uuid-1',
+        storeId: 'legacy-store',
         newQuantity: 4,
         reasonCode: 'DAMAGE' as const,
         remarks: 'Water damage during warehouse roof inspection',
       };
 
       await service.adjustStock({
-        id: 'manager-1',
-        role: Role.STORE_MANAGER,
-        scopeType: ScopeType.STORE,
-        storeId: 'legacy-store',
+        id: 'admin-1',
+        role: Role.ADMINISTRATOR,
+        scopeType: ScopeType.GLOBAL,
+        storeId: null,
       } as any, dto);
 
       expect(notifications.createForUsers).toHaveBeenCalledWith(

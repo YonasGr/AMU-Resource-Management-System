@@ -38,6 +38,7 @@ export default function UsersPage({ section = 'users' }: { section?: AdminSectio
     (section === 'audit' && currentUser?.role === 'AUDITOR');
 
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [activeUserTab, setActiveUserTab] = useState<'users' | 'approvals'>('users');
   const [search, setSearch] = useState('');
 
   // Form State
@@ -179,7 +180,8 @@ export default function UsersPage({ section = 'users' }: { section?: AdminSectio
       u.department?.name?.toLowerCase().includes(q)
     );
   });
-  const visibleUsers = section === 'approvals'
+  const currentSection = section === 'users' ? activeUserTab : section;
+  const visibleUsers = currentSection === 'approvals'
     ? filteredUsers.filter((u: any) => u.status === 'PENDING_APPROVAL')
     : filteredUsers;
 
@@ -188,20 +190,20 @@ export default function UsersPage({ section = 'users' }: { section?: AdminSectio
       {/* Header */}
       <PageHeader
         title={
-          section === 'approvals'
+          currentSection === 'approvals'
             ? 'Registration Approvals'
-            : section === 'audit'
+            : currentSection === 'audit'
             ? 'Audit Logs'
-            : section === 'settings'
+            : currentSection === 'settings'
             ? 'System Settings & Backups'
             : 'User Management'
         }
         description={
-          section === 'approvals'
+          currentSection === 'approvals'
             ? 'Review newly registered requester accounts and approve access to material requests.'
-            : section === 'audit'
+            : currentSection === 'audit'
             ? 'Review the immutable record of security, account, and operational activity.'
-            : section === 'settings'
+            : currentSection === 'settings'
             ? 'Manage system parameters and administrative backup snapshots.'
             : 'Create staff accounts, assign role-based access, and manage existing users.'
         }
@@ -220,7 +222,7 @@ export default function UsersPage({ section = 'users' }: { section?: AdminSectio
           },
         ]}
         actions={
-          section === 'users' ? (
+          currentSection === 'users' ? (
             <Button
               variant="primary"
               onClick={() => setIsModalOpen(true)}
@@ -232,8 +234,43 @@ export default function UsersPage({ section = 'users' }: { section?: AdminSectio
         }
       />
 
+      {(section === 'users') && (
+        <div className="-mx-4 flex snap-x items-center gap-2 overflow-x-auto border-b border-slate-200/90 px-4 pb-3 sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0">
+          <button
+            type="button"
+            onClick={() => setActiveUserTab('users')}
+            className={`flex min-h-11 shrink-0 snap-start items-center gap-2 rounded-xl px-3 py-2 text-xs font-bold transition-all sm:px-4 ${
+              activeUserTab === 'users'
+                ? 'bg-brand-900 text-white shadow-xs'
+                : 'border border-slate-200/80 bg-white text-slate-600 hover:bg-slate-50'
+            }`}
+          >
+            <ShieldCheck className="h-3.5 w-3.5" />
+            <span>System Users</span>
+            <span className="rounded-full bg-slate-100/30 px-2 py-0.5 text-[10px] font-bold">
+              {users?.length ?? 0}
+            </span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveUserTab('approvals')}
+            className={`flex min-h-11 shrink-0 snap-start items-center gap-2 rounded-xl px-3 py-2 text-xs font-bold transition-all sm:px-4 ${
+              activeUserTab === 'approvals'
+                ? 'bg-brand-900 text-white shadow-xs'
+                : 'border border-slate-200/80 bg-white text-slate-600 hover:bg-slate-50'
+            }`}
+          >
+            <UserCheck className="h-3.5 w-3.5" />
+            <span>Registration Approvals</span>
+            <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-800">
+              {(users || []).filter((u: any) => u.status === 'PENDING_APPROVAL').length}
+            </span>
+          </button>
+        </div>
+      )}
+
       {/* Tab: Users Management */}
-      {(section === 'users' || section === 'approvals') && (
+      {(currentSection === 'users' || currentSection === 'approvals') && (
         <Card className="overflow-hidden space-y-4">
           <div className="p-4 border-b border-slate-200/80 max-w-md">
             <SearchInput
@@ -257,7 +294,7 @@ export default function UsersPage({ section = 'users' }: { section?: AdminSectio
                 description={
                   search
                     ? 'No user accounts match your search filter.'
-                    : section === 'approvals'
+                    : currentSection === 'approvals'
                     ? 'There are no requester registrations waiting for approval.'
                     : 'No system accounts are configured.'
                 }
@@ -385,7 +422,7 @@ export default function UsersPage({ section = 'users' }: { section?: AdminSectio
       )}
 
       {/* Tab: Audit Logs */}
-      {section === 'audit' && (
+      {currentSection === 'audit' && (
         <Card className="overflow-hidden">
           <CardHeader>
             <CardTitle>System Activity Audit Log</CardTitle>
@@ -466,7 +503,7 @@ export default function UsersPage({ section = 'users' }: { section?: AdminSectio
       )}
 
       {/* Tab: System Settings & Backup */}
-      {section === 'settings' && (
+      {currentSection === 'settings' && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <Card>
             <CardHeader>
@@ -551,7 +588,7 @@ export default function UsersPage({ section = 'users' }: { section?: AdminSectio
       )}
 
       {/* Create User Modal */}
-      {section === 'users' && <Modal
+      {currentSection === 'users' && <Modal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
         title="Create System User Account"

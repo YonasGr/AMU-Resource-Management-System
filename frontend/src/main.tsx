@@ -75,7 +75,6 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
                 }
               >
                 <Route index element={<UsersPage section="users" />} />
-                <Route path="approvals" element={<UsersPage section="approvals" />} />
               </Route>
               <Route element={<ProtectedRoute allowedRoles={['ADMINISTRATOR', 'AUDITOR']} />}>
                 <Route path="/audit" element={<UsersPage section="audit" />} />

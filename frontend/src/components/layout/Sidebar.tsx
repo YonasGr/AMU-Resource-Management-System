@@ -123,12 +123,6 @@ export function Sidebar({ isOpen = false, onNavigate }: { isOpen?: boolean; onNa
           roles: ['ADMINISTRATOR'],
         },
         {
-          to: '/users/approvals',
-          label: 'Registration Approvals',
-          icon: ShieldCheck,
-          roles: ['ADMINISTRATOR'],
-        },
-        {
           to: '/audit',
           label: 'Audit Logs',
           icon: History,

@@ -30,12 +30,15 @@ export default function LoginPage() {
 
     try {
       if (isRegister) {
-        const res = await api.post('/auth/register', {
+        await api.post('/auth/register', {
           fullName,
           email,
           password,
         });
-        setSession(res.data.data || res.data);
+        setIsRegister(false);
+        setPassword('');
+        setError('Registration received. An administrator must approve your account before you can submit material requests.');
+        return;
       } else {
         const res = await api.post('/auth/login', { email, password });
         setSession(res.data.data || res.data);
@@ -116,10 +119,16 @@ export default function LoginPage() {
             </h3>
             <p className="text-xs text-slate-500 mt-1">
               {isRegister
-                ? 'Register your university account.'
+                ? 'Create a requester account. Approval is required before submitting requests.'
                 : 'Access your AMU store account.'}
             </p>
           </div>
+
+          {isRegister && (
+            <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs leading-relaxed text-amber-800">
+              After registration you can sign in to view the catalog. Request submission remains locked until an administrator approves your account.
+            </div>
+          )}
 
           {error && (
             <div className="rounded-xl bg-coral-50 p-3.5 text-xs font-semibold text-coral-700 border border-coral-200 text-center animate-fade-in">

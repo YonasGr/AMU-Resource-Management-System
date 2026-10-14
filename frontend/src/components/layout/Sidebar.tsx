@@ -59,7 +59,7 @@ export function Sidebar({ isOpen = false, onNavigate }: { isOpen?: boolean; onNa
           label: 'Overview Dashboard',
           icon: LayoutDashboard,
           end: true,
-          roles: ['ADMINISTRATOR', 'STORE_MANAGER', 'STOREKEEPER', 'AUDITOR', 'REQUESTER'],
+          roles: ['ADMINISTRATOR', 'STORE_MANAGER', 'STOREKEEPER', 'AUDITOR'],
         },
         {
           to: '/materials',
@@ -71,7 +71,7 @@ export function Sidebar({ isOpen = false, onNavigate }: { isOpen?: boolean; onNa
         },
         {
           to: '/requests',
-          label: 'Material Requests',
+          label: 'My Material Requests',
           icon: FileText,
           badge: pendingRequestsCount > 0 ? `${pendingRequestsCount}` : undefined,
           badgeTone: 'amber',

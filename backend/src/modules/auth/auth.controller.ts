@@ -5,6 +5,7 @@ import { LoginDto } from './dto/login.dto';
 import { Public } from './decorators/public.decorator';
 import { CurrentUser, SafeUser } from './decorators/current-user.decorator';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
+import { RegisterDto } from './dto/register.dto';
 
 @ApiTags('auth')
 @Controller('auth')
@@ -31,16 +32,7 @@ export class AuthController {
   @Post('register')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Register a new Requester / Employee account' })
-  register(
-    @Body()
-    dto: {
-      fullName: string;
-      email: string;
-      phone?: string;
-      password: string;
-      departmentId?: string;
-    },
-  ) {
+  register(@Body() dto: RegisterDto) {
     return this.authService.register(dto);
   }
 

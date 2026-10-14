@@ -6,6 +6,7 @@ import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { PrismaService } from '../../prisma/prisma.service';
 import { UsersService } from '../users/users.service';
 import { RedisService } from '../../common/redis/redis.service';
+import { RegisterDto } from './dto/register.dto';
 
 export interface AuthResponse {
   accessToken: string;
@@ -15,6 +16,8 @@ export interface AuthResponse {
     fullName: string;
     email: string;
     role: string;
+    status: string;
+    employeeCode?: string | null;
     departmentId?: string | null;
     departmentName?: string | null;
   };
@@ -67,7 +70,7 @@ export class AuthService {
       include: { department: true },
     });
 
-    if (!user || user.status !== 'ACTIVE') {
+    if (!user || user.status === 'INACTIVE') {
       await this.redisService.recordFailedAttempt(emailKey, AuthService.LOCKOUT_WINDOW_SECONDS);
       throw new UnauthorizedException('Invalid email or password');
     }
@@ -110,7 +113,16 @@ export class AuthService {
     }
   }
 
-  private createSession(user: { id: string; email: string; role: string; fullName: string; departmentId: string | null; department?: { name: string } | null }): AuthResponse {
+  private createSession(user: {
+    id: string;
+    email: string;
+    role: string;
+    status: string;
+    employeeCode?: string | null;
+    fullName: string;
+    departmentId: string | null;
+    department?: { name: string } | null;
+  }): AuthResponse {
     const accessToken = this.jwtService.sign(
       { sub: user.id, email: user.email, role: user.role },
       {
@@ -136,17 +148,13 @@ export class AuthService {
         role: user.role,
         departmentId: user.departmentId,
         departmentName: user.department?.name,
+        status: user.status,
+        employeeCode: user.employeeCode,
       },
     };
   }
 
-  async register(dto: {
-    fullName: string;
-    email: string;
-    phone?: string;
-    password: string;
-    departmentId?: string;
-  }): Promise<AuthResponse> {
+  async register(dto: RegisterDto): Promise<{ message: string; user: Record<string, unknown> }> {
     const createdUser = await this.usersService.create({
       fullName: dto.fullName,
       email: dto.email,
@@ -154,8 +162,18 @@ export class AuthService {
       password: dto.password,
       role: 'REQUESTER' as any,
       departmentId: dto.departmentId,
+      status: 'PENDING_APPROVAL',
     });
 
-    return this.login(dto.email, dto.password);
+    return {
+      message: 'Registration received. Your account is pending administrator approval.',
+      user: {
+        id: createdUser.id,
+        fullName: createdUser.fullName,
+        email: createdUser.email,
+        role: createdUser.role,
+        status: createdUser.status,
+      },
+    };
   }
 }

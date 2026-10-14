@@ -9,6 +9,8 @@ export interface AuthUser {
   departmentId?: string | null;
   departmentName?: string | null;
   storeId?: string | null;
+  status: 'PENDING_APPROVAL' | 'ACTIVE' | 'INACTIVE';
+  employeeCode?: string | null;
 }
 
 interface AuthState {

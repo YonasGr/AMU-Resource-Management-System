@@ -1,7 +1,9 @@
 import { createParamDecorator, ExecutionContext } from '@nestjs/common';
 import { User } from '@prisma/client';
 
-export type SafeUser = Omit<User, 'passwordHash'>;
+export type SafeUser = Omit<User, 'passwordHash' | 'employeeCode'> & {
+  employeeCode?: string | null;
+};
 
 /**
  * Pulls the authenticated user off the request, populated by JwtAccessStrategy.

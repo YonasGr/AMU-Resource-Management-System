@@ -24,12 +24,12 @@ export class JwtAccessStrategy extends PassportStrategy(Strategy, 'jwt') {
 
   /**
    * Runs after the JWT signature/expiry is verified by passport-jwt.
-   * Re-checks the user still exists and is active, so a deactivated user's
+   * Re-checks the user still exists and is not inactive, so a deactivated user's
    * still-valid access token stops working immediately rather than at expiry.
    */
   async validate(payload: JwtAccessPayload) {
     const user = await this.usersService.findById(payload.sub);
-    if (!user || user.status !== 'ACTIVE') {
+    if (!user || user.status === 'INACTIVE') {
       throw new UnauthorizedException('User is no longer active');
     }
     const { passwordHash, ...safeUser } = user;

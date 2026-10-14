@@ -1,11 +1,34 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import { Role } from '@prisma/client';
+import { SafeUser } from '../auth/decorators/current-user.decorator';
 
 @Injectable()
 export class DashboardService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async getStats() {
+  async getStats(user: SafeUser) {
+    if (user.role === Role.REQUESTER) {
+      const [totalMaterials, myRequests, approvedRequests] = await Promise.all([
+        this.prisma.material.count({ where: { status: 'ACTIVE' } }),
+        this.prisma.materialRequest.count({ where: { requesterId: user.id } }),
+        this.prisma.materialRequest.count({
+          where: { requesterId: user.id, status: { in: ['APPROVED', 'PARTIALLY_ISSUED', 'ISSUED'] } },
+        }),
+      ]);
+      return {
+        overview: {
+          totalMaterials,
+          pendingRequests: Math.max(0, myRequests - approvedRequests),
+          approvedRequests,
+          lowStockCount: 0,
+          stockInCount: 0,
+          stockOutCount: 0,
+        },
+        lowStockAlerts: [],
+        recentTransactions: [],
+      };
+    }
     const totalMaterials = await this.prisma.material.count({ where: { status: 'ACTIVE' } });
     const totalDepartments = await this.prisma.department.count();
     const totalEmployees = await this.prisma.employee.count();

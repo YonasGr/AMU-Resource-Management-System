@@ -180,10 +180,10 @@ export default function UsersPage() {
     <div className="space-y-6 animate-fade-in">
       {/* Header */}
       <PageHeader
-        title="Admin Control & System Security"
-        description="Manage user credentials, assign role-based access privileges, inspect system audit logs, and download database backups."
+        title="User Management"
+        description="Approve registrations, create staff accounts, assign role-based access, inspect audit logs, and manage backups."
         icon={ShieldCheck}
-        breadcrumbs={[{ label: 'Home', to: '/' }, { label: 'Admin Security Control' }]}
+        breadcrumbs={[{ label: 'Home', to: '/' }, { label: 'User Management' }]}
         actions={
           <Button
             variant="primary"

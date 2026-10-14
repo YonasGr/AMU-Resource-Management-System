@@ -118,8 +118,8 @@ export function Sidebar({ isOpen = false, onNavigate }: { isOpen?: boolean; onNa
         },
         {
           to: '/users',
-          label: 'Admin & Backup Controls',
-          icon: ShieldAlert,
+          label: 'User Management',
+          icon: Users,
           roles: ['ADMINISTRATOR'],
         },
       ],

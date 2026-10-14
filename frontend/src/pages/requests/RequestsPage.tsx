@@ -35,6 +35,7 @@ export default function RequestsPage() {
   const isManager = user?.role === 'STORE_MANAGER' || user?.role === 'ADMINISTRATOR';
   // Strict Segregation of Duties: Only physical STOREKEEPER can execute stock issuance
   const isKeeper = user?.role === 'STOREKEEPER';
+  const canSubmitRequest = user?.role !== 'REQUESTER' || user.status === 'ACTIVE';
 
   // Role-tailored initial tab
   const getInitialTab = (): 'all' | 'my' | 'approvals' | 'issue' => {
@@ -212,6 +213,20 @@ export default function RequestsPage() {
       ? myRequests
       : allRequests;
 
+  const requestAction = canSubmitRequest ? (
+    <Button
+      variant="primary"
+      onClick={() => setIsModalOpen(true)}
+      leftIcon={<Plus className="h-4 w-4" />}
+    >
+      Submit New Request
+    </Button>
+  ) : (
+    <span className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800">
+      Account approval required to submit
+    </span>
+  );
+
   return (
     <div className="space-y-6 animate-fade-in">
       {/* Header */}
@@ -220,15 +235,7 @@ export default function RequestsPage() {
         description="Submit departmental requisition orders, approve request workflows, and release store items."
         icon={FileText}
         breadcrumbs={[{ label: 'Home', to: '/' }, { label: 'Material Requests' }]}
-        actions={
-          <Button
-            variant="primary"
-            onClick={() => setIsModalOpen(true)}
-            leftIcon={<Plus className="h-4 w-4" />}
-          >
-            Submit New Request
-          </Button>
-        }
+        actions={requestAction}
       />
 
       {/* Feedback Banner */}
@@ -353,14 +360,16 @@ export default function RequestsPage() {
                   : 'No material requests found.'
               }
               action={
-                <Button
-                  variant="primary"
-                  size="sm"
-                  onClick={() => setIsModalOpen(true)}
-                  leftIcon={<Plus className="h-3.5 w-3.5" />}
-                >
-                  Submit Request
-                </Button>
+                canSubmitRequest ? (
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    onClick={() => setIsModalOpen(true)}
+                    leftIcon={<Plus className="h-3.5 w-3.5" />}
+                  >
+                    Submit Request
+                  </Button>
+                ) : undefined
               }
             />
           </Card>

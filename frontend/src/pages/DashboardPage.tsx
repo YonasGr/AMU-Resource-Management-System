@@ -63,6 +63,7 @@ export default function DashboardPage() {
       return res.data.data ?? res.data;
     },
     refetchInterval: 30000,
+    enabled: user?.role !== 'REQUESTER',
   });
 
   if (isLoading) {
@@ -70,6 +71,50 @@ export default function DashboardPage() {
       <div className="flex min-h-[400px] flex-col items-center justify-center gap-3">
         <div className="h-8 w-8 animate-spin rounded-full border-3 border-teal-600 border-t-transparent" />
         <p className="text-xs font-semibold text-slate-500">Loading live store metrics & inventory charts...</p>
+      </div>
+    );
+  }
+
+  if (user?.role === 'REQUESTER') {
+    const requesterOverview = stats?.overview;
+    return (
+      <div className="space-y-6 animate-fade-in">
+        <div>
+          <h1 className="text-2xl font-extrabold tracking-tight text-slate-900">Requester workspace</h1>
+          <p className="mt-1 text-sm text-slate-500">
+            Find materials, submit requests, and follow their progress from one place.
+          </p>
+        </div>
+        {user.status !== 'ACTIVE' && (
+          <Card className="border-amber-200 bg-amber-50">
+            <CardBody>
+              <div className="flex items-start gap-3 text-amber-900">
+                <ShieldAlert className="mt-0.5 h-5 w-5 shrink-0" />
+                <div>
+                  <p className="font-bold">Account pending approval</p>
+                  <p className="mt-1 text-xs leading-relaxed">
+                    You can browse the catalog now. An administrator must approve your account before you can submit a material request.
+                  </p>
+                </div>
+              </div>
+            </CardBody>
+          </Card>
+        )}
+        <div className="grid grid-cols-1 gap-5 sm:grid-cols-3">
+          <StatCard title="Catalog materials" value={requesterOverview?.totalMaterials ?? 0} subtitle="Available catalog items" icon={Package} tone="teal" onClick={() => navigate('/materials')} />
+          <StatCard title="My pending requests" value={requesterOverview?.pendingRequests ?? 0} subtitle="Awaiting review" icon={Clock} tone="amber" onClick={() => navigate('/requests')} />
+          <StatCard title="My approved requests" value={requesterOverview?.approvedRequests ?? 0} subtitle="Approved or in fulfillment" icon={CheckCircle2} tone="emerald" onClick={() => navigate('/requests')} />
+        </div>
+        <Card>
+          <CardHeader>
+            <CardTitle>What you can do</CardTitle>
+            <CardDescription>Your workspace is intentionally limited to requester tasks.</CardDescription>
+          </CardHeader>
+          <CardBody className="flex flex-wrap gap-3">
+            <Button variant="primary" onClick={() => navigate('/materials')} leftIcon={<Package className="h-4 w-4" />}>Browse catalog</Button>
+            <Button variant="secondary" onClick={() => navigate('/requests')} leftIcon={<FileText className="h-4 w-4" />}>Track my requests</Button>
+          </CardBody>
+        </Card>
       </div>
     );
   }
@@ -128,15 +173,6 @@ export default function DashboardPage() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl font-extrabold tracking-tight text-slate-900">Overview</h1>
         <div className="flex flex-wrap items-center gap-2">
-          {user?.role === 'REQUESTER' && (
-            <Button
-              variant="primary"
-              onClick={() => navigate('/requests')}
-              leftIcon={<PlusCircle className="h-4 w-4" />}
-            >
-              Request material
-            </Button>
-          )}
           {(user?.role === 'STOREKEEPER' ||
             user?.role === 'STORE_MANAGER' ||
             user?.role === 'ADMINISTRATOR') && (
@@ -155,15 +191,13 @@ export default function DashboardPage() {
           >
             Catalog
           </Button>
-          {user?.role !== 'REQUESTER' && (
-            <Button
-              variant="secondary"
-              onClick={() => navigate('/reports')}
-              leftIcon={<BarChart3 className="h-4 w-4" />}
-            >
-              Reports
-            </Button>
-          )}
+          <Button
+            variant="secondary"
+            onClick={() => navigate('/reports')}
+            leftIcon={<BarChart3 className="h-4 w-4" />}
+          >
+            Reports
+          </Button>
         </div>
       </div>
 

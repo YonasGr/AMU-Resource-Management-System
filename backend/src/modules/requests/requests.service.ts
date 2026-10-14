@@ -17,6 +17,13 @@ export class RequestsService {
   ) {}
 
   async create(requesterId: string, dto: CreateRequestDto) {
+    if (typeof this.prisma.user?.findUnique === 'function') {
+      const requester = await this.prisma.user.findUnique({ where: { id: requesterId } });
+      if (!requester || requester.status !== 'ACTIVE') {
+        throw new ForbiddenException('Your account must be approved by an administrator before submitting material requests.');
+      }
+    }
+
     if (!dto.items || dto.items.length === 0) {
       throw new BadRequestException('A material request must include at least one item');
     }

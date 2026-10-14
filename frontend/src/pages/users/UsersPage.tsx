@@ -85,9 +85,9 @@ export default function UsersPage() {
   });
 
   // Update Role Mutation
-  const updateRoleMutation = useMutation({
-    mutationFn: async ({ id, role }: { id: string; role: string }) => {
-      const res = await api.patch(`/users/${id}`, { role });
+  const updateUserMutation = useMutation({
+    mutationFn: async ({ id, role, status }: { id: string; role?: string; status?: string }) => {
+      const res = await api.patch(`/users/${id}`, { role, status });
       return res.data;
     },
     onSuccess: () => {
@@ -318,10 +318,20 @@ export default function UsersPage() {
                       </td>
 
                       <td className="px-6 py-4 text-right">
+                        {u.status === 'PENDING_APPROVAL' && (
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            className="mr-2"
+                            onClick={() => updateUserMutation.mutate({ id: u.id, status: 'ACTIVE' })}
+                          >
+                            Approve
+                          </Button>
+                        )}
                         <select
                           value={u.role}
                           onChange={(e) =>
-                            updateRoleMutation.mutate({ id: u.id, role: e.target.value })
+                            updateUserMutation.mutate({ id: u.id, role: e.target.value })
                           }
                           className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-800 shadow-2xs focus:border-teal-500 focus:outline-none"
                         >
@@ -355,7 +365,7 @@ export default function UsersPage() {
                     <select
                       aria-label={`Assign role for ${u.fullName}`}
                       value={u.role}
-                      onChange={(e) => updateRoleMutation.mutate({ id: u.id, role: e.target.value })}
+                      onChange={(e) => updateUserMutation.mutate({ id: u.id, role: e.target.value })}
                       className="min-h-11 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-800 shadow-2xs focus:border-teal-500 focus:outline-none"
                     >
                       <option value="ADMINISTRATOR">ADMINISTRATOR</option>
@@ -365,6 +375,16 @@ export default function UsersPage() {
                       <option value="REQUESTER">REQUESTER</option>
                     </select>
                   </label>
+                  {u.status === 'PENDING_APPROVAL' && (
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      className="mt-3 w-full"
+                      onClick={() => updateUserMutation.mutate({ id: u.id, status: 'ACTIVE' })}
+                    >
+                      Approve account
+                    </Button>
+                  )}
                 </li>
               ))}
             </ul>

@@ -1,6 +1,7 @@
 import { Controller, Get } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { DashboardService } from './dashboard.service';
+import { CurrentUser, SafeUser } from '../auth/decorators/current-user.decorator';
 
 @ApiTags('dashboard')
 @ApiBearerAuth()
@@ -10,8 +11,8 @@ export class DashboardController {
 
   @Get('stats')
   @ApiOperation({ summary: 'Get store inventory statistics and low-stock alerts' })
-  getStats() {
-    return this.dashboardService.getStats();
+  getStats(@CurrentUser() user: SafeUser) {
+    return this.dashboardService.getStats(user);
   }
 
   @Get('exceptions')

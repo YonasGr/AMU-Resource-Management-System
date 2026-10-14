@@ -3,6 +3,7 @@ import * as argon2 from 'argon2';
 import { User, Role, UserStatus, ScopeType } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
+import { randomUUID } from 'node:crypto';
 
 export interface CreateUserDto {
   fullName: string;
@@ -13,6 +14,7 @@ export interface CreateUserDto {
   scopeType?: ScopeType;
   departmentId?: string;
   storeId?: string;
+  status?: UserStatus;
 }
 
 export interface UpdateUserDto {
@@ -35,7 +37,8 @@ export class UsersService {
   ) {}
 
   async create(dto: CreateUserDto, actorId?: string): Promise<Omit<User, 'passwordHash'>> {
-    const existing = await this.prisma.user.findUnique({ where: { email: dto.email } });
+    const email = dto.email.trim().toLowerCase();
+    const existing = await this.prisma.user.findUnique({ where: { email } });
     if (existing) {
       throw new ConflictException(`A user with email ${dto.email} already exists`);
     }
@@ -45,10 +48,12 @@ export class UsersService {
     const user = await this.prisma.user.create({
       data: {
         fullName: dto.fullName,
-        email: dto.email,
+        email,
         phone: dto.phone,
         passwordHash,
         role: dto.role || Role.REQUESTER,
+        status: dto.status || UserStatus.ACTIVE,
+        employeeCode: `EMP-${new Date().getFullYear()}-${randomUUID().slice(0, 8).toUpperCase()}`,
         scopeType: dto.scopeType || ScopeType.STORE,
         departmentId: dto.departmentId || null,
         storeId: dto.storeId || null,

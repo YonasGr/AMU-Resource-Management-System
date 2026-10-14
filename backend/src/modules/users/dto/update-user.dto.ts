@@ -1,10 +1,6 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { IsEmail, IsEnum, IsOptional, IsString, IsUUID } from 'class-validator';
-
-export enum UserStatus {
-  ACTIVE = 'ACTIVE',
-  INACTIVE = 'INACTIVE',
-}
+import { IsEmail, IsEnum, IsOptional, IsString, IsUUID, MinLength } from 'class-validator';
+import { Role, ScopeType, UserStatus as PrismaUserStatus } from '@prisma/client';
 
 export class UpdateUserDto {
   @ApiPropertyOptional()
@@ -25,10 +21,31 @@ export class UpdateUserDto {
   @ApiPropertyOptional()
   @IsOptional()
   @IsUUID()
-  organizationId?: string;
+  role?: Role;
+
+  @ApiPropertyOptional({ enum: ScopeType })
+  @IsOptional()
+  @IsEnum(ScopeType)
+  scopeType?: ScopeType;
 
   @ApiPropertyOptional()
   @IsOptional()
-  @IsEnum(UserStatus)
-  status?: UserStatus;
+  @IsUUID()
+  departmentId?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsUUID()
+  storeId?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  @MinLength(8)
+  password?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsEnum(PrismaUserStatus)
+  status?: PrismaUserStatus;
 }

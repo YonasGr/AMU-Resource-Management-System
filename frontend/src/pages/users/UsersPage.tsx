@@ -28,12 +28,15 @@ import { Input, Select, Label, SearchInput } from '../../components/ui/Input';
 import { Modal } from '../../components/ui/Modal';
 import { EmptyState } from '../../components/ui/EmptyState';
 
-export default function UsersPage() {
+type AdminSection = 'users' | 'approvals' | 'audit' | 'settings';
+
+export default function UsersPage({ section = 'users' }: { section?: AdminSection }) {
   const queryClient = useQueryClient();
   const currentUser = useAuthStore((s) => s.user);
-  const isAdmin = currentUser?.role === 'ADMINISTRATOR';
+  const isAdmin =
+    currentUser?.role === 'ADMINISTRATOR' ||
+    (section === 'audit' && currentUser?.role === 'AUDITOR');
 
-  const [activeTab, setActiveTab] = useState<'users' | 'audit' | 'settings'>('users');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [search, setSearch] = useState('');
 
@@ -62,7 +65,7 @@ export default function UsersPage() {
     },
   });
 
-  const { data: auditLogs, isLoading: loadingAudit } = useQuery({
+  const { data: auditResponse, isLoading: loadingAudit } = useQuery({
     queryKey: ['audit-logs'],
     enabled: isAdmin,
     queryFn: async () => {
@@ -70,6 +73,7 @@ export default function UsersPage() {
       return res.data.data ?? res.data;
     },
   });
+  const auditLogs = Array.isArray(auditResponse) ? auditResponse : auditResponse?.items ?? [];
 
   // Create User Mutation
   const createUserMutation = useMutation({
@@ -175,76 +179,61 @@ export default function UsersPage() {
       u.department?.name?.toLowerCase().includes(q)
     );
   });
+  const visibleUsers = section === 'approvals'
+    ? filteredUsers.filter((u: any) => u.status === 'PENDING_APPROVAL')
+    : filteredUsers;
 
   return (
     <div className="space-y-6 animate-fade-in">
       {/* Header */}
       <PageHeader
-        title="User Management"
-        description="Approve registrations, create staff accounts, assign role-based access, inspect audit logs, and manage backups."
+        title={
+          section === 'approvals'
+            ? 'Registration Approvals'
+            : section === 'audit'
+            ? 'Audit Logs'
+            : section === 'settings'
+            ? 'System Settings & Backups'
+            : 'User Management'
+        }
+        description={
+          section === 'approvals'
+            ? 'Review newly registered requester accounts and approve access to material requests.'
+            : section === 'audit'
+            ? 'Review the immutable record of security, account, and operational activity.'
+            : section === 'settings'
+            ? 'Manage system parameters and administrative backup snapshots.'
+            : 'Create staff accounts, assign role-based access, and manage existing users.'
+        }
         icon={ShieldCheck}
-        breadcrumbs={[{ label: 'Home', to: '/' }, { label: 'User Management' }]}
+        breadcrumbs={[
+          { label: 'Home', to: '/' },
+          {
+            label:
+              section === 'approvals'
+                ? 'Registration Approvals'
+                : section === 'audit'
+                ? 'Audit Logs'
+                : section === 'settings'
+                ? 'System Settings & Backups'
+                : 'User Management',
+          },
+        ]}
         actions={
-          <Button
-            variant="primary"
-            onClick={() => setIsModalOpen(true)}
-            leftIcon={<UserPlus className="h-4 w-4" />}
-          >
-            Create User Account
-          </Button>
+          section === 'users' ? (
+            <Button
+              variant="primary"
+              onClick={() => setIsModalOpen(true)}
+              leftIcon={<UserPlus className="h-4 w-4" />}
+            >
+              Create User Account
+            </Button>
+          ) : undefined
         }
       />
 
-      {/* Navigation Tabs */}
-      <div className="-mx-4 flex snap-x items-center gap-2 overflow-x-auto border-b border-slate-200/90 px-4 pb-3 sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0">
-        <button
-          type="button"
-          onClick={() => setActiveTab('users')}
-          className={`flex min-h-11 shrink-0 snap-start items-center gap-2 rounded-xl px-3 py-2 text-xs font-bold transition-all sm:px-4 ${
-            activeTab === 'users'
-              ? 'bg-brand-900 text-white shadow-xs'
-              : 'bg-white text-slate-600 border border-slate-200/80 hover:bg-slate-50'
-          }`}
-        >
-          <ShieldCheck className="h-3.5 w-3.5" />
-          <span>System Users</span>
-          <span className="rounded-full bg-slate-100/30 px-2 py-0.5 text-[10px] font-bold">
-            {users?.length ?? 0}
-          </span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setActiveTab('audit')}
-          className={`flex min-h-11 shrink-0 snap-start items-center gap-2 rounded-xl px-3 py-2 text-xs font-bold transition-all sm:px-4 ${
-            activeTab === 'audit'
-              ? 'bg-brand-900 text-white shadow-xs'
-              : 'bg-white text-slate-600 border border-slate-200/80 hover:bg-slate-50'
-          }`}
-        >
-          <History className="h-3.5 w-3.5" />
-          <span>Audit Logs</span>
-          <span className="rounded-full bg-slate-100/30 px-2 py-0.5 text-[10px] font-bold">
-            {auditLogs?.length ?? 0}
-          </span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setActiveTab('settings')}
-          className={`flex min-h-11 shrink-0 snap-start items-center gap-2 rounded-xl px-3 py-2 text-xs font-bold transition-all sm:px-4 ${
-            activeTab === 'settings'
-              ? 'bg-brand-900 text-white shadow-xs'
-              : 'bg-white text-slate-600 border border-slate-200/80 hover:bg-slate-50'
-          }`}
-        >
-          <Settings className="h-3.5 w-3.5" />
-          <span>System Settings & Backups</span>
-        </button>
-      </div>
-
       {/* Tab: Users Management */}
-      {activeTab === 'users' && (
+      {(section === 'users' || section === 'approvals') && (
         <Card className="overflow-hidden space-y-4">
           <div className="p-4 border-b border-slate-200/80 max-w-md">
             <SearchInput
@@ -260,7 +249,7 @@ export default function UsersPage() {
               <div className="mx-auto h-7 w-7 animate-spin rounded-full border-2 border-teal-600 border-t-transparent" />
               <p className="mt-3 text-xs font-semibold text-slate-500">Loading system users...</p>
             </div>
-          ) : filteredUsers.length === 0 ? (
+          ) : visibleUsers.length === 0 ? (
             <div className="p-8">
               <EmptyState
                 icon={UserCheck}
@@ -268,6 +257,8 @@ export default function UsersPage() {
                 description={
                   search
                     ? 'No user accounts match your search filter.'
+                    : section === 'approvals'
+                    ? 'There are no requester registrations waiting for approval.'
                     : 'No system accounts are configured.'
                 }
               />
@@ -286,7 +277,7 @@ export default function UsersPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {filteredUsers.map((u: any) => (
+                  {visibleUsers.map((u: any) => (
                     <tr key={u.id} className="hover:bg-slate-50/80 transition-colors">
                       <td className="px-6 py-4">
                         <p className="font-bold text-slate-900">{u.fullName}</p>
@@ -348,7 +339,7 @@ export default function UsersPage() {
               </table>
             </div>
             <ul className="divide-y divide-slate-100 sm:hidden" aria-label="System users">
-              {filteredUsers.map((u: any) => (
+              {visibleUsers.map((u: any) => (
                 <li key={u.id} className="p-4">
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
@@ -394,7 +385,7 @@ export default function UsersPage() {
       )}
 
       {/* Tab: Audit Logs */}
-      {activeTab === 'audit' && (
+      {section === 'audit' && (
         <Card className="overflow-hidden">
           <CardHeader>
             <CardTitle>System Activity Audit Log</CardTitle>
@@ -409,7 +400,7 @@ export default function UsersPage() {
                 <div className="mx-auto h-7 w-7 animate-spin rounded-full border-2 border-teal-600 border-t-transparent" />
                 <p className="mt-3 text-xs font-semibold text-slate-500">Loading audit trail...</p>
               </div>
-            ) : auditLogs?.length === 0 ? (
+            ) : auditLogs.length === 0 ? (
               <div className="p-8">
                 <EmptyState
                   icon={History}
@@ -431,7 +422,7 @@ export default function UsersPage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {auditLogs?.map((log: any) => (
+                    {auditLogs.map((log: any) => (
                       <tr key={log.id} className="hover:bg-slate-50/80 transition-colors">
                         <td className="px-6 py-4 text-slate-400 font-mono">
                           {new Date(log.createdAt).toLocaleString()}
@@ -454,7 +445,7 @@ export default function UsersPage() {
                 </table>
               </div>
               <ul className="divide-y divide-slate-100 sm:hidden" aria-label="System audit log">
-                {auditLogs?.map((log: any) => (
+                {auditLogs.map((log: any) => (
                   <li key={log.id} className="space-y-2 p-4">
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
@@ -475,7 +466,7 @@ export default function UsersPage() {
       )}
 
       {/* Tab: System Settings & Backup */}
-      {activeTab === 'settings' && (
+      {section === 'settings' && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <Card>
             <CardHeader>
@@ -560,7 +551,7 @@ export default function UsersPage() {
       )}
 
       {/* Create User Modal */}
-      <Modal
+      {section === 'users' && <Modal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
         title="Create System User Account"
@@ -640,7 +631,7 @@ export default function UsersPage() {
             </Button>
           </div>
         </form>
-      </Modal>
+      </Modal>}
     </div>
   );
 }

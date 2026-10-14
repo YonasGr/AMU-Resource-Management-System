@@ -74,7 +74,14 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
                   <ProtectedRoute allowedRoles={['ADMINISTRATOR']} />
                 }
               >
-                <Route index element={<UsersPage />} />
+                <Route index element={<UsersPage section="users" />} />
+                <Route path="approvals" element={<UsersPage section="approvals" />} />
+              </Route>
+              <Route element={<ProtectedRoute allowedRoles={['ADMINISTRATOR', 'AUDITOR']} />}>
+                <Route path="/audit" element={<UsersPage section="audit" />} />
+              </Route>
+              <Route element={<ProtectedRoute allowedRoles={['ADMINISTRATOR']} />}>
+                <Route path="/settings" element={<UsersPage section="settings" />} />
               </Route>
             </Route>
           </Route>

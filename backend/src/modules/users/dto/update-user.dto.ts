@@ -20,6 +20,26 @@ export class UpdateUserDto {
 
   @ApiPropertyOptional()
   @IsOptional()
+  @IsString()
+  campusName?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  directorate?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  sector?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  jobTitle?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
   @IsUUID()
   role?: Role;
 

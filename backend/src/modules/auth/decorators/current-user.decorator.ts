@@ -1,8 +1,12 @@
 import { createParamDecorator, ExecutionContext } from '@nestjs/common';
 import { User } from '@prisma/client';
 
-export type SafeUser = Omit<User, 'passwordHash' | 'employeeCode'> & {
+export type SafeUser = Omit<User, 'passwordHash' | 'employeeCode' | 'campusName' | 'sector' | 'directorate' | 'jobTitle'> & {
   employeeCode?: string | null;
+  campusName?: string | null;
+  sector?: string | null;
+  directorate?: string | null;
+  jobTitle?: string | null;
 };
 
 /**

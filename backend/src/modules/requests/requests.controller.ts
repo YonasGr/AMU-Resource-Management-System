@@ -19,6 +19,7 @@ export class RequestsController {
   constructor(private readonly requestsService: RequestsService) {}
 
   @Post()
+  @Roles(Role.REQUESTER)
   @ApiOperation({ summary: 'Submit a new material request' })
   create(@CurrentUser() user: SafeUser, @Body() dto: CreateRequestDto) {
     return this.requestsService.create(user.id, dto);
@@ -43,8 +44,8 @@ export class RequestsController {
 
   @Post(':id/approve-reject')
   @HttpCode(HttpStatus.OK)
-  @Roles(Role.STORE_MANAGER, Role.ADMINISTRATOR)
-  @ApiOperation({ summary: 'Approve or reject a material request (Store Manager / Admin - UC13)' })
+  @Roles(Role.STORE_MANAGER)
+  @ApiOperation({ summary: 'Approve or reject a material request (Store Manager only - UC13)' })
   approveOrReject(
     @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser() user: SafeUser,
@@ -73,7 +74,7 @@ export class RequestsController {
 
   @Post(':id/backorder')
   @HttpCode(HttpStatus.OK)
-  @Roles(Role.STORE_MANAGER, Role.ADMINISTRATOR)
+  @Roles(Role.STORE_MANAGER)
   @ApiOperation({ summary: 'Move an approved request to backorder' })
   backorder(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: SafeUser, @Body() body: ApproveRejectRequestDto) {
     return this.requestsService.backorder(id, user, body.remarks);
@@ -81,7 +82,7 @@ export class RequestsController {
 
   @Post(':id/handover')
   @HttpCode(HttpStatus.OK)
-  @Roles(Role.STOREKEEPER, Role.STORE_MANAGER, Role.ADMINISTRATOR)
+  @Roles(Role.STOREKEEPER, Role.STORE_MANAGER)
   @ApiOperation({ summary: 'Record request handover evidence' })
   handover(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: SafeUser, @Body() body: HandoverRequestDto) {
     return this.requestsService.handover(id, user, body.evidence);

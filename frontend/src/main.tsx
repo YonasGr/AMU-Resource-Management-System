@@ -35,11 +35,13 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
             <Route element={<AppShell />}>
               <Route path="/" element={<DashboardPage />} />
               <Route path="/materials" element={<MaterialsPage />} />
-              <Route path="/requests" element={<RequestsPage />} />
+              <Route element={<ProtectedRoute allowedRoles={['ADMINISTRATOR', 'STORE_MANAGER', 'STOREKEEPER', 'REQUESTER']} />}>
+                <Route path="/requests" element={<RequestsPage />} />
+              </Route>
               <Route
                 path="/inventory"
                 element={
-                  <ProtectedRoute allowedRoles={['ADMINISTRATOR', 'STOREKEEPER', 'STORE_MANAGER', 'AUDITOR']} />
+                  <ProtectedRoute allowedRoles={['STOREKEEPER', 'STORE_MANAGER']} />
                 }
               >
                 <Route index element={<InventoryPage />} />

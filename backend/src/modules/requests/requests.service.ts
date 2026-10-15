@@ -38,6 +38,26 @@ export class RequestsService {
 
     const year = new Date().getFullYear();
     const request = await this.prisma.$transaction(async (tx) => {
+      for (const item of dto.items) {
+        const balance = targetStoreId
+          ? await tx.stockBalance.findUnique({
+              where: {
+                storeId_materialId: {
+                  storeId: targetStoreId,
+                  materialId: item.materialId,
+                },
+              },
+              include: { material: true },
+            })
+          : null;
+        const available = (balance?.remainingQuantity ?? 0) - (balance?.reservedQuantity ?? 0);
+        if (!balance || available < item.quantityRequested) {
+          throw new BadRequestException(
+            `Insufficient available stock for "${balance?.material.name || 'the requested material'}". Requested: ${item.quantityRequested}, Available: ${Math.max(0, available)}`,
+          );
+        }
+      }
+
       const counter = await tx.requestNumberCounter.upsert({
         where: { year },
         update: { nextNumber: { increment: 1 } },

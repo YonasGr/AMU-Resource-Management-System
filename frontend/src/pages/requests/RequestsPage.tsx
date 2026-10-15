@@ -32,10 +32,10 @@ export default function RequestsPage() {
   const queryClient = useQueryClient();
   const user = useAuthStore((s) => s.user);
 
-  const isManager = user?.role === 'STORE_MANAGER' || user?.role === 'ADMINISTRATOR';
+  const isManager = user?.role === 'STORE_MANAGER';
   // Strict Segregation of Duties: Only physical STOREKEEPER can execute stock issuance
   const isKeeper = user?.role === 'STOREKEEPER';
-  const canSubmitRequest = user?.role !== 'REQUESTER' || user.status === 'ACTIVE';
+  const canSubmitRequest = user?.role === 'REQUESTER' && user.status === 'ACTIVE';
 
   // Role-tailored initial tab
   const getInitialTab = (): 'all' | 'my' | 'approvals' | 'issue' => {

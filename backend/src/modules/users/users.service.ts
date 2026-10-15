@@ -9,6 +9,10 @@ export interface CreateUserDto {
   fullName: string;
   email: string;
   phone?: string;
+  campusName?: string;
+  sector?: string;
+  directorate?: string;
+  jobTitle?: string;
   password: string;
   role?: Role;
   scopeType?: ScopeType;
@@ -21,6 +25,10 @@ export interface UpdateUserDto {
   fullName?: string;
   email?: string;
   phone?: string | null;
+  campusName?: string | null;
+  sector?: string | null;
+  directorate?: string | null;
+  jobTitle?: string | null;
   role?: Role;
   status?: UserStatus;
   scopeType?: ScopeType;
@@ -50,6 +58,10 @@ export class UsersService {
         fullName: dto.fullName,
         email,
         phone: dto.phone,
+        campusName: dto.campusName || null,
+        sector: dto.sector || null,
+        directorate: dto.directorate || null,
+        jobTitle: dto.jobTitle || null,
         passwordHash,
         role: dto.role || Role.REQUESTER,
         status: dto.status || UserStatus.ACTIVE,
@@ -176,6 +188,10 @@ export class UsersService {
         ...(dto.fullName ? { fullName: dto.fullName } : {}),
         ...(dto.email ? { email: dto.email } : {}),
         ...(dto.phone !== undefined ? { phone: dto.phone } : {}),
+        ...(dto.campusName !== undefined ? { campusName: dto.campusName } : {}),
+        ...(dto.sector !== undefined ? { sector: dto.sector } : {}),
+        ...(dto.directorate !== undefined ? { directorate: dto.directorate } : {}),
+        ...(dto.jobTitle !== undefined ? { jobTitle: dto.jobTitle } : {}),
         ...(dto.role ? { role: dto.role } : {}),
         ...(dto.status ? { status: dto.status } : {}),
         ...(dto.scopeType ? { scopeType: dto.scopeType } : {}),

@@ -80,6 +80,10 @@ model User {
   email        String     @unique
   employeeCode String?    @unique @map("employee_code")
   phone        String?
+  campusName   String?    @map("campus_name")
+  sector       String?
+  directorate  String?
+  jobTitle     String?    @map("job_title")
   passwordHash String     @map("password_hash")
   role         Role       @default(REQUESTER)
   status       UserStatus @default(ACTIVE)

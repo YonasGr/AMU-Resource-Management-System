@@ -16,6 +16,26 @@ export class RegisterDto {
   @IsString()
   phone?: string;
 
+  @ApiPropertyOptional({ example: 'Main Campus' })
+  @IsOptional()
+  @IsString()
+  campusName?: string;
+
+  @ApiPropertyOptional({ example: 'Information Technology' })
+  @IsOptional()
+  @IsString()
+  sector?: string;
+
+  @ApiPropertyOptional({ example: 'ICT Directorate' })
+  @IsOptional()
+  @IsString()
+  directorate?: string;
+
+  @ApiPropertyOptional({ example: 'Lecturer' })
+  @IsOptional()
+  @IsString()
+  jobTitle?: string;
+
   @ApiProperty({ example: 'ChangeMe123!' })
   @IsString()
   @MinLength(8)

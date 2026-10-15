@@ -11,7 +11,7 @@ export class SuppliersController {
   constructor(private readonly suppliersService: SuppliersService) {}
 
   @Post()
-  @Roles(Role.ADMINISTRATOR, Role.STORE_MANAGER)
+  @Roles(Role.STORE_MANAGER)
   @ApiOperation({ summary: 'Register a new supplier (Admin & Store Manager - UC7)' })
   create(@Body() dto: CreateSupplierDto) {
     return this.suppliersService.create(dto);
@@ -30,7 +30,7 @@ export class SuppliersController {
   }
 
   @Patch(':id')
-  @Roles(Role.ADMINISTRATOR, Role.STORE_MANAGER)
+  @Roles(Role.STORE_MANAGER)
   @ApiOperation({ summary: 'Update supplier details (Admin & Store Manager)' })
   update(@Param('id', ParseUUIDPipe) id: string, @Body() dto: Partial<CreateSupplierDto>) {
     return this.suppliersService.update(id, dto);

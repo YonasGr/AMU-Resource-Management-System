@@ -32,13 +32,13 @@ export class InventoryController {
   ) {}
 
   @Post('receipts')
-  @Roles(Role.STOREKEEPER, Role.STORE_MANAGER, Role.ADMINISTRATOR)
+  @Roles(Role.STOREKEEPER, Role.STORE_MANAGER)
   createGoodsReceipt(@Req() req: any, @Body() dto: CreateGoodsReceiptDto) {
     return this.inventoryService.createGoodsReceipt(req.user, dto);
   }
 
   @Post('receipts/:id/inspect')
-  @Roles(Role.STORE_MANAGER, Role.ADMINISTRATOR)
+  @Roles(Role.STORE_MANAGER)
   inspectGoodsReceipt(
     @Req() req: any,
     @Param('id', ParseUUIDPipe) id: string,
@@ -48,13 +48,13 @@ export class InventoryController {
   }
 
   @Post('receipts/:id/post')
-  @Roles(Role.STORE_MANAGER, Role.ADMINISTRATOR)
+  @Roles(Role.STORE_MANAGER)
   postGoodsReceipt(@Req() req: any, @Param('id', ParseUUIDPipe) id: string) {
     return this.inventoryService.postGoodsReceipt(id, req.user);
   }
 
   @Post('receipts/:id/reject')
-  @Roles(Role.STORE_MANAGER, Role.ADMINISTRATOR)
+  @Roles(Role.STORE_MANAGER)
   rejectGoodsReceipt(
     @Req() req: any,
     @Param('id', ParseUUIDPipe) id: string,
@@ -64,13 +64,13 @@ export class InventoryController {
   }
 
   @Post('cycle-counts')
-  @Roles(Role.STOREKEEPER, Role.STORE_MANAGER, Role.ADMINISTRATOR)
+  @Roles(Role.STOREKEEPER, Role.STORE_MANAGER)
   createCycleCount(@Req() req: any, @Body() dto: CreateCycleCountDto) {
     return this.inventoryService.createCycleCount(req.user, dto);
   }
 
   @Post('cycle-counts/:id/submit')
-  @Roles(Role.STOREKEEPER, Role.STORE_MANAGER, Role.ADMINISTRATOR)
+  @Roles(Role.STOREKEEPER, Role.STORE_MANAGER)
   submitCycleCount(
     @Req() req: any,
     @Param('id', ParseUUIDPipe) id: string,
@@ -80,19 +80,19 @@ export class InventoryController {
   }
 
   @Post('cycle-counts/:id/recount')
-  @Roles(Role.STORE_MANAGER, Role.ADMINISTRATOR)
+  @Roles(Role.STORE_MANAGER)
   requestCycleCountRecount(@Req() req: any, @Param('id', ParseUUIDPipe) id: string) {
     return this.inventoryService.requestCycleCountRecount(id, req.user);
   }
 
   @Post('cycle-counts/:id/approve')
-  @Roles(Role.STORE_MANAGER, Role.ADMINISTRATOR)
+  @Roles(Role.STORE_MANAGER)
   approveCycleCount(@Req() req: any, @Param('id', ParseUUIDPipe) id: string) {
     return this.inventoryService.approveCycleCount(id, req.user);
   }
 
   @Post('stock-out')
-  @Roles(Role.STOREKEEPER, Role.STORE_MANAGER, Role.ADMINISTRATOR)
+  @Roles(Role.STOREKEEPER, Role.STORE_MANAGER)
   @ApiOperation({
     summary: 'Issue Materials / Stock Out Direct (Storekeeper / Manager / Admin - UC9)',
   })
@@ -101,7 +101,7 @@ export class InventoryController {
   }
 
   @Post('batch')
-  @Roles(Role.STOREKEEPER, Role.STORE_MANAGER, Role.ADMINISTRATOR)
+  @Roles(Role.STOREKEEPER, Role.STORE_MANAGER)
   @ApiOperation({
     summary: 'Process warehouse movement lines with per-line results and safe retries',
   })
@@ -110,7 +110,7 @@ export class InventoryController {
   }
 
   @Post('return')
-  @Roles(Role.STOREKEEPER, Role.STORE_MANAGER, Role.ADMINISTRATOR)
+  @Roles(Role.STOREKEEPER, Role.STORE_MANAGER)
   @ApiOperation({
     summary:
       'Return materials against an issued request item (Storekeeper / Manager / Admin - UC10)',
@@ -120,33 +120,33 @@ export class InventoryController {
   }
 
   @Post('adjustment')
-  @Roles(Role.STORE_MANAGER, Role.ADMINISTRATOR)
+  @Roles(Role.STORE_MANAGER)
   @ApiOperation({ summary: 'Stock Adjustment Audit (Store Manager / Admin - UC11)' })
   adjustStock(@Req() req: any, @Body() dto: AdjustmentDto) {
     return this.inventoryService.adjustStock(req.user, dto);
   }
 
   @Post('transfer')
-  @Roles(Role.STOREKEEPER, Role.STORE_MANAGER, Role.ADMINISTRATOR)
+  @Roles(Role.STOREKEEPER, Role.STORE_MANAGER)
   @ApiOperation({ summary: 'Transfer Materials (Storekeeper / Manager / Admin - UC12)' })
   transferMaterial(@Req() req: any, @Body() dto: TransferDto) {
     return this.inventoryService.transferMaterial(req.user, dto);
   }
 
   @Post('transfer/:id/dispatch')
-  @Roles(Role.STOREKEEPER, Role.STORE_MANAGER, Role.ADMINISTRATOR)
+  @Roles(Role.STOREKEEPER, Role.STORE_MANAGER)
   dispatchTransfer(@Req() req: any, @Param('id', ParseUUIDPipe) id: string) {
     return this.inventoryService.dispatchTransfer(id, req.user);
   }
 
   @Post('transfer/:id/receive')
-  @Roles(Role.STOREKEEPER, Role.STORE_MANAGER, Role.ADMINISTRATOR)
+  @Roles(Role.STOREKEEPER, Role.STORE_MANAGER)
   receiveTransfer(@Req() req: any, @Param('id', ParseUUIDPipe) id: string) {
     return this.inventoryService.receiveTransfer(id, req.user);
   }
 
   @Post('transfer/:id/cancel')
-  @Roles(Role.STORE_MANAGER, Role.ADMINISTRATOR)
+  @Roles(Role.STORE_MANAGER)
   cancelTransfer(
     @Req() req: any,
     @Param('id', ParseUUIDPipe) id: string,
@@ -156,13 +156,13 @@ export class InventoryController {
   }
 
   @Post('return-inspections')
-  @Roles(Role.STOREKEEPER, Role.STORE_MANAGER, Role.ADMINISTRATOR)
+  @Roles(Role.STOREKEEPER, Role.STORE_MANAGER)
   createReturnInspection(@Req() req: any, @Body() dto: CreateReturnInspectionDto) {
     return this.inventoryService.createReturnInspection(req.user, dto);
   }
 
   @Post('return-inspections/:id/inspect')
-  @Roles(Role.STORE_MANAGER, Role.ADMINISTRATOR)
+  @Roles(Role.STORE_MANAGER)
   inspectReturn(
     @Req() req: any,
     @Param('id', ParseUUIDPipe) id: string,
@@ -172,7 +172,7 @@ export class InventoryController {
   }
 
   @Post('return-inspections/:id/post')
-  @Roles(Role.STORE_MANAGER, Role.ADMINISTRATOR)
+  @Roles(Role.STORE_MANAGER)
   postReturnInspection(@Req() req: any, @Param('id', ParseUUIDPipe) id: string) {
     return this.inventoryService.postReturnInspection(id, req.user);
   }

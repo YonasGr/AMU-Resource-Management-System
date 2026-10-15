@@ -41,9 +41,9 @@ describe('RequestsController RBAC & Approval Verification', () => {
   };
 
   describe('Metadata Reflection Verification', () => {
-    it('should have @Roles(Role.STORE_MANAGER, Role.ADMINISTRATOR) on approveOrReject', () => {
+    it('should have @Roles(Role.STORE_MANAGER) on approveOrReject', () => {
       const roles = reflector.get<Role[]>(ROLES_KEY, controller.approveOrReject);
-      expect(roles).toEqual([Role.STORE_MANAGER, Role.ADMINISTRATOR]);
+      expect(roles).toEqual([Role.STORE_MANAGER]);
     });
 
     it('should have @Roles(Role.STOREKEEPER) on issueItems', () => {
@@ -51,9 +51,9 @@ describe('RequestsController RBAC & Approval Verification', () => {
       expect(roles).toEqual([Role.STOREKEEPER]);
     });
 
-    it('should NOT have @Roles on create (any authenticated user can submit a request)', () => {
+    it('should restrict create to requesters', () => {
       const roles = reflector.get<Role[]>(ROLES_KEY, controller.create);
-      expect(roles).toBeUndefined();
+      expect(roles).toEqual([Role.REQUESTER]);
     });
 
     it('should NOT have @Roles on findAll (open to authenticated users)', () => {
@@ -73,9 +73,9 @@ describe('RequestsController RBAC & Approval Verification', () => {
       expect(guard.canActivate(ctx)).toBe(true);
     });
 
-    it('should ALLOW ADMINISTRATOR to access', () => {
+    it('should REJECT ADMINISTRATOR because administration is separated from operational approvals', () => {
       const ctx = createMockContext(controller.approveOrReject, { id: 'u2', role: Role.ADMINISTRATOR });
-      expect(guard.canActivate(ctx)).toBe(true);
+      expect(() => guard.canActivate(ctx)).toThrow(ForbiddenException);
     });
 
     it('should REJECT STOREKEEPER (HTTP 403 Forbidden)', () => {

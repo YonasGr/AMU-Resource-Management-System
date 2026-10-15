@@ -310,6 +310,7 @@ export default function UsersPage({ section = 'users' }: { section?: AdminSectio
                     <th className="px-6 py-4">Email</th>
                     <th className="px-6 py-4">Current Role</th>
                     <th className="px-6 py-4">Department Unit</th>
+                    <th className="px-6 py-4">Organization Details</th>
                     <th className="px-6 py-4 text-right">Assign Role</th>
                   </tr>
                 </thead>
@@ -343,6 +344,11 @@ export default function UsersPage({ section = 'users' }: { section?: AdminSectio
 
                       <td className="px-6 py-4 text-xs text-slate-500">
                         {u.department?.name || 'General Inventory Ops'}
+                      </td>
+                      <td className="px-6 py-4 text-xs text-slate-500">
+                        <div>{u.campusName || 'Campus not provided'}</div>
+                        <div>{u.sector || 'Sector not provided'}{u.directorate ? ` · ${u.directorate}` : ''}</div>
+                        <div className="font-medium text-slate-700">{u.jobTitle || 'Job title not provided'}</div>
                       </td>
 
                       <td className="px-6 py-4 text-right">
@@ -388,6 +394,7 @@ export default function UsersPage({ section = 'users' }: { section?: AdminSectio
                     </Badge>
                   </div>
                   <p className="mt-2 text-xs text-slate-500">{u.department?.name || 'General Inventory Ops'}{u.phone ? ` · ${u.phone}` : ''}</p>
+                  <p className="mt-1 text-xs text-slate-500">{[u.campusName, u.sector, u.directorate, u.jobTitle].filter(Boolean).join(' · ') || 'Organization details not provided'}</p>
                   <label className="mt-3 block">
                     <span className="mb-1 block text-[11px] font-semibold text-slate-500">Assign role</span>
                     <select

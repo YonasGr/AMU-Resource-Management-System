@@ -16,6 +16,32 @@ export class RequestsService {
     private readonly auditService: AuditService,
   ) {}
 
+  private addReturnStatus<T extends { items: Array<{ quantityIssued: number; quantityReturned: number }> }>(
+    request: T,
+  ) {
+    const items = request.items.map((item) => {
+      const returnedQuantity = item.quantityReturned ?? 0;
+      const returnStatus =
+        item.quantityIssued > 0 && returnedQuantity >= item.quantityIssued
+          ? 'RETURNED'
+          : returnedQuantity > 0
+            ? 'PARTIALLY_RETURNED'
+            : 'NOT_RETURNED';
+
+      return { ...item, returnStatus };
+    });
+    const issuedQuantity = items.reduce((sum, item) => sum + item.quantityIssued, 0);
+    const returnedQuantity = items.reduce((sum, item) => sum + item.quantityReturned, 0);
+    const returnStatus =
+      issuedQuantity > 0 && returnedQuantity >= issuedQuantity
+        ? 'RETURNED'
+        : returnedQuantity > 0
+          ? 'PARTIALLY_RETURNED'
+          : 'NOT_RETURNED';
+
+    return { ...request, items, returnStatus };
+  }
+
   async create(requesterId: string, dto: CreateRequestDto) {
     if (typeof this.prisma.user?.findUnique === 'function') {
       const requester = await this.prisma.user.findUnique({ where: { id: requesterId } });
@@ -131,7 +157,7 @@ export class RequestsService {
       ? { AND: [visibility, filters] }
       : visibility;
 
-    return this.prisma.materialRequest.findMany({
+    const requests = await this.prisma.materialRequest.findMany({
       where,
       include: {
         requester: { select: { id: true, fullName: true, email: true } },
@@ -146,6 +172,7 @@ export class RequestsService {
       },
       orderBy: { createdAt: 'desc' },
     });
+    return requests.map((request) => this.addReturnStatus(request));
   }
 
   async findOne(id: string, user: SafeUser) {
@@ -173,7 +200,7 @@ export class RequestsService {
     if (!request || !this.accessControlService.canViewRequest(user, request)) {
       throw new NotFoundException(`Material request ${id} not found`);
     }
-    return request;
+    return this.addReturnStatus(request);
   }
 
   /** Store Manager approves or rejects request */

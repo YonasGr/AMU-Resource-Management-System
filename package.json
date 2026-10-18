@@ -11,5 +11,10 @@
     "docker:up": "docker compose up --build",
     "docker:down": "docker compose down"
   },
-  "packageManager": "pnpm@9.0.0"
+  "packageManager": "pnpm@12.14.0",
+  "devDependencies": {
+    "@mermaid-js/mermaid-cli": "^12.0.0",
+    "prisma-erd-generator": "^3.2.1",
+    "puppeteer": "^25.14.0"
+  }
 }

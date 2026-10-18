@@ -88,6 +88,20 @@ flowchart TB
     N -. optional entry point .-> API
 ```
 
+## Database schema
+
+The entity relationship diagram below shows the Prisma/PostgreSQL data model used by the application. It is maintained alongside the schema at [`backend/prisma/schema.prisma`](backend/prisma/schema.prisma).
+
+<p align="center">
+  <a href="backend/prisma/ERD.svg">
+    <img src="backend/prisma/ERD.svg" alt="Entity relationship diagram for the AMU Store Inventory and Requisition Management System" width="100%" />
+  </a>
+</p>
+
+<p align="center">
+  <a href="backend/prisma/ERD.svg">Open the ERD at full size</a>
+</p>
+
 <details>
 <summary><strong>Repository map</strong></summary>
 

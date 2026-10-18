@@ -2,10 +2,12 @@ packages:
   - "backend"
   - "frontend"
 
-onlyBuiltDependencies:
-  - "@nestjs/core"
-  - "@prisma/client"
-  - "@prisma/engines"
-  - argon2
-  - msgpackr-extract
-  - prisma
+allowBuilds:
+  '@nestjs/core': true
+  '@prisma/client': true
+  '@prisma/engines': true
+  argon2: true
+  esbuild: true
+  msgpackr-extract: true
+  prisma: true
+  puppeteer: true

@@ -385,6 +385,11 @@ export default function RequestsPage() {
                   <Badge tone={statusTone(req.status)}>
                     {req.status}
                   </Badge>
+                  {req.returnStatus && req.returnStatus !== 'NOT_RETURNED' && (
+                    <Badge tone={statusTone(req.returnStatus)}>
+                      {req.returnStatus === 'RETURNED' ? 'Returned' : 'Partially returned'}
+                    </Badge>
+                  )}
 
                   <span className="text-[11px] font-medium text-slate-500 sm:text-xs">
                     {new Date(req.createdAt).toLocaleString()}
@@ -422,6 +427,7 @@ export default function RequestsPage() {
                         <th className="px-4 py-2.5 text-center">Category</th>
                         <th className="px-4 py-2.5 text-center">Qty Requested</th>
                         <th className="px-4 py-2.5 text-center">Issued / Returned</th>
+                        <th className="px-4 py-2.5 text-center">Return status</th>
                         <th className="px-4 py-2.5 text-right">Unit of Measure</th>
                       </tr>
                     </thead>
@@ -442,6 +448,17 @@ export default function RequestsPage() {
                           </td>
                           <td className="px-4 py-2.5 text-center font-medium text-slate-600">
                             {item.quantityIssued ?? 0} / {item.quantityReturned ?? 0}
+                          </td>
+                          <td className="px-4 py-2.5 text-center">
+                            <Badge tone={statusTone(item.returnStatus)} withDot={false}>
+                              {item.returnStatus === 'RETURNED'
+                                ? 'Returned'
+                                : item.returnStatus === 'PARTIALLY_RETURNED'
+                                  ? 'Partially returned'
+                                  : item.quantityIssued > 0
+                                    ? 'Issued'
+                                    : 'Not issued'}
+                            </Badge>
                           </td>
                           <td className="px-4 py-2.5 text-right font-medium text-slate-600">
                             {item.material?.unit || 'unit'}s
@@ -466,9 +483,19 @@ export default function RequestsPage() {
                       </div>
                       <p className="mt-2 text-xs text-slate-600">{item.material?.category?.name || 'General'}</p>
                       {req.status === 'ISSUED' && (
-                        <p className="mt-1 text-xs font-medium text-slate-500">
-                          Issued {item.quantityIssued ?? 0} · Returned {item.quantityReturned ?? 0} · Outstanding {Math.max(0, (item.quantityIssued ?? 0) - (item.quantityReturned ?? 0))}
-                        </p>
+                        <div className="mt-2 space-y-1.5">
+                          <p className="text-xs font-medium text-slate-500">
+                            Issued {item.quantityIssued ?? 0} · Returned {item.quantityReturned ?? 0} · Outstanding{' '}
+                            {Math.max(0, (item.quantityIssued ?? 0) - (item.quantityReturned ?? 0))}
+                          </p>
+                          <Badge tone={statusTone(item.returnStatus)} withDot={false}>
+                            {item.returnStatus === 'RETURNED'
+                              ? 'Returned'
+                              : item.returnStatus === 'PARTIALLY_RETURNED'
+                                ? 'Partially returned'
+                                : 'Issued'}
+                          </Badge>
+                        </div>
                       )}
                     </li>
                   ))}

@@ -89,8 +89,9 @@ export function Badge({
 export function statusTone(status?: string): BadgeTone {
   if (!status) return 'neutral';
   const s = status.toUpperCase();
-  if (['ACTIVE', 'APPROVED', 'COMPLETED', 'ISSUED', 'STOCK_IN'].includes(s)) return 'success';
-  if (['PENDING', 'SUBMITTED', 'DRAFT', 'WARNING', 'RETURN'].includes(s)) return 'warning';
+  if (['ACTIVE', 'APPROVED', 'COMPLETED', 'ISSUED', 'RETURNED', 'STOCK_IN'].includes(s)) return 'success';
+  if (['PENDING', 'SUBMITTED', 'DRAFT', 'WARNING', 'RETURN', 'NOT_RETURNED'].includes(s)) return 'warning';
+  if (['PARTIALLY_RETURNED'].includes(s)) return 'info';
   if (['INACTIVE', 'REJECTED', 'CANCELLED', 'DISPOSED', 'LOW_STOCK', 'CRITICAL'].includes(s)) return 'danger';
   if (['STOCK_OUT', 'PURCHASE_RECEIVE', 'INFO'].includes(s)) return 'info';
   if (['TRANSFER', 'ADJUSTMENT'].includes(s)) return 'teal';
@@ -98,4 +99,3 @@ export function statusTone(status?: string): BadgeTone {
   if (['STOREKEEPER', 'AUDITOR'].includes(s)) return 'brand';
   return 'neutral';
 }
-
